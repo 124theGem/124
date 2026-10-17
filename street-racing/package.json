@@ -9,7 +9,8 @@
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run",
     "test:browser": "node tests/browser-smoke.mjs",
-    "test:telegram": "node tests/telegram-smoke.mjs"
+    "test:telegram": "node tests/telegram-smoke.mjs",
+    "test:config": "node tests/config-smoke.mjs"
   },
   "dependencies": {
     "three": "^0.180.0"

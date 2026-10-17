@@ -11,6 +11,7 @@ import { FollowCamera } from './Camera';
 import { createScene } from './Scene';
 import { RaceState } from './RaceState';
 import { Display } from '../platform/Display';
+import { CAR } from '../vehicles/CarConfig';
 
 export class Game {
   readonly physics=new CarPhysics();
@@ -34,7 +35,7 @@ export class Game {
   private hudTimer=0;
   private started=false;
   private storedBestKey='coastline-best-v1';
-  constructor(){
+  constructor(configWarning?:string){
     this.renderer.domElement.className='game-canvas';
     document.querySelector('#app')!.prepend(this.renderer.domElement);
     this.renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));
@@ -53,12 +54,13 @@ export class Game {
     this.renderer.domElement.addEventListener('webglcontextlost',e=>{e.preventDefault();this.pause(true);this.hud.toast('Графический контекст потерян. Обновите страницу.');},{signal});
     window.addEventListener('pagehide',()=>this.dispose(),{signal,once:true});
     this.resize();this.reset();
-    this.hud.toast(matchMedia('(pointer:coarse)').matches?'Газ + руль. Короткое нажатие 〰 — управляемый занос.':'W / ↑ — газ. Space — ручник. Ночной город ждёт.');
+    this.hud.toast(configWarning??(matchMedia('(pointer:coarse)').matches?'Газ + руль. Короткое нажатие 〰 — управляемый занос.':'W / ↑ — газ. Space — ручник. Ночной город ждёт.'));
     this.renderer.setAnimationLoop(this.frame);
     // Read-only diagnostics, enabled explicitly for browser smoke checks.
     if(new URLSearchParams(location.search).has('debug'))Object.defineProperty(window,'__coastline',{configurable:true,value:{
       snapshot:()=>({x:this.physics.x,z:this.physics.z,speed:this.physics.speed,slip:this.physics.slipAngle,rearGrip:this.physics.rearGrip,heading:this.physics.heading,
-        steer:this.physics.steer,slipIntensity:this.physics.slipIntensity,lap:this.race.lap,score:this.race.score,paused:this.paused,drawCalls:this.renderer.info.render.calls,triangles:this.renderer.info.render.triangles,fps:this.fps,...this.effects.stats})}});
+        steer:this.physics.steer,slipIntensity:this.physics.slipIntensity,lap:this.race.lap,score:this.race.score,paused:this.paused,drawCalls:this.renderer.info.render.calls,triangles:this.renderer.info.render.triangles,fps:this.fps,...this.effects.stats,
+        carConfig:{...CAR,maxSpeedKmh:CAR.maxSpeed*3.6,maxSteerDegrees:CAR.maxSteer*180/Math.PI}})}});
   }
   private resize(){this.renderer.setSize(innerWidth,innerHeight);this.camera.resize();}
   private reset(){const p=this.track.point(0);this.physics.reset(p.x,p.z,Math.atan2(p.tz,p.tx));this.race.reset();this.started=false;this.clock.reset();this.camera.update(this.physics,1,true);this.car.update(this.physics,0,false);if(this.paused)this.pause(false);}

@@ -9,6 +9,18 @@ const gas={...IDLE,throttle:1};
 function run(car:CarPhysics,seconds:number,input:Input=gas){for(let i=0;i<Math.round(seconds*60);i++)car.step(input,CAR.fixedStep);}
 
 describe('dynamic bicycle vehicle',()=>{
+  it.each([{kmh:70,maxRadius:18,minKmh:60},{kmh:100,maxRadius:40,minKmh:90}])(
+    'takes a tighter corner from $kmh km/h while retaining speed and grip',({kmh,maxRadius,minKmh})=>{
+      const car=new CarPhysics();car.vx=kmh/3.6;let maxSlip=0;
+      for(let i=0;i<120;i++){
+        const throttle=Math.max(0,Math.min(1,.15+(kmh/3.6-car.speed)*.5));
+        car.step({...IDLE,throttle,steer:1},1/60);
+        maxSlip=Math.max(maxSlip,Math.abs(car.slipAngle));
+      }
+      expect(car.speed/Math.abs(car.yawRate)).toBeLessThan(maxRadius);
+      expect(car.speed*3.6).toBeGreaterThan(minKmh);
+      expect(maxSlip*180/Math.PI).toBeLessThan(8);
+    });
   it('grips through an ordinary powered corner instead of spinning on full throttle',()=>{
     const car=new CarPhysics();car.vx=20;let maxSlip=0;
     for(let i=0;i<180;i++){car.step({...gas,steer:.7},1/60);maxSlip=Math.max(maxSlip,Math.abs(car.slipAngle));}
