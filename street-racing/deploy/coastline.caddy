@@ -1,0 +1,16 @@
+# Managed by COASTLINE deployment.
+razdorhouse.ru {
+    encode zstd gzip
+
+    redir / /racing/ 302
+    redir /racing /racing/ 308
+
+    handle_path /racing/* {
+        root * /var/www/coastline-racing/current
+        file_server
+    }
+
+    handle {
+        respond "Not Found" 404
+    }
+}
