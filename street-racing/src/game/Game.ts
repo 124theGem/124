@@ -10,6 +10,7 @@ import { FixedStepper } from './GameLoop';
 import { FollowCamera } from './Camera';
 import { createScene } from './Scene';
 import { RaceState } from './RaceState';
+import { Display } from '../platform/Display';
 
 export class Game {
   readonly physics=new CarPhysics();
@@ -21,6 +22,7 @@ export class Game {
   private camera=new FollowCamera();
   private hud=new HUD(this.track);
   private controls=new Controls();
+  private display=new Display();
   private effects=new DrivingEffects(this.world.scene);
   private clock=new FixedStepper();
   private abort=new AbortController();
@@ -37,12 +39,13 @@ export class Game {
     document.querySelector('#app')!.prepend(this.renderer.domElement);
     this.renderer.setPixelRatio(Math.min(devicePixelRatio,1.6));
     this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=T.PCFSoftShadowMap;
-    this.renderer.toneMapping=T.ACESFilmicToneMapping;this.renderer.toneMappingExposure=1.12;
+    this.renderer.toneMapping=T.ACESFilmicToneMapping;this.renderer.toneMappingExposure=1.35;
     this.world.scene.add(this.car.group);
     try{const saved=Number(localStorage.getItem(this.storedBestKey));if(saved>0&&Number.isFinite(saved))this.race.best=saved;}catch{/* Storage is optional in embedded browsers. */}
     this.controls.onReset=()=>this.reset();this.controls.onCamera=()=>this.camera.mode=1-this.camera.mode;this.controls.onPause=()=>this.pause(!this.paused);
     this.hud.button('reset',()=>this.reset());this.hud.button('camera',()=>this.camera.mode=1-this.camera.mode);
     this.hud.button('pause',()=>this.pause(!this.paused));this.hud.button('help',()=>this.pause(true,true));this.hud.button('resume',()=>this.pause(false));
+    this.hud.button('fullscreen',this.display.request);
     const signal=this.abort.signal;
     window.addEventListener('resize',()=>this.resize(),{signal});
     window.addEventListener('blur',()=>this.pause(true),{signal});
@@ -50,7 +53,7 @@ export class Game {
     this.renderer.domElement.addEventListener('webglcontextlost',e=>{e.preventDefault();this.pause(true);this.hud.toast('Графический контекст потерян. Обновите страницу.');},{signal});
     window.addEventListener('pagehide',()=>this.dispose(),{signal,once:true});
     this.resize();this.reset();
-    this.hud.toast(matchMedia('(pointer:coarse)').matches?'Удерживай газ и поворачивай. 〰 — ручник.':'W / ↑ — газ. Space — ручник. Побережье ждёт.');
+    this.hud.toast(matchMedia('(pointer:coarse)').matches?'Газ + руль. Короткое нажатие 〰 — управляемый занос.':'W / ↑ — газ. Space — ручник. Ночной город ждёт.');
     this.renderer.setAnimationLoop(this.frame);
     // Read-only diagnostics, enabled explicitly for browser smoke checks.
     if(new URLSearchParams(location.search).has('debug'))Object.defineProperty(window,'__coastline',{configurable:true,value:{
@@ -85,7 +88,7 @@ export class Game {
     this.renderer.render(this.world.scene,cam);
   };
   dispose(){
-    this.renderer.setAnimationLoop(null);this.abort.abort();this.controls.dispose();this.effects.dispose();this.hud.dispose();
+    this.renderer.setAnimationLoop(null);this.abort.abort();this.controls.dispose();this.display.dispose();this.effects.dispose();this.hud.dispose();this.world.sun.shadow.dispose();
     const geometries=new Set<T.BufferGeometry>(),materials=new Set<T.Material>(),textures=new Set<T.Texture>();
     this.world.scene.traverse(obj=>{if(obj instanceof T.Mesh||obj instanceof T.Points){geometries.add(obj.geometry);for(const material of Array.isArray(obj.material)?obj.material:[obj.material]){materials.add(material);for(const value of Object.values(material))if(value instanceof T.Texture)textures.add(value);}}});
     geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());this.world.dispose();this.renderer.dispose();

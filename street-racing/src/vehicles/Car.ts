@@ -39,6 +39,13 @@ export class Car {
     box(2.20,0.54,0,0.06,0.16,0.78,dark);
     box(-1.88,1.31,0,0.39,0.11,2.02,dark);
     box(-2.25,0.36,-0.58,0.16,0.13,0.23,new T.MeshStandardMaterial({color:0xabab9f,metalness:0.9}));
+    const glowCanvas=document.createElement('canvas');glowCanvas.width=glowCanvas.height=64;
+    const gc=glowCanvas.getContext('2d')!,gradient=gc.createRadialGradient(32,32,3,32,32,32);
+    gradient.addColorStop(0,'rgba(255,255,255,.9)');gradient.addColorStop(1,'rgba(255,255,255,0)');gc.fillStyle=gradient;gc.fillRect(0,0,64,64);
+    const underglow=new T.Mesh(new T.PlaneGeometry(6,3.8),new T.MeshBasicMaterial({map:new T.CanvasTexture(glowCanvas),color:0xff2e91,transparent:true,opacity:.75,depthWrite:false,blending:T.AdditiveBlending,toneMapped:false}));
+    underglow.rotation.x=-Math.PI/2;underglow.position.y=.018;this.group.add(underglow);
+    const headlights=new T.SpotLight(0xc9eaff,110,28,.42,.65,1.3);
+    headlights.position.set(1.9,.85,0);headlights.target.position.set(17,0,0);this.group.add(headlights,headlights.target);
     const rubber=new T.MeshStandardMaterial({color:0x172126,roughness:0.95});
     const alloy=new T.MeshStandardMaterial({color:0xb7c6c9,metalness:0.8,roughness:0.22});
     const tireGeo=new T.CylinderGeometry(CAR.wheelRadius,CAR.wheelRadius,0.28,12);tireGeo.rotateX(Math.PI/2);

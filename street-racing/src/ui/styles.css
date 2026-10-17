@@ -1,8 +1,171 @@
-:root{font-family:Inter,"Arial",sans-serif;color:#f7f2e6;background:#a6d0ce;font-synthesis:none;font-weight:400;--ink:#193b3b;--cream:#f7f2e6;--muted:#a8bbb2;--accent:#ee7655}
-*{box-sizing:border-box}html,body,#app{width:100%;height:100%;margin:0;overflow:hidden;overscroll-behavior:none;touch-action:none}button{font:inherit;cursor:pointer;color:inherit;-webkit-tap-highlight-color:transparent}button:focus-visible{outline:2px solid #ffc37f;outline-offset:4px}canvas.game-canvas{display:block;width:100%;height:100%;position:absolute;inset:0}.hud{position:absolute;inset:0;pointer-events:none;padding:32px;user-select:none}.hud:before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(15,43,40,.28),transparent 32%),linear-gradient(0deg,rgba(12,38,37,.3),transparent 20%);z-index:-0;pointer-events:none}.hud>*{position:absolute}.brand{left:32px;top:28px;display:flex;gap:12px;align-items:center}.brand-mark{font-size:52px;font-weight:800;font-style:italic;line-height:1;color:var(--cream);letter-spacing:-7px;position:relative;padding-right:16px}.brand-mark>span{font-size:27px;position:absolute;top:0;right:0;font-style:normal}.wordmark{font-size:19px;font-weight:800;letter-spacing:3px}.wordmark>span{font-size:11px;color:#e7c69a;font-weight:500;letter-spacing:1px}.eyebrow{font-size:8px;letter-spacing:3.3px;margin-top:6px;color:#d4e0d2}.track-title{top:121px;left:34px}.live-label{font-size:9px;font-weight:700;letter-spacing:2px;color:#f2d3a4;display:flex;align-items:center;gap:7px}.live-label i,.status-dot{display:inline-block;width:5px;height:5px;background:#e8b67b;border-radius:50%;box-shadow:0 0 8px #e4b36c88}.track-title h1{font-size:28px;line-height:1.14;font-weight:500;letter-spacing:-.9px;margin:13px 0 14px}.track-title h1>span{color:#f4c489;font-size:22px}.track-title p{font-size:8px;letter-spacing:1.8px;color:#e5e7d8}.track-title p>span{color:#d2aa7c;padding:0 6px}.panel{background:rgba(20,49,47,.85);border:1px solid #e1e3cb25;box-shadow:0 8px 25px #122e2b15;backdrop-filter:blur(12px);border-radius:3px}.label{font-size:8px;letter-spacing:1.6px;font-weight:600;color:#acc1b7;display:block}.timing{top:30px;left:50%;transform:translateX(-50%);display:flex;padding:16px 22px;gap:30px}.timing>div{min-width:72px}.timing>div+div{border-left:1px solid #d1dac41c;padding-left:26px}.timing strong{font-size:20px;font-weight:400;font-variant-numeric:tabular-nums;display:block;margin-top:8px;letter-spacing:-.5px}.timing strong>span{font-size:11px;color:#9fbaac}.best-time strong{color:#e9c99b}.map{top:30px;right:32px;width:180px;padding:14px 13px 10px}.map-head,.map-foot{display:flex;justify-content:space-between;align-items:center}.map-head .label{font-size:7px;letter-spacing:1.1px}.map-head>span+span{font-size:6px;color:#eccda3;letter-spacing:.8px}.map svg{width:100%;height:132px;margin-top:6px;filter:drop-shadow(0 2px 4px #0003)}.map-foot{color:#b4c6b9;font-size:7px;letter-spacing:1px;border-top:1px solid #cadbc41c;padding-top:9px}.top-actions{top:231px;right:32px;display:flex;gap:7px}.top-actions button{pointer-events:auto;width:39px;height:35px;border:1px solid #ecedda30;border-radius:3px;background:#1c3d38d9;font-size:20px;transition:background .15s}.top-actions button:hover{background:#375a4e}.top-actions button:last-child{font-size:14px}.speed{bottom:92px;left:32px;width:235px;padding:16px 20px 13px}.speed-top{display:flex;align-items:center;justify-content:space-between}.gear{border:1px solid #b0c2ad55;font-size:10px;padding:4px 6px;color:#efc591}.speed-value{display:flex;align-items:baseline;gap:10px}.speed-value strong{font-size:72px;font-weight:300;font-variant-numeric:tabular-nums;line-height:1.12;letter-spacing:-5px}.speed-value>span{font-size:9px;letter-spacing:1px;color:#bed0c2}.speed-bars{display:flex;gap:3px;height:12px;margin:10px 0 14px}.speed-bars i{flex:1;background:#adc2ae26;transform:skew(-15deg)}.speed-bars i.lit{background:#e8d2a7}.speed-bars i.lit:nth-child(n+19){background:#ef8056}.telemetry{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:6px;letter-spacing:.8px;color:#afc4b6}.telemetry b{font-size:9px;font-weight:500;color:#e6e4cf;margin-left:4px}.drift-box{bottom:136px;left:50%;transform:translateX(-50%);text-align:center;min-width:230px;opacity:.8;color:#f5efdb;transition:color .2s,opacity .2s;text-shadow:0 2px 12px #1a3f37a0}.drift-box>div:first-child{font-size:8px;letter-spacing:1.5px}.drift-icon{font-size:24px;vertical-align:middle;color:#f0c18c;margin-right:5px}.drift-box strong{font-size:42px;display:block;font-weight:400;font-variant-numeric:tabular-nums;line-height:1.2;letter-spacing:-1px}.drift-caption{font-size:7px;letter-spacing:2.8px;color:#e2e6d6}.drift-meter{height:2px;margin:14px auto 0;background:#e5e7cc40;width:110px}.drift-meter i{height:100%;display:block;background:#f6ba75;transition:width .05s}.drift-box.active{color:#ffe1a7;opacity:1}.drift-box.active .drift-icon{color:#ffb77c}.bottom-note{left:34px;bottom:30px;display:flex;align-items:center;gap:10px;font-size:7px;letter-spacing:1.2px;color:#e2e9d9}.divider{color:#c6b78f;padding:0 3px}.keyboard-hint{bottom:31px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:7px;color:#e8ecdd;letter-spacing:.9px}.keyboard-hint kbd{font-family:inherit;color:#fff5df;border:1px solid #f0e9d846;background:#1a3f3970;padding:5px 6px;border-radius:2px;font-size:8px;margin-right:5px}.keyboard-hint>span{padding:0 7px;opacity:.5}.touch-controls{pointer-events:none;left:0;right:0;bottom:max(78px,env(safe-area-inset-bottom));display:flex;justify-content:space-between;padding:0 32px}.touch-controls button{pointer-events:auto;touch-action:none;border:1px solid #f5edcf5c;border-radius:6px;background:#264c4355;backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;flex-direction:column;transition:background .08s;color:#fff4dd;box-shadow:0 3px 12px #183d3010}.steering{display:none;gap:10px}.steering button{font-size:48px;font-weight:300;width:70px;height:70px;line-height:1}.pedals{display:flex;gap:9px;margin-left:auto;align-items:flex-end}.pedals button{width:55px;height:62px;font-size:24px}.pedals button span{font-size:6px;letter-spacing:1px;margin-top:5px}.pedals .gas-button{height:81px;background:#dfbb7640;border-color:#f7dba885;font-size:31px}.pedals .drift-button{margin-right:5px;border-color:#f2ae7d80;color:#ffd1a2}.touch-controls button.pressed{background:#ebaf65b0;border-color:#fff3ce;box-shadow:0 0 20px #e4b97430}.overlay{inset:0;pointer-events:auto;display:flex;justify-content:center;align-items:center;background:#0a292c80;backdrop-filter:blur(9px);z-index:10}.hidden{display:none}.dialog{width:min(470px,90vw);background:#193d39;border:1px solid #c8d6b333;border-radius:5px;padding:34px;box-shadow:0 25px 100px #0e25294a}.dialog h2{font-size:30px;font-weight:400;margin:20px 0}.dialog p{font-size:12px;line-height:1.9;color:#d6dfce}.dialog p.tip{color:#ecc99a;font-size:11px;border-top:1px solid #e8ebcf22;padding-top:14px;margin-top:20px}.dialog button{pointer-events:auto;width:100%;background:#efc08a;color:#213d35;border:0;padding:17px;margin-top:12px;font-size:10px;font-weight:700;letter-spacing:2px}.toast{top:50%;left:50%;transform:translate(-50%,-50%);margin-top:95px;font-size:10px;letter-spacing:1px;background:#193b35ba;padding:12px 18px;border-radius:3px;opacity:1;transition:opacity 1s;white-space:nowrap}.toast.fade{opacity:0}.fatal{max-width:600px;margin:10vh auto;padding:32px;background:#193b3b;color:#f5e5c9;line-height:1.7;position:relative}.fatal h1{font-size:24px}
-@media (pointer:coarse){.steering{display:flex}.keyboard-hint{display:none}.speed{bottom:190px;width:180px;padding:12px 16px}.speed-value strong{font-size:56px}.speed-bars{margin:6px 0 9px;height:9px}.touch-controls{bottom:max(32px,env(safe-area-inset-bottom))}.pedals button{width:64px;height:72px}.pedals .gas-button{height:94px}.drift-box{bottom:190px}.bottom-note{bottom:10px}.telemetry{font-size:5.5px}}
-@media(max-width:950px){.hud{padding:20px}.brand{left:20px;top:20px}.wordmark{font-size:15px;letter-spacing:2px}.brand-mark{font-size:42px}.eyebrow{font-size:6px;letter-spacing:2.5px}.track-title{left:22px;top:101px}.track-title h1{font-size:24px}.map{right:20px;top:20px;width:150px}.map svg{height:105px}.top-actions{right:20px;top:192px;gap:5px}.top-actions button{width:33px;height:32px}.timing{padding:12px 16px;gap:15px;top:20px}.timing strong{font-size:17px}.timing>div{min-width:57px}.timing>div+div{padding-left:15px}.label{font-size:7px}.speed{left:20px}.touch-controls{padding:0 20px}.bottom-note{left:22px}}
-@media(max-width:700px){.brand{top:max(16px,env(safe-area-inset-top));left:max(16px,env(safe-area-inset-left))}.brand-mark{font-size:35px;padding-right:12px}.brand-mark>span{font-size:21px}.wordmark{font-size:12px;letter-spacing:2px}.wordmark>span{font-size:8px}.eyebrow{font-size:5px;letter-spacing:2px}.track-title{top:86px;left:17px}.track-title h1{font-size:21px;margin:9px 0}.track-title .live-label{font-size:7px;letter-spacing:1.4px}.track-title p{font-size:6px;letter-spacing:1px}.map{right:15px;top:max(16px,env(safe-area-inset-top));width:112px;padding:10px 8px}.map-head>span+span{display:none}.map-head .label{font-size:6px}.map svg{height:91px}.map-foot{font-size:5px;letter-spacing:.4px}.top-actions{right:15px;top:159px;gap:4px}.top-actions button{width:25px;height:27px;font-size:15px}.timing{top:205px;left:16px;transform:none;gap:12px;padding:11px 12px}.timing>div{min-width:42px}.timing>div+div{padding-left:12px}.timing strong{font-size:15px;margin-top:6px}.timing .label{font-size:6px;letter-spacing:.8px}.best-time{display:none}.speed{bottom:170px;left:16px;width:155px;padding:10px 13px}.speed-value strong{font-size:51px}.speed-value>span{font-size:7px}.speed-bars{height:7px;gap:2px;margin:6px 0 10px}.speed .label{font-size:6px}.telemetry{font-size:5px;letter-spacing:.4px}.telemetry b{font-size:8px}.drift-box{left:auto;right:15px;transform:none;bottom:192px;min-width:145px}.drift-box>div:first-child{font-size:6px;letter-spacing:.8px}.drift-box strong{font-size:34px}.drift-caption{font-size:6px;letter-spacing:2px}.drift-icon{font-size:18px;margin-right:1px}.touch-controls{padding:0 max(15px,env(safe-area-inset-right)) 0 max(15px,env(safe-area-inset-left));bottom:max(36px,env(safe-area-inset-bottom))}.steering{gap:7px}.steering button{width:58px;height:65px}.pedals{gap:7px}.pedals button{width:49px;height:63px;font-size:22px}.pedals .gas-button{height:83px;font-size:28px}.pedals .drift-button{margin-right:0}.pedals button span{font-size:5px;letter-spacing:.5px}.bottom-note{font-size:6px;left:17px;bottom:12px;gap:7px}.keyboard-hint{display:none}.toast{font-size:8px;max-width:90vw;white-space:normal;text-align:center;padding:10px 12px;margin-top:50px}.dialog{padding:24px}.dialog h2{font-size:25px}}
-@media(max-height:520px) and (min-width:600px){.track-title{top:88px}.track-title h1{font-size:19px;margin:8px 0}.track-title p{display:none}.timing{padding:9px 15px}.timing strong{font-size:16px}.brand{top:15px}.map{top:15px;width:117px;padding:9px}.map svg{height:78px;margin-top:0}.map-head .label{font-size:6px}.map-head>span+span{display:none}.map-foot{font-size:5px}.top-actions{top:145px;right:20px}.top-actions button{width:26px;height:25px;font-size:14px}.speed{left:20px;bottom:114px;width:160px;padding:9px 12px}.speed-value strong{font-size:45px}.speed-bars{height:6px;margin:4px 0 8px}.speed .label{font-size:6px}.gear{font-size:8px;padding:2px 4px}.touch-controls{bottom:max(20px,env(safe-area-inset-bottom))}.steering button{width:60px;height:55px}.pedals button{width:53px;height:51px}.pedals .gas-button{height:67px}.drift-box{bottom:95px;right:auto;left:50%;transform:translateX(-50%)}.drift-box strong{font-size:32px}.bottom-note{bottom:6px;font-size:5px}.keyboard-hint{display:none}.toast{margin-top:60px}.dialog{padding:20px;max-height:95vh;overflow:auto}.dialog h2{margin:10px 0;font-size:24px}.dialog p{font-size:10px}.dialog p.tip{margin-top:10px;padding-top:8px}.dialog button{padding:12px;margin-top:5px}}
-.brand-mark>span{width:22px;height:22px;display:block;top:1px;right:-1px}.brand-mark svg,.track-title h1>span svg{width:100%;height:100%;display:block}.track-title h1>span{display:inline-block;width:20px;height:20px;vertical-align:baseline;margin-left:7px}.top-actions button svg{width:20px;height:20px;vertical-align:middle}.drift-box:not(.active){color:#e9e9d4}.drift-box.active{filter:drop-shadow(0 2px 7px #203c2c)}
-@media(max-width:700px){.brand-mark>span{width:15px;height:15px;right:-1px;top:0}.track-title h1>span{width:15px;height:15px;margin-left:4px}.top-actions button svg{width:16px;height:16px}}
+:root {
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+  color: #edf7ff; background: #080e20; font-synthesis: none;
+  --cream: #edf7ff; --muted: #8598b5; --accent: #56e5ff;
+  --safe-top: max(env(safe-area-inset-top, 0px), var(--tg-safe-top, 0px));
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--tg-safe-bottom, 0px));
+  --safe-left: max(env(safe-area-inset-left, 0px), var(--tg-safe-left, 0px));
+  --safe-right: max(env(safe-area-inset-right, 0px), var(--tg-safe-right, 0px));
+}
+* { box-sizing: border-box; }
+html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; overscroll-behavior: none; touch-action: none; }
+#app { position: fixed; inset: 0; width: 100%; height: 100%; height: 100dvh; overflow: hidden; touch-action: none; }
+button { font: inherit; cursor: pointer; color: inherit; -webkit-tap-highlight-color: transparent; }
+button:focus-visible { outline: 2px solid #60e8ff; outline-offset: 4px; }
+.game-canvas { display: block; position: absolute; inset: 0; }
+.hud { position: absolute; inset: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left); pointer-events: none; user-select: none; }
+.hud:before { content: ""; position: fixed; inset: 0; background: linear-gradient(90deg,#070c203a,transparent 35%),linear-gradient(0deg,#03071880,transparent 30%); pointer-events: none; }
+.hud > * { position: absolute; }
+.brand { left: 28px; top: 24px; display: flex; gap: 12px; align-items: center; }
+.brand-mark { font-size: 50px; font-weight: 800; font-style: italic; line-height: 1; letter-spacing: -7px; position: relative; padding-right: 16px; color: #55e6ff; text-shadow: 0 0 22px #53dfff55; }
+.brand-mark > span { position: absolute; width: 21px; height: 21px; top: 0; right: -1px; }
+.brand-mark svg, .track-title h1 svg { width: 100%; height: 100%; display: block; }
+.wordmark { font-size: 18px; font-weight: 800; letter-spacing: 3px; }
+.wordmark > span { font-size: 10px; color: #ec79bf; font-weight: 500; letter-spacing: 1px; }
+.eyebrow { font-size: 7px; letter-spacing: 2.4px; margin-top: 7px; color: #9eaec9; }
+.track-title { top: 116px; left: 30px; }
+.live-label { display: flex; align-items: center; gap: 7px; color: #68e4f3; font-size: 9px; letter-spacing: 2px; font-weight: 600; }
+.live-label i, .status-dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: #4fe8ff; box-shadow: 0 0 9px #4fe8ff; }
+.track-title h1 { font-size: 30px; font-weight: 450; letter-spacing: -.8px; line-height: 1.12; margin: 14px 0; }
+.track-title h1 > span { display: inline-block; width: 20px; height: 20px; margin-left: 8px; color: #fb59ae; }
+.track-title p { font-size: 8px; letter-spacing: 1.4px; color: #8b9dbb; }
+.track-title p > span { padding: 0 4px; color: #e366b4; }
+.panel { background: #090f23de; border: 1px solid #6ea4d039; border-radius: 5px; box-shadow: 0 8px 28px #02050e44; backdrop-filter: blur(12px); }
+.label { display: block; font-size: 8px; letter-spacing: 1.5px; font-weight: 600; color: #94a9c5; }
+.timing { top: 26px; left: 50%; transform: translateX(-50%); display: flex; padding: 15px 20px; gap: 26px; }
+.timing > div { min-width: 68px; }
+.timing > div + div { border-left: 1px solid #7596c52b; padding-left: 24px; }
+.timing strong { display: block; font-size: 20px; font-weight: 400; font-variant-numeric: tabular-nums; margin-top: 8px; letter-spacing: -.5px; }
+.timing strong > span { font-size: 11px; color: #89a1bc; }
+.best-time strong { color: #ee8ec8; }
+.map { top: 26px; right: 28px; width: 174px; padding: 13px 12px 10px; }
+.map-head, .map-foot { display: flex; justify-content: space-between; align-items: center; }
+.map-head .label { font-size: 7px; letter-spacing: 1px; }
+.map-head > span + span { font-size: 6px; color: #6be6f4; letter-spacing: .6px; }
+.map svg { width: 100%; height: 126px; margin-top: 5px; filter: drop-shadow(0 0 5px #4ee6ff50); }
+.map-foot { font-size: 7px; letter-spacing: .8px; color: #9aaec5; border-top: 1px solid #7596c52b; padding-top: 8px; }
+.top-actions { top: 218px; right: 28px; display: flex; gap: 6px; }
+.top-actions button { pointer-events: auto; width: 34px; height: 34px; border: 1px solid #80b5d340; border-radius: 4px; background: #0b142ce0; font-size: 18px; }
+.top-actions button:hover { background: #18334c; }
+.top-actions button svg { width: 19px; height: 19px; vertical-align: middle; }
+.top-actions button:last-child { font-size: 14px; }
+#fullscreen { color: #65eaff; border-color: #58d6ed66; }
+#fullscreen[aria-pressed="true"] { background: #184351; }
+.speed { bottom: 88px; left: 28px; width: 228px; padding: 15px 18px 13px; border-top: 2px solid #49deef; }
+.speed-top { display: flex; justify-content: space-between; align-items: center; }
+.gear { color: #f08fc8; border: 1px solid #ba6da85c; border-radius: 2px; font-size: 10px; padding: 4px 7px; }
+.speed-value { display: flex; align-items: baseline; gap: 11px; }
+.speed-value strong { font-size: 70px; font-weight: 300; font-variant-numeric: tabular-nums; line-height: 1.12; letter-spacing: -4px; }
+.speed-value > span { font-size: 9px; letter-spacing: 1px; color: #a6bdd1; }
+.speed-bars { display: flex; gap: 3px; height: 10px; margin: 9px 0 13px; }
+.speed-bars i { flex: 1; background: #49709c33; transform: skew(-15deg); }
+.speed-bars i.lit { background: #53d7ec; box-shadow: 0 0 8px #51d7ed33; }
+.speed-bars i.lit:nth-child(n+19) { background: #f65bab; }
+.telemetry { display: flex; justify-content: space-between; gap: 5px; color: #98adc5; font-size: 7px; letter-spacing: .4px; }
+.telemetry b { color: #e8f8ff; font-size: 10px; font-weight: 500; margin-left: 3px; }
+.drift-box { bottom: 132px; left: 50%; transform: translateX(-50%); text-align: center; min-width: 230px; color: #a5b9d6; text-shadow: 0 2px 14px #02091f; transition: color .2s; }
+.drift-box > div:first-child { font-size: 8px; letter-spacing: 1.4px; }
+.drift-icon { font-size: 25px; vertical-align: middle; color: #74d8ed; margin-right: 5px; }
+.drift-box strong { display: block; font-size: 43px; font-weight: 400; font-variant-numeric: tabular-nums; line-height: 1.2; letter-spacing: -1px; }
+.drift-caption { color: #96abc9; font-size: 7px; letter-spacing: 2.8px; }
+.drift-meter { width: 110px; height: 2px; margin: 14px auto 0; background: #6282ae44; }
+.drift-meter i { display: block; height: 100%; background: #ec64b5; transition: width .05s; box-shadow: 0 0 9px #ec64b5; }
+.drift-box.active { color: #ff8fce; filter: drop-shadow(0 0 9px #f552aa44); }
+.drift-box.active .drift-icon { color: #ff8fce; }
+.bottom-note { left: 30px; bottom: 25px; display: flex; align-items: center; gap: 9px; color: #a3b6cc; font-size: 7px; letter-spacing: 1.1px; }
+.divider { color: #ae73b5; padding: 0 3px; }
+.keyboard-hint { left: 50%; bottom: 26px; transform: translateX(-50%); white-space: nowrap; font-size: 7px; letter-spacing: .7px; color: #a4b9d3; }
+.keyboard-hint kbd { font-family: inherit; font-size: 8px; border: 1px solid #89abd54a; background: #0b172dc9; border-radius: 3px; padding: 5px 6px; margin-right: 5px; color: #d7eeff; }
+.keyboard-hint > span { padding: 0 6px; color: #687ea3; }
+.touch-controls { left: 0; right: 0; bottom: 74px; display: flex; justify-content: space-between; padding: 0 28px; pointer-events: none; }
+.touch-controls button { pointer-events: auto; touch-action: none; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px solid #6bbbdc69; border-radius: 7px; color: #e0f5ff; background: #12203d99; backdrop-filter: blur(6px); box-shadow: 0 5px 18px #02071940; }
+.steering { display: none; gap: 9px; }
+.steering button { width: 70px; height: 70px; font-size: 48px; line-height: 1; font-weight: 300; }
+.pedals { display: flex; gap: 9px; margin-left: auto; align-items: flex-end; }
+.pedals button { width: 55px; height: 62px; font-size: 24px; }
+.pedals button span { font-size: 6px; letter-spacing: 1px; margin-top: 5px; }
+.pedals .gas-button { height: 81px; font-size: 31px; background: #1c748078; border-color: #67e8f6a0; }
+.pedals .drift-button { margin-right: 4px; border-color: #ed79c389; color: #ff9dd4; }
+.touch-controls button.pressed { background: #328aabca; border-color: #b4f6ff; box-shadow: 0 0 20px #4de7ff44; }
+.touch-controls .drift-button.pressed { background: #a7357dbb; border-color: #ffc5e6; }
+.overlay { inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; pointer-events: auto; background: #030719b8; backdrop-filter: blur(9px); }
+.hidden { display: none; }
+.dialog { width: min(470px,90vw); padding: 32px; border: 1px solid #72c5e34f; border-radius: 7px; background: #0c1429; box-shadow: 0 25px 100px #02040a88; }
+.dialog h2 { font-size: 29px; font-weight: 400; margin: 20px 0; }
+.dialog p { color: #b9cce0; font-size: 12px; line-height: 1.9; }
+.dialog p.tip { color: #a8e8f5; font-size: 11px; border-top: 1px solid #8eacd32e; padding-top: 14px; margin-top: 20px; }
+.dialog button { pointer-events: auto; width: 100%; padding: 16px; margin-top: 12px; background: #65e5f5; color: #0b2032; border: 0; border-radius: 3px; font-size: 10px; font-weight: 700; letter-spacing: 2px; }
+.toast { top: 50%; left: 50%; transform: translate(-50%,-50%); margin-top: 95px; padding: 12px 18px; border: 1px solid #6ddce04a; border-radius: 4px; background: #0b1531e3; color: #c2ebf5; white-space: nowrap; font-size: 10px; letter-spacing: .6px; transition: opacity 1s; }
+.toast.fade { opacity: 0; }
+.fatal { position: relative; max-width: 600px; margin: 10vh auto; padding: 32px; background: #0d1933; color: #d0eafd; line-height: 1.7; }
+.fatal h1 { font-size: 24px; }
+@media(pointer: coarse) {
+  .steering { display: flex; } .keyboard-hint { display: none; }
+  .touch-controls { bottom: 24px; }
+  .speed { bottom: 166px; width: 180px; padding: 12px 15px; }
+  .speed-value strong { font-size: 56px; }
+  .speed-bars { height: 8px; margin: 6px 0 10px; }
+  .pedals button { width: 64px; height: 72px; }
+  .pedals .gas-button { height: 94px; }
+  .drift-box { bottom: 170px; } .bottom-note { bottom: 7px; }
+}
+@media(max-width: 1050px) {
+  .brand { left: 20px; top: 18px; } .wordmark { font-size: 14px; letter-spacing: 2px; }
+  .brand-mark { font-size: 40px; } .eyebrow { font-size: 6px; letter-spacing: 1.8px; }
+  .track-title { left: 22px; top: 94px; } .track-title h1 { font-size: 25px; }
+  .map { right: 20px; top: 18px; width: 148px; } .map svg { height: 102px; }
+  .top-actions { right: 20px; top: 186px; gap: 5px; } .top-actions button { width: 28px; height: 30px; }
+  .timing { top: 18px; padding: 12px 15px; gap: 15px; }
+  .timing > div { min-width: 52px; } .timing > div + div { padding-left: 15px; }
+  .timing strong { font-size: 17px; } .timing .label { font-size: 7px; }
+  .speed { left: 20px; } .touch-controls { padding: 0 20px; } .bottom-note { left: 22px; }
+}
+@media(max-width: 700px) {
+  .brand { top: 14px; left: 16px; gap: 9px; } .brand-mark { font-size: 34px; padding-right: 12px; }
+  .brand-mark > span { width: 15px; height: 15px; } .wordmark { font-size: 12px; letter-spacing: 2px; }
+  .wordmark > span { font-size: 8px; } .eyebrow { font-size: 5px; letter-spacing: 1.3px; }
+  .track-title { top: 79px; left: 17px; } .track-title h1 { font-size: 23px; margin: 8px 0 10px; }
+  .track-title h1 > span { width: 15px; height: 15px; margin-left: 4px; }
+  .track-title .live-label { font-size: 7px; letter-spacing: 1.1px; } .track-title p { font-size: 6px; letter-spacing: .6px; }
+  .map { right: 15px; top: 14px; width: 109px; padding: 9px 8px; }
+  .map svg { height: 87px; margin-top: 2px; } .map-head .label { font-size: 6px; }
+  .map-head > span + span { display: none; } .map-foot { font-size: 5px; letter-spacing: .4px; }
+  .top-actions { right: 15px; top: 153px; gap: 4px; }
+  .top-actions button { width: 25px; height: 28px; font-size: 15px; } .top-actions button svg { width: 16px; height: 16px; }
+  .timing { top: 186px; left: 16px; transform: none; padding: 10px 12px; gap: 12px; }
+  .timing > div { min-width: 42px; } .timing > div + div { padding-left: 12px; }
+  .timing strong { font-size: 15px; margin-top: 6px; } .timing .label { font-size: 6px; letter-spacing: .8px; }
+  .best-time { display: none; }
+  .speed { bottom: 155px; left: 16px; width: 151px; padding: 10px 12px; }
+  .speed-value strong { font-size: 49px; } .speed-value > span { font-size: 7px; }
+  .speed-bars { height: 7px; gap: 2px; margin: 5px 0 9px; } .speed .label { font-size: 6px; }
+  .telemetry { font-size: 5px; letter-spacing: .3px; } .telemetry b { font-size: 8px; }
+  .drift-box { bottom: 178px; left: auto; right: 15px; transform: none; min-width: 142px; }
+  .drift-box > div:first-child { font-size: 6px; letter-spacing: .6px; } .drift-box strong { font-size: 34px; }
+  .drift-caption { font-size: 6px; letter-spacing: 2px; } .drift-icon { font-size: 18px; margin-right: 2px; }
+  .touch-controls { bottom: 23px; padding: 0 15px; } .steering { gap: 7px; }
+  .steering button { width: 57px; height: 65px; } .pedals { gap: 7px; }
+  .pedals button { width: 49px; height: 63px; font-size: 22px; }
+  .pedals .gas-button { height: 83px; font-size: 28px; } .pedals .drift-button { margin-right: 0; }
+  .pedals button span { font-size: 5px; letter-spacing: .5px; }
+  .bottom-note { left: 17px; bottom: 6px; gap: 7px; font-size: 6px; } .keyboard-hint { display: none; }
+  .toast { max-width: 89vw; margin-top: 53px; padding: 10px 12px; white-space: normal; text-align: center; font-size: 9px; }
+  .dialog { padding: 23px; } .dialog h2 { font-size: 25px; }
+}
+@media(max-height: 520px) and (min-width: 600px) {
+  .brand { top: 12px; } .track-title { display: none; }
+  .timing { top: 13px; padding: 9px 15px; } .timing strong { font-size: 16px; }
+  .map { top: 12px; width: 115px; padding: 9px; } .map svg { height: 75px; margin-top: 0; }
+  .map-head .label { font-size: 6px; } .map-head > span + span { display: none; } .map-foot { font-size: 5px; }
+  .top-actions { top: 140px; } .top-actions button { width: 25px; height: 26px; font-size: 14px; }
+  .speed { bottom: 105px; width: 154px; padding: 9px 12px; } .speed-value strong { font-size: 43px; }
+  .speed-bars { height: 6px; margin: 4px 0 8px; } .speed .label { font-size: 6px; } .gear { font-size: 8px; padding: 2px 4px; }
+  .touch-controls { bottom: 16px; } .steering button { width: 59px; height: 54px; }
+  .pedals button { width: 53px; height: 51px; } .pedals .gas-button { height: 67px; }
+  .drift-box { left: 50%; right: auto; top: 83px; bottom: auto; min-width: 165px; transform: translateX(-50%); }
+  .drift-box strong { font-size: 25px; } .drift-box > div:first-child { font-size: 6px; }
+  .drift-icon { font-size: 16px; } .drift-caption { display: none; } .drift-meter { margin-top: 5px; }
+  .bottom-note { bottom: 3px; font-size: 5px; } .keyboard-hint { display: none; }
+  .dialog { max-height: 95%; overflow: auto; padding: 18px; } .dialog h2 { font-size: 22px; margin: 10px 0; }
+  .dialog p { font-size: 10px; } .dialog p.tip { margin-top: 8px; padding-top: 8px; } .dialog button { padding: 12px; margin-top: 4px; }
+}

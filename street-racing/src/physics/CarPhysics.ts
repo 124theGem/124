@@ -24,11 +24,16 @@ export class CarPhysics {
   }
   step(input: Input, dt: number) {
     const speed = this.speed;
-    const target = clamp(input.steer, -1, 1) * CAR.maxSteer / (1 + Math.abs(this.vx) / 38);
+    const mu = this.surface === 'grass' ? CAR.grassGrip : this.surface === 'shoulder' ? CAR.shoulderGrip : CAR.asphaltGrip;
+    const driftSteering = input.handbrake ? CAR.driftSteeringMultiplier : 1;
+    // Asking for a 20-degree steering angle at 100 km/h overloaded both axles.
+    // Limit curvature to the available lateral acceleration, as in arcade racers.
+    const steeringLimit = Math.min(CAR.maxSteer, Math.max(CAR.minimumSteer,
+      Math.atan(CAR.wheelbase * mu * 9.81 * CAR.corneringMargin / Math.max(1, this.vx * this.vx)) * driftSteering));
+    const target = clamp(input.steer, -1, 1) * steeringLimit;
     this.steer += clamp(target - this.steer, -CAR.steeringRate * dt, CAR.steeringRate * dt);
     const gripTarget = input.handbrake ? CAR.handbrakeGrip : 1;
     this.rearGrip += clamp(gripTarget - this.rearGrip, -7 * dt, CAR.gripRecovery * dt);
-    const mu = this.surface === 'grass' ? CAR.grassGrip : this.surface === 'shoulder' ? CAR.shoulderGrip : CAR.asphaltGrip;
     const transfer = clamp(CAR.mass * this.acceleration * CAR.cgHeight / CAR.wheelbase, -2200, 2200);
     const frontLoad = CAR.mass * 9.81 * CAR.rearAxle / CAR.wheelbase - transfer;
     const rearLoad = CAR.mass * 9.81 - frontLoad;
@@ -43,11 +48,12 @@ export class CarPhysics {
     if (this.vx < -0.7 && input.throttle > 0) { drive = 0; brake += input.throttle * CAR.brakeForce; }
     const direction = this.vx === 0 ? 0 : Math.sign(this.vx);
     const handbrake = input.handbrake ? CAR.handbrakeForce : 0;
-    const denominator = Math.max(2.5, Math.abs(this.vx));
+    const denominator = Math.max(4, Math.abs(this.vx));
     this.frontSlip = Math.atan2(this.vy + CAR.frontAxle * this.yawRate, denominator) - this.steer * Math.tanh(this.vx / 2);
     this.rearSlip = Math.atan2(this.vy - CAR.rearAxle * this.yawRate, denominator);
-    const front = tireForce(this.frontSlip, CAR.frontStiffness, frontLoad, mu, -direction * brake * 0.65);
-    const rear = tireForce(this.rearSlip, CAR.rearStiffness, rearLoad, mu * this.rearGrip, drive - direction * (brake * 0.35 + handbrake));
+    const lowSpeedStiffness = clamp(Math.abs(this.vx) / 6, 0.22, 1);
+    const front = tireForce(this.frontSlip, CAR.frontStiffness * lowSpeedStiffness, frontLoad, mu, -direction * brake * 0.65);
+    const rear = tireForce(this.rearSlip, CAR.rearStiffness * lowSpeedStiffness, rearLoad, mu * this.rearGrip, drive - direction * (brake * 0.35 + handbrake));
     const c = Math.cos(this.steer), s = Math.sin(this.steer);
     const resistance = CAR.airDrag * this.vx * Math.abs(this.vx) + Math.tanh(this.vx * 2) * CAR.rolling * (this.surface === 'grass' ? 4 : 1);
     const fx = front.fx * c - front.fy * s + rear.fx - resistance;
@@ -60,6 +66,19 @@ export class CarPhysics {
     velocity.x += (ch * fx - sh * fy) / CAR.mass * dt;
     velocity.z += (sh * fx + ch * fy) / CAR.mass * dt;
     this.yawRate += (CAR.frontAxle * (front.fy * c + front.fx * s) - CAR.rearAxle * rear.fy) / CAR.inertia * dt;
+    // Bounded ESP-like yaw torque arrests spin while preserving real lateral velocity.
+    // The weaker handbrake setting allows an intentional slide and countersteering.
+    let desiredYaw = this.vx / CAR.wheelbase * Math.tan(this.steer);
+    if (input.handbrake) desiredYaw = clamp(desiredYaw, -CAR.maxDriftYawRate, CAR.maxDriftYawRate);
+    else {
+      // Help the body catch up with its travel direction after a slide, rather than
+      // scrubbing all forward momentum against a fully restored tire side force.
+      const slide = Math.sign(this.slipAngle) * Math.max(0, Math.abs(this.slipAngle) - 0.08);
+      desiredYaw += clamp(slide * CAR.recoveryAlignment, -2.4, 2.4);
+    }
+    const stability = input.handbrake ? CAR.driftStabilityAssist : CAR.stabilityAssist;
+    if (speed > 2) this.yawRate += clamp((desiredYaw - this.yawRate) * stability,
+      -CAR.maxAssistAcceleration, CAR.maxAssistAcceleration) * dt;
     this.yawRate *= Math.exp(-0.28 * dt);
     if (speed < 1.5) this.yawRate *= Math.exp(-5 * dt);
     this.heading += this.yawRate * dt;

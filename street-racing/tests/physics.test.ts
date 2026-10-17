@@ -9,6 +9,28 @@ const gas={...IDLE,throttle:1};
 function run(car:CarPhysics,seconds:number,input:Input=gas){for(let i=0;i<Math.round(seconds*60);i++)car.step(input,CAR.fixedStep);}
 
 describe('dynamic bicycle vehicle',()=>{
+  it('grips through an ordinary powered corner instead of spinning on full throttle',()=>{
+    const car=new CarPhysics();car.vx=20;let maxSlip=0;
+    for(let i=0;i<180;i++){car.step({...gas,steer:.7},1/60);maxSlip=Math.max(maxSlip,Math.abs(car.slipAngle));}
+    expect(maxSlip*180/Math.PI).toBeLessThan(7);
+    expect(car.speed*3.6).toBeGreaterThan(80);
+    expect(car.heading).toBeGreaterThan(.5);
+  });
+  it('responds to steering within a quarter second without an abrupt heading change',()=>{
+    const car=new CarPhysics();car.vx=20;car.step({...gas,steer:.7},1/60);
+    expect(Math.abs(car.heading)).toBeLessThan(.02);run(car,.25,{...gas,steer:.7});expect(car.heading).toBeGreaterThan(.04);
+  });
+  it('allows a short handbrake drift then catches the slide while preserving momentum',()=>{
+    const car=new CarPhysics();car.vx=23;run(car,.8,{...gas,steer:.7,handbrake:true});
+    const driftSpeed=car.speed;
+    expect(Math.abs(car.slipAngle)*180/Math.PI).toBeGreaterThan(15);
+    expect(Math.abs(car.slipAngle)*180/Math.PI).toBeLessThan(40);
+    expect(Math.abs(car.yawRate)).toBeLessThan(1.8);
+    run(car,1.5,{...IDLE,throttle:.4});
+    expect(Math.abs(car.slipAngle)*180/Math.PI).toBeLessThan(3);
+    expect(car.speed).toBeGreaterThan(driftSpeed*.8);
+    expect(car.rearGrip).toBe(1);
+  });
   it('accelerates gradually to 100 km/h in approximately seven seconds',()=>{
     const car=new CarPhysics();run(car,1);expect(car.vx).toBeGreaterThan(3);expect(car.vx).toBeLessThan(7);
     let t=1;while(car.vx<100/3.6&&t<12){run(car,1/60);t+=1/60;}
