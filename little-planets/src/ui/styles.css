@@ -2090,3 +2090,210 @@ small {
     display: none;
   }
 }
+.space-hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+.space-hud > header {
+  position: absolute;
+  left: calc(var(--left) + 20px);
+  top: calc(var(--top) + 18px);
+  padding: 17px 20px;
+  width: 300px;
+  border-radius: 15px;
+  background: #0b2437de;
+  border: 1px solid #b0d2d52b;
+}
+.space-hud h3 {
+  font-size: 23px;
+  margin: 7px 0 14px;
+}
+.flight-readings {
+  display: flex;
+  gap: 25px;
+}
+.flight-readings span {
+  display: grid;
+  gap: 5px;
+}
+.flight-readings small {
+  font-size: 8px;
+  letter-spacing: 1px;
+}
+.flight-readings b {
+  font-size: 20px;
+  color: #e2e3bd;
+}
+.space-hud p {
+  font-size: 11px;
+  margin-top: 11px;
+  line-height: 1.45;
+}
+.flight-actions {
+  position: absolute;
+  right: calc(var(--right) + 20px);
+  bottom: calc(var(--bottom) + 20px);
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  justify-content: end;
+  max-width: 340px;
+}
+.flight-actions button {
+  pointer-events: auto;
+  font-size: 12px;
+  padding: 11px 14px;
+  background: #17384bdc;
+}
+.flight-actions .primary {
+  background: #bedda4;
+}
+.flight-thrust {
+  position: absolute;
+  right: calc(var(--right) + 20px);
+  top: calc(var(--top) + 20px);
+  display: grid;
+  grid-template-columns: repeat(2, 65px);
+  gap: 7px;
+}
+.flight-thrust button {
+  pointer-events: auto;
+  touch-action: none;
+  background: #17384be0;
+  padding: 10px 5px;
+  font-size: 11px;
+}
+.flight-thrust button:nth-child(-n + 2) {
+  font-size: 22px;
+}
+.flight-hint {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--bottom) + 16px);
+  transform: translateX(-50%);
+  font-size: 9px;
+  color: #c3d2d6;
+  text-shadow: 0 1px 6px #000;
+}
+.flight-reticle {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 35px;
+  color: #c9e9aa;
+  text-shadow: 0 0 8px #aee4c8aa;
+}
+.space-flight #joystick {
+  visibility: visible !important;
+  pointer-events: auto !important;
+  opacity: 1 !important;
+  bottom: calc(var(--bottom) + 23px);
+  left: calc(var(--left) + 24px);
+}
+.space-flight .keyboard,
+.space-flight #toast {
+  visibility: hidden;
+}
+.space-flight .modal {
+  z-index: 20;
+}
+.space-flight .flight-actions button:disabled {
+  opacity: 0.4;
+}
+.space-flight .flight-actions button.primary:disabled {
+  background: #56735a;
+}
+@media (max-width: 600px) {
+  .space-hud > header {
+    left: calc(var(--left) + 12px);
+    top: calc(var(--top) + 12px);
+    width: 210px;
+    padding: 12px 14px;
+  }
+  .space-hud h3 {
+    font-size: 18px;
+    margin: 6px 0 12px;
+  }
+  .flight-readings {
+    gap: 15px;
+  }
+  .flight-readings b {
+    font-size: 16px;
+  }
+  .space-hud p {
+    font-size: 10px;
+  }
+  .flight-thrust {
+    right: calc(var(--right) + 12px);
+    top: calc(var(--top) + 12px);
+    grid-template-columns: repeat(2, 51px);
+    gap: 5px;
+  }
+  .flight-thrust button {
+    font-size: 9px;
+  }
+  .flight-actions {
+    right: calc(var(--right) + 12px);
+    bottom: calc(var(--bottom) + 17px);
+    max-width: 190px;
+    gap: 5px;
+  }
+  .flight-actions button {
+    font-size: 10px;
+    padding: 10px;
+  }
+  .flight-hint {
+    display: none;
+  }
+  .space-flight #joystick {
+    width: 82px;
+    height: 82px;
+    left: calc(var(--left) + 20px);
+  }
+}
+@media (orientation: landscape) and (max-height: 600px) {
+  .space-hud > header {
+    top: calc(var(--top) + 10px);
+    left: calc(var(--left) + 12px);
+    padding: 10px 14px;
+    width: 235px;
+  }
+  .space-hud h3 {
+    font-size: 17px;
+    margin: 5px 0 9px;
+  }
+  .flight-readings b {
+    font-size: 16px;
+  }
+  .space-hud p {
+    font-size: 9px;
+    margin-top: 7px;
+  }
+  .flight-thrust {
+    top: calc(var(--top) + 12px);
+    grid-template-columns: repeat(2, 56px);
+    gap: 5px;
+  }
+  .flight-thrust button {
+    padding: 6px;
+  }
+  .flight-actions {
+    bottom: calc(var(--bottom) + 14px);
+    right: calc(var(--right) + 14px);
+    max-width: 350px;
+  }
+  .flight-actions button {
+    padding: 9px 12px;
+    font-size: 11px;
+  }
+  .flight-hint {
+    display: none;
+  }
+  .space-flight #joystick {
+    width: 76px;
+    height: 76px;
+    bottom: calc(var(--bottom) + 16px);
+    left: calc(var(--left) + 20px);
+  }
+}

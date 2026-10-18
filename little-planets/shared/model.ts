@@ -1,3 +1,10 @@
+import {
+  beginFlight,
+  redirectFlight,
+  stepFlight,
+  landingInfo,
+  type FlightState,
+} from "./space";
 import { surfaceDistance } from "./sphere";
 import { z } from "zod";
 import {
@@ -67,7 +74,8 @@ export interface PlanetState {
   lastSimAt: number;
 }
 export interface Save {
-  version: 3;
+  version: 4;
+  flight: FlightState | null;
   revision: number;
   planet: PlanetId;
   position: { x: number; z: number };
@@ -88,8 +96,33 @@ export interface Save {
 }
 export class RuleError extends Error {}
 const planet = z.string().refine((p) => Object.hasOwn(PLANETS, p)),
-  cell = z.number().int().min(0).max(128);
+  cell = z.number().int().min(0).max(224);
+const pilotInput = z
+  .object({
+    throttle: z.number().min(-1).max(1),
+    turn: z.number().min(-1).max(1),
+    pitch: z.number().min(-1).max(1),
+    brake: z.boolean(),
+    boost: z.boolean(),
+    autopilot: z.boolean(),
+  })
+  .strict();
 export const ActionSchema = z.discriminatedUnion("type", [
+  z
+    .object({
+      type: z.literal("pilot"),
+      commands: z
+        .array(
+          z
+            .object({ input: pilotInput, dt: z.number().min(0.001).max(0.2) })
+            .strict(),
+        )
+        .min(1)
+        .max(40),
+    })
+    .strict(),
+  z.object({ type: z.literal("course"), planet }).strict(),
+  z.object({ type: z.literal("land") }).strict(),
   z.object({ type: z.literal("scan") }).strict(),
   z
     .object({
@@ -105,8 +138,8 @@ export const ActionSchema = z.discriminatedUnion("type", [
   z
     .object({
       type: z.literal("move"),
-      x: z.number().finite().min(0).max(128),
-      z: z.number().finite().min(0).max(128),
+      x: z.number().finite().min(0).max(224),
+      z: z.number().finite().min(0).max(224),
     })
     .strict(),
   z
@@ -201,7 +234,8 @@ export function newGame(now = Date.now()): Save {
   };
   for (const id of Object.keys(PLANTS)) inventory[`seed:${id}`] = 6;
   return {
-    version: 3,
+    version: 4,
+    flight: null,
     revision: 0,
     planet: "home",
     position: { x: 18, z: 21 },
@@ -275,9 +309,9 @@ export function walkable(
       Number.isFinite(x) &&
       Number.isFinite(z) &&
       x >= 0 &&
-      x < 120 &&
+      x < planetSize(p) &&
       z >= 0 &&
-      z <= 60
+      z <= planetDepth(p)
     );
   const cx = Math.round(x),
     cz = Math.round(z);
@@ -467,7 +501,11 @@ function charge(save: Save, cost: Record<string, number>, count = 1) {
 }
 function nearby(save: Save, x: number, z: number, distance = 2.7) {
   if (
-    surfaceDistance(save.position, { x, z }, isSphere(save.planet)) > distance
+    surfaceDistance(
+      save.position,
+      { x, z },
+      isSphere(save.planet) ? save.planet : false,
+    ) > distance
   )
     throw new RuleError("Подойдите поближе к объекту.");
 }
@@ -479,6 +517,8 @@ export function applyAction(
   const action = ActionSchema.parse(raw),
     save = structuredClone(original),
     world = save.worlds[save.planet];
+  if (save.flight && !["pilot", "course", "land"].includes(action.type))
+    throw new RuleError("Сначала завершите полёт и посадку.");
   if (advanceEnemies(save, now)) {
     save.revision++;
     save.updatedAt = now;
@@ -498,6 +538,42 @@ export function applyAction(
   )
     throw new RuleError("Сначала выйдите из дома.");
   switch (action.type) {
+    case "pilot": {
+      if (!save.flight) throw new RuleError("Корабль на поверхности.");
+      const total = action.commands.reduce((n, c) => n + c.dt, 0);
+      if (total > 1.45 || total > (now - save.flight.lastUpdate) / 1000 + 0.35)
+        throw new RuleError("Некорректное время управления полётом.");
+      for (const c of action.commands)
+        save.flight = stepFlight(save.flight, c.input, c.dt, save.discovered);
+      save.flight.lastUpdate = Math.max(
+        save.flight.lastUpdate + total * 1000,
+        now - 1500,
+      );
+      break;
+    }
+    case "course": {
+      if (!save.flight || !save.discovered.includes(action.planet as PlanetId))
+        throw new RuleError("Недоступный курс.");
+      save.flight = redirectFlight(
+        save.flight,
+        action.planet as PlanetId,
+        save.discovered,
+      );
+      break;
+    }
+    case "land": {
+      if (!save.flight || !landingInfo(save.flight).allowed)
+        throw new RuleError(
+          "Подлетите к посадочному маяку и снизьте скорость до 7 м/с.",
+        );
+      save.planet = save.flight.target;
+      save.flight = null;
+      const pad = ship(save.planet);
+      save.position = { x: pad.x - 2, z: pad.z };
+      save.worlds[save.planet].lastSimAt = now;
+      if (save.planet === "home") save.health = 100;
+      break;
+    }
     case "combatTick":
       break;
     case "equip": {
@@ -674,11 +750,12 @@ export function applyAction(
       if (!save.discovered.includes(action.planet as PlanetId))
         throw new RuleError("Сначала найдите эту планету сканером.");
       if (save.planet === action.planet) throw new RuleError("Вы уже здесь.");
-      save.planet = action.planet as PlanetId;
-      save.worlds[save.planet].lastSimAt = now;
-      if (save.planet === "home") save.health = 100;
-      const dest = ship(save.planet);
-      save.position = { x: dest.x - 2, z: dest.z };
+      save.flight = beginFlight(
+        save.planet,
+        action.planet as PlanetId,
+        save.discovered,
+        now,
+      );
       break;
     }
     case "enter": {
@@ -826,7 +903,45 @@ const positionSchema = z.object({
   z: z.number().finite().nonnegative(),
 });
 const saveSchema = z.object({
-  version: z.literal(3),
+  version: z.literal(4),
+  flight: z
+    .object({
+      origin: planet,
+      target: planet,
+      position: z.object({
+        x: z.number().finite(),
+        y: z.number().finite(),
+        z: z.number().finite(),
+      }),
+      velocity: z.object({
+        x: z.number().finite(),
+        y: z.number().finite(),
+        z: z.number().finite(),
+      }),
+      forward: z.object({
+        x: z.number().finite(),
+        y: z.number().finite(),
+        z: z.number().finite(),
+      }),
+      up: z.object({
+        x: z.number().finite(),
+        y: z.number().finite(),
+        z: z.number().finite(),
+      }),
+      route: z.array(
+        z.object({
+          x: z.number().finite(),
+          y: z.number().finite(),
+          z: z.number().finite(),
+        }),
+      ),
+      waypoint: z.number().int().nonnegative(),
+      autopilot: z.boolean(),
+      startedAt: z.number().finite(),
+      lastUpdate: z.number().finite(),
+      distance: z.number().nonnegative(),
+    })
+    .nullable(),
   revision: z.number().int().nonnegative(),
   planet,
   position: positionSchema,
@@ -851,10 +966,16 @@ const saveSchema = z.object({
 export function parseSave(raw: string): Save {
   const data = JSON.parse(raw);
   // Prototype builds deliberately start a new world; no version-to-version migration.
-  if (data?.version === 1 || data?.version === 2) return newGame();
+  if ([1, 2, 3].includes(data?.version)) return newGame();
   const save = saveSchema.parse(data) as Save;
   for (const p of Object.keys(PLANETS) as PlanetId[])
     if (!save.worlds[p]) throw new Error("Отсутствует планета");
+  if (
+    save.flight &&
+    (save.flight.origin !== save.planet ||
+      !save.discovered.includes(save.flight.target))
+  )
+    throw new Error("Повреждённый полёт");
   if (!save.discovered.includes(save.planet))
     throw new Error("Планета не открыта");
   for (const p of Object.keys(PLANETS) as PlanetId[])
@@ -961,7 +1082,7 @@ export function spawnEnemies(p: PlanetId): Enemy[] {
 /** Only connected play advances combat; offline time never kills the player. */
 export function advanceEnemies(save: Save, now: number): boolean {
   const world = save.worlds[save.planet];
-  if (save.inside || !PLANETS[save.planet].hostile) return false;
+  if (save.flight || save.inside || !PLANETS[save.planet].hostile) return false;
   const dt = Math.max(0, Math.min(1.5, (now - world.lastSimAt) / 1000));
   world.lastSimAt = now;
   for (const [i, e] of world.enemies.entries()) {

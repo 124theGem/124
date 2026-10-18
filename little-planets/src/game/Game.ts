@@ -1,9 +1,19 @@
+import { SpaceScene } from "../world/SpaceScene";
+import { StarSky } from "../world/StarSky";
+import {
+  stepFlight,
+  redirectFlight,
+  landingInfo,
+  padPoint,
+  type FlightState,
+  type PilotInput,
+} from "../../shared/space";
 import {
   sphereNormal,
   sphereCoordinates,
   sphereStep,
   surfaceDistance,
-  SPHERE_RADIUS,
+  sphereRadius,
 } from "../../shared/sphere";
 import { SphereWorld, spherePoint, sphereUp } from "../world/SphereWorld";
 import { Enemies } from "../world/Enemies";
@@ -78,6 +88,12 @@ type Selection = {
 const wait = (ms: number) => new Promise<void>((done) => setTimeout(done, ms));
 export class Game {
   private scene = new T.Scene();
+  private sky = new StarSky();
+  private space?: SpaceScene;
+  private flightState?: FlightState;
+  private pilotCommands: { input: PilotInput; dt: number }[] = [];
+  private pilotPending?: Promise<void>;
+  private spaceTick = 0;
   private renderer = new T.WebGLRenderer({
     antialias: true,
     powerPreference: "high-performance",
@@ -169,7 +185,12 @@ export class Game {
     const fill = new T.DirectionalLight(0x9ebcff, 0.7);
     fill.position.set(25, 8, -15);
     this.scene.add(fill);
-    this.scene.add(this.avatar.root, this.marker, this.weather.root);
+    this.scene.add(
+      this.avatar.root,
+      this.marker,
+      this.weather.root,
+      this.sky.root,
+    );
     this.marker.visible = false;
     this.loadScene();
     const menu = (fn: () => void) => {
@@ -239,6 +260,23 @@ export class Game {
       });
     };
     this.ui.onTravel = (p) => void this.travel(p);
+    this.ui.onSpaceAuto = () => {
+      if (this.busy) return;
+      if (this.flightState) {
+        const enabled = !this.flightState.autopilot;
+        if (enabled)
+          this.flightState = redirectFlight(
+            this.flightState,
+            this.flightState.target,
+            this.store.state.discovered,
+          );
+        this.flightState.autopilot = enabled;
+      }
+    };
+    this.ui.onSpaceLand = () => void this.land();
+    this.ui.onSpaceCourse = () => {
+      if (!this.busy) this.ui.galaxy(this.store.state);
+    };
     this.ui.onSelectBuilding = (kind) => {
       this.buildKind = kind;
       this.buildResource = moduleResources(store.state.planet, kind)[0];
@@ -299,6 +337,11 @@ export class Game {
       "blur",
       () => {
         this.input.clear();
+        Object.assign(this.ui.flightControls, {
+          pitch: 0,
+          brake: false,
+          boost: false,
+        });
         this.path = [];
         this.arrived = undefined;
         void this.flushMove().catch(() => {});
@@ -310,6 +353,11 @@ export class Game {
       () => {
         if (document.hidden) {
           this.input.clear();
+          Object.assign(this.ui.flightControls, {
+            pitch: 0,
+            brake: false,
+            boost: false,
+          });
           this.path = [];
           void this.flushMove().catch(() => {});
         }
@@ -325,6 +373,7 @@ export class Game {
       { signal: this.abort.signal, once: true },
     );
     this.resize();
+    if (store.state.flight) this.enterSpace();
     this.renderer.setAnimationLoop(this.frame);
     if (new URLSearchParams(location.search).has("debug"))
       Object.defineProperty(window, "__planets", {
@@ -333,7 +382,7 @@ export class Game {
           project: (x: number, z: number, y = 0) => {
             const p = (
               isSphere(store.state.planet)
-                ? spherePoint({ x, z }, y)
+                ? this.spherePoint({ x, z }, y)
                 : new T.Vector3(x, this.height(x, z) + y, z)
             ).project(this.camera);
             return {
@@ -368,6 +417,26 @@ export class Game {
               .applyQuaternion(this.avatar.root.quaternion)
               .toArray(),
             sphereForward: this.sphereForward.toArray(),
+            sky: this.sky.stats,
+            sphere:
+              this.view instanceof SphereWorld
+                ? {
+                    id: this.view.id,
+                    radius: sphereRadius(this.view.id),
+                    tiles: this.view.tiles,
+                    features: this.view.nature.features,
+                    vegetation: this.view.nature.stats,
+                  }
+                : null,
+            space: this.space
+              ? {
+                  ...this.space.stats,
+                  flight: structuredClone(this.flightState),
+                  landing: this.flightState
+                    ? landingInfo(this.flightState)
+                    : null,
+                }
+              : null,
           }),
         },
       });
@@ -458,26 +527,28 @@ export class Game {
   }
   private updateSphereCamera(dt: number, instant = false) {
     const aspect = innerWidth / innerHeight,
-      n = sphereUp(this.position),
+      n = this.sphereUp(this.position),
       forward = this.sphereForward
         .clone()
         .addScaledVector(n, -this.sphereForward.dot(n))
         .normalize();
     this.sphereForward.copy(forward);
     const overview = this.mode === "planet",
-      target = overview ? new T.Vector3() : spherePoint(this.position, 0.5),
+      target = overview
+        ? new T.Vector3()
+        : this.spherePoint(this.position, 0.5),
       position = overview
         ? n
             .clone()
-            .multiplyScalar(SPHERE_RADIUS + 32)
+            .multiplyScalar(sphereRadius(this.store.state.planet) + 32)
             .addScaledVector(forward, 22)
-        : spherePoint(this.position, 12).addScaledVector(forward, 14),
+        : this.spherePoint(this.position, 5.2).addScaledVector(forward, 11),
       blend = instant ? 1 : 1 - Math.exp(-7 * dt);
     this.target.copy(target);
     this.camera.up.copy(n);
     this.camera.position.lerp(position, blend);
     const half =
-      (overview ? SPHERE_RADIUS * 1.16 : 6.5) *
+      (overview ? sphereRadius(this.store.state.planet) * 1.16 : 6.5) *
       this.zoom *
       Math.max(1, 1.05 / aspect);
     this.cameraHalf += (half - this.cameraHalf) * blend;
@@ -492,7 +563,7 @@ export class Game {
   private moveSphere(dt: number) {
     if (this.busy || this.ui.modalOpen || this.flying) return false;
     const input = this.input.read(),
-      up = sphereUp(this.position),
+      up = this.sphereUp(this.position),
       right = new T.Vector3().crossVectors(up, this.sphereForward).normalize();
     let direction = new T.Vector3();
     if (Math.hypot(input.x, input.z) > 0.08) {
@@ -504,8 +575,14 @@ export class Game {
         .addScaledVector(this.sphereForward, input.z);
       this.mode = "explore";
     } else if (this.sphereDestination) {
-      const goal = sphereUp(this.sphereDestination);
-      if (surfaceDistance(this.position, this.sphereDestination, true) < 1.45) {
+      const goal = this.sphereUp(this.sphereDestination);
+      if (
+        surfaceDistance(
+          this.position,
+          this.sphereDestination,
+          this.store.state.planet,
+        ) < 1.45
+      ) {
         this.sphereDestination = undefined;
         const done = this.arrived;
         this.arrived = undefined;
@@ -516,8 +593,13 @@ export class Game {
     }
     if (direction.lengthSq() < 1e-8) return false;
     direction.normalize();
-    const next = sphereStep(this.position, direction, 6 * dt),
-      nextUp = sphereUp(next),
+    const next = sphereStep(
+        this.position,
+        direction,
+        6 * dt,
+        this.store.state.planet,
+      ),
+      nextUp = this.sphereUp(next),
       transport = new T.Quaternion().setFromUnitVectors(up, nextUp);
     this.sphereForward.applyQuaternion(transport).normalize();
     this.sphereHeading.copy(direction).applyQuaternion(transport).normalize();
@@ -529,6 +611,7 @@ export class Game {
   }
   private resize = () => {
     this.renderer.setSize(innerWidth, innerHeight);
+    this.space?.resize();
     if (!this.flying) this.updateCamera(1, true);
   };
   private updateCamera(dt: number, instant = false) {
@@ -624,7 +707,7 @@ export class Game {
           this.theta -= delta * 0.007;
           if (isSphere(this.store.state.planet))
             this.sphereForward
-              .applyAxisAngle(sphereUp(this.position), -delta * 0.007)
+              .applyAxisAngle(this.sphereUp(this.position), -delta * 0.007)
               .normalize();
         }
       },
@@ -662,11 +745,11 @@ export class Game {
       const point = this.view.pick(this.raycaster.ray);
       if (!point) return;
       let selected: Selection = { ...point, type: "ground" };
-      const pad = ship("orbis"),
-        node = nodes("orbis").find(
-          (n) => surfaceDistance(point, n, true) < 1.1,
+      const pad = ship(this.store.state.planet),
+        node = nodes(this.store.state.planet).find(
+          (n) => surfaceDistance(point, n, this.store.state.planet) < 1.1,
         );
-      if (surfaceDistance(point, pad, true) < 2.6)
+      if (surfaceDistance(point, pad, this.store.state.planet) < 2.6)
         selected = { ...pad, type: "ship" };
       else if (node)
         selected = { x: node.x, z: node.z, type: "node", id: node.id };
@@ -1215,12 +1298,15 @@ export class Game {
     } else {
       if (isSphere(state.planet)) {
         this.view = new SphereWorld(this.kit, state, this.store.now());
-        const n = sphereUp(state.position),
-          longitude = (state.position.x / 120) * Math.PI * 2;
+        const n = this.sphereUp(state.position),
+          longitude =
+            (state.position.x / planetSize(state.planet)) * Math.PI * 2;
         this.sphereForward
           .set(
             Math.cos(longitude) * n.y,
-            -Math.sin((state.position.z / 60) * Math.PI),
+            -Math.sin(
+              (state.position.z / (planetSize(state.planet) / 2)) * Math.PI,
+            ),
             Math.sin(longitude) * n.y,
           )
           .normalize();
@@ -1241,6 +1327,8 @@ export class Game {
         state.planet === "mycelia" ? new T.FogExp2(0x20173d, 0.009) : null;
     }
     this.scene.add(this.view.root);
+    this.sky.root.visible = !state.inside;
+    if (!state.inside) this.sky.setPlanet(state.planet);
     if (!isSphere(state.planet)) this.avatar.root.quaternion.identity();
     this.position = { ...state.position };
     this.sphereDestination = undefined;
@@ -1253,7 +1341,42 @@ export class Game {
     this.ui.update(state, this.store.now());
     this.updateCamera(1, true);
   }
+  private spherePoint(p: { x: number; z: number }, height = 0) {
+    return spherePoint(p, height, this.store.state.planet);
+  }
+  private sphereUp(p: { x: number; z: number }) {
+    return sphereUp(p, this.store.state.planet);
+  }
+  private enterSpace() {
+    if (!this.store.state.flight) return;
+    this.space?.dispose();
+    this.flightState = structuredClone(this.store.state.flight);
+    this.space = new SpaceScene(this.kit, this.store.state);
+    this.flying = true;
+    this.busy = false;
+    this.avatar.root.visible = false;
+    this.ui.root.classList.add("in-flight");
+    this.ui.space(this.flightState);
+    this.audio.weather();
+    this.pilotCommands = [];
+    this.spaceTick = 0;
+  }
   private async travel(planet: PlanetId) {
+    if (this.space && this.flightState) {
+      if (this.busy) return;
+      this.busy = true;
+      try {
+        await this.flushPilots();
+        await this.store.action({ type: "course", planet });
+        this.flightState = structuredClone(this.store.state.flight!);
+        this.ui.close();
+      } catch (e) {
+        this.ui.toast((e as Error).message);
+      } finally {
+        this.busy = false;
+      }
+      return;
+    }
     if (
       this.busy ||
       this.flying ||
@@ -1267,69 +1390,169 @@ export class Game {
     this.path = [];
     try {
       await this.flushMove();
+      await this.store.action({ type: "travel", planet });
       this.flying = true;
       this.avatar.root.visible = false;
       this.ui.root.classList.add("in-flight");
       this.flightSamples = [];
       const source = this.view as Planet | SphereWorld,
         base = source.ship.position.clone(),
-        launchUp = isSphere(this.store.state.planet)
-          ? sphereUp(ship(this.store.state.planet))
+        up = isSphere(this.store.state.planet)
+          ? this.sphereUp(ship(this.store.state.planet))
           : new T.Vector3(0, 1, 0);
-      this.atmosphere?.startLaunch(
-        source.ship.position.x,
-        base.y,
-        source.ship.position.z,
-        launchUp,
-      );
+      this.atmosphere?.startLaunch(base.x, base.y, base.z, up);
       this.audio.play("launch");
-      await this.animateFlight(1500, (t) => {
-        source.ship.position.copy(base).addScaledVector(launchUp, t * t * 13);
+      await this.animateFlight(1600, (t) => {
+        source.ship.position.copy(base).addScaledVector(up, t * t * 13);
         this.atmosphere?.setExhaust(t * t * 13);
         this.sampleFlight("launch", source.ship);
       });
-      this.ui.flight(PLANETS[planet].name, true);
-      await this.store.action({ type: "travel", planet });
-      await wait(650);
-      this.flying = false;
-      this.loadScene();
-      this.position = { ...ship(planet) };
-      this.mode = "explore";
-      this.updateCamera(1, true);
-      this.position = { ...this.store.state.position };
-      this.flying = true;
-      this.ui.flight("", false);
-      const dest = this.view as Planet | SphereWorld,
-        destBase = dest.ship.position.clone(),
-        destUp = isSphere(planet)
-          ? sphereUp(ship(planet))
-          : new T.Vector3(0, 1, 0);
-      this.atmosphere?.startLaunch(
-        dest.ship.position.x,
-        destBase.y,
-        dest.ship.position.z,
-        destUp,
-      );
-      await this.animateFlight(1400, (t) => {
-        dest.ship.position
-          .copy(destBase)
-          .addScaledVector(destUp, (1 - t) ** 2 * 13);
-        this.atmosphere?.setExhaust((1 - t) ** 2 * 13);
-        this.sampleFlight("landing", dest.ship);
-      });
-      this.audio.play("land");
-      this.ui.toast(`Добро пожаловать: ${PLANETS[planet].name}!`);
+      this.atmosphere?.stopLaunch();
+      this.enterSpace();
     } catch (e) {
       this.flying = false;
-      this.loadScene();
-      this.ui.toast((e as Error).message);
-    } finally {
-      this.atmosphere?.stopLaunch();
       this.busy = false;
+      this.avatar.root.visible = true;
+      this.ui.root.classList.remove("in-flight");
+      this.ui.toast((e as Error).message);
+    }
+  }
+  private async sendPilots() {
+    if (this.pilotPending || !this.pilotCommands.length)
+      return this.pilotPending;
+    let count = 0,
+      duration = 0;
+    while (
+      count < this.pilotCommands.length &&
+      count < 30 &&
+      duration + this.pilotCommands[count].dt <= 1.2
+    ) {
+      duration += this.pilotCommands[count].dt;
+      count++;
+    }
+    const commands = this.pilotCommands.splice(0, count);
+    const task = (async () => {
+      try {
+        await this.store.action({ type: "pilot", commands });
+        if (this.store.state.flight) {
+          const auto = this.flightState?.autopilot ?? false;
+          this.flightState = structuredClone(this.store.state.flight);
+          for (const command of this.pilotCommands)
+            this.flightState = stepFlight(
+              this.flightState,
+              command.input,
+              command.dt,
+              this.store.state.discovered,
+            );
+          this.flightState.autopilot = auto;
+        }
+      } catch (e) {
+        if (this.store.state.flight)
+          this.flightState = structuredClone(this.store.state.flight);
+        this.ui.el("flight-help").textContent = (e as Error).message;
+      } finally {
+        this.pilotPending = undefined;
+      }
+    })();
+    this.pilotPending = task;
+    return task;
+  }
+  private async flushPilots() {
+    if (this.pilotPending) await this.pilotPending;
+    while (this.pilotCommands.length) await this.sendPilots();
+  }
+  private spaceFrame(dt: number, time: number) {
+    if (!this.flightState || !this.space) return;
+    const input = this.input.read(),
+      keys = this.input.flight(),
+      controls: PilotInput = {
+        throttle: this.ui.modalOpen ? 0 : -input.z,
+        turn: this.ui.modalOpen ? 0 : input.x,
+        pitch: this.ui.modalOpen
+          ? 0
+          : Math.max(
+              -1,
+              Math.min(1, keys.pitch + this.ui.flightControls.pitch),
+            ),
+        brake: keys.brake || this.ui.flightControls.brake,
+        boost: keys.boost || this.ui.flightControls.boost,
+        autopilot: this.flightState.autopilot,
+      };
+    if (!this.busy && dt > 0.001) {
+      this.flightState = stepFlight(
+        this.flightState,
+        controls,
+        dt,
+        this.store.state.discovered,
+      );
+      const tail = this.pilotCommands.at(-1);
+      if (
+        tail &&
+        tail.dt + dt <= 0.12 &&
+        Object.keys(controls).every(
+          (key) =>
+            tail.input[key as keyof PilotInput] ===
+            controls[key as keyof PilotInput],
+        )
+      )
+        tail.dt += dt;
+      else this.pilotCommands.push({ input: controls, dt });
+      this.spaceTick += dt;
+      if (this.spaceTick > 0.45 || this.pilotCommands.length >= 26) {
+        this.spaceTick = 0;
+        void this.sendPilots();
+      }
+    }
+    this.space.update(this.flightState, dt, time / 1000, this.busy);
+    this.ui.space(this.flightState, this.busy, this.space.projectTarget());
+    this.renderer.render(this.space.scene, this.space.camera);
+  }
+  private async land() {
+    if (
+      this.busy ||
+      !this.flightState ||
+      !this.space ||
+      !landingInfo(this.flightState).allowed
+    )
+      return;
+    this.busy = true;
+    this.input.clear();
+    try {
+      await this.flushPilots();
+      this.flightState = structuredClone(this.store.state.flight!);
+      if (!landingInfo(this.flightState).allowed)
+        throw new Error("Снизьте скорость и подойдите ближе к маяку.");
+      const start = { ...this.flightState.position },
+        end = padPoint(this.flightState.target);
+      await this.animateFlight(2600, (t) => {
+        if (!this.flightState) return;
+        const k = t * t * (3 - 2 * t);
+        this.flightState.position = {
+          x: start.x + (end.x - start.x) * k,
+          y: start.y + (end.y - start.y) * k,
+          z: start.z + (end.z - start.z) * k,
+        };
+        this.flightState.velocity = { x: 0, y: 0, z: 0 };
+      });
+      await this.store.action({ type: "land" });
+      this.space.dispose();
+      this.space = undefined;
+      this.flightState = undefined;
       this.flying = false;
       this.avatar.root.visible = true;
-      this.ui.flight("", false);
+      this.ui.space(null);
       this.ui.root.classList.remove("in-flight");
+      this.loadScene();
+      this.audio.play("land");
+      this.ui.toast(
+        `Посадка завершена: ${PLANETS[this.store.state.planet].name}.`,
+      );
+    } catch (e) {
+      if (this.store.state.flight)
+        this.flightState = structuredClone(this.store.state.flight);
+      this.ui.toast((e as Error).message);
+    } finally {
+      this.busy = false;
     }
   }
   private sampleFlight(phase: string, object: T.Object3D) {
@@ -1360,7 +1583,7 @@ export class Game {
   private saveLocalOnExit() {
     try {
       localStorage.setItem(
-        "little-planets-v3",
+        "little-planets-v4",
         JSON.stringify({ ...this.store.state, position: { ...this.position } }),
       );
     } catch {}
@@ -1369,6 +1592,10 @@ export class Game {
     const raw = this.previousTime ? (time - this.previousTime) / 1000 : 0,
       dt = Math.min(0.08, raw);
     this.previousTime = time;
+    if (this.space) {
+      this.spaceFrame(dt, time);
+      return;
+    }
     this.slowTime =
       raw > 0.045 ? this.slowTime + dt : Math.max(0, this.slowTime - dt);
     if (this.slowTime > 4 && this.adaptiveRatio > 0.8) {
@@ -1431,13 +1658,13 @@ export class Game {
       if (moving) this.avatar.root.rotation.y = Math.atan2(input.x, input.z);
     }
     if (isSphere(this.store.state.planet)) {
-      const up = sphereUp(this.position),
+      const up = this.sphereUp(this.position),
         heading = this.sphereHeading
           .clone()
           .addScaledVector(up, -this.sphereHeading.dot(up))
           .normalize(),
         right = new T.Vector3().crossVectors(up, heading).normalize();
-      this.avatar.root.position.copy(spherePoint(this.position, 0.06));
+      this.avatar.root.position.copy(this.spherePoint(this.position, 0.06));
       this.avatar.root.quaternion.setFromRotationMatrix(
         new T.Matrix4().makeBasis(right, up, heading),
       );
@@ -1465,7 +1692,7 @@ export class Game {
     if (isSphere(this.store.state.planet))
       this.sun.position
         .copy(this.avatar.root.position)
-        .addScaledVector(sphereUp(this.position), 30)
+        .addScaledVector(this.sphereUp(this.position), 30)
         .addScaledVector(this.sphereForward, 16);
     this.sun.target.position.copy(this.target);
     this.view.animate(time / 1000);
@@ -1513,6 +1740,7 @@ export class Game {
       this.lastCombatPoll = time;
       void this.combatPulse();
     }
+    this.sky.update(this.camera);
     this.renderer.render(this.scene, this.camera);
   };
   dispose() {
@@ -1522,6 +1750,8 @@ export class Game {
     this.audio.dispose();
     this.enemies?.dispose();
     this.weather.dispose();
+    this.sky.dispose();
+    this.space?.dispose();
     this.telegram.dispose();
     this.removePreview();
     this.view.dispose();

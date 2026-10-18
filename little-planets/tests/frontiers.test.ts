@@ -157,7 +157,8 @@ describe("planet scanner and weather", () => {
     ).toBe(false);
     const id = s.lastDiscovery!;
     s = applyAction(s, { type: "travel", planet: id }, 3000);
-    expect(s.planet).toBe(id);
+    expect(s.planet).toBe("home");
+    expect(s.flight?.target).toBe(id);
     expect(parseSave(JSON.stringify(s))).toEqual(s);
   });
   it("generates stable, distinct resource layouts even for matching expedition sizes and biomes", () => {
@@ -253,6 +254,7 @@ describe("complete spherical surface", () => {
     s.planet = "orbis";
     s.position = { x: 28, z: 30 };
     s = applyAction(s, { type: "travel", planet: "home" }, 1000);
-    expect(s.planet).toBe("home");
+    expect(s.planet).toBe("orbis");
+    expect(s.flight?.target).toBe("home");
   });
 });

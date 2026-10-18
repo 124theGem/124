@@ -110,7 +110,7 @@ try {
   await phone.waitForFunction(() =>
     Boolean(
       document.querySelector("canvas") ||
-        document.querySelector("#error-message"),
+      document.querySelector("#error-message"),
     ),
   );
   if (await phone.locator("#error-message").count())
@@ -161,10 +161,58 @@ try {
   );
   await mkdir("test-results", { recursive: true });
   await phone.screenshot({ path: "test-results/telegram-production.png" });
+  await phone.setViewportSize({ width: 844, height: 390 });
+  await phone.locator("#menu-toggle").click();
+  await phone.locator("#galaxy").click();
+  await phone.locator('[data-planet="orbis"]').click({ timeout: 90000 });
+  await phone.locator("#space-hud:not(.hidden)").waitFor({ timeout: 60000 });
+  const state = async () =>
+    (
+      await app.inject({
+        url: "/api/state",
+        headers: { authorization: `tma ${initData}` },
+      })
+    ).json().state;
+  assert.equal((await state()).planet, "home");
+  assert.equal((await state()).flight.target, "orbis");
+  assert(await phone.locator("#space-land").isDisabled());
+  await phone.locator("#space-auto").click();
+  await phone.waitForFunction(
+    () => (window as any).__planets.snapshot().state.flight.distance > 30,
+    {},
+    { timeout: 90000 },
+  );
+  const airborne = await state();
+  assert.equal(airborne.planet, "home");
+  assert(airborne.flight.distance > 20);
+  await phone.goto(gameUrl);
+  await phone.locator("#space-hud:not(.hidden)").waitFor({ timeout: 60000 });
+  assert((await state()).flight.autopilot);
+  await phone.waitForFunction(
+    () =>
+      !(document.querySelector("#space-land") as HTMLButtonElement).disabled,
+    {},
+    { timeout: 180000 },
+  );
+  await phone.screenshot({
+    path: "test-results/telegram-production-approach.png",
+  });
+  await phone.locator("#space-land").click();
+  await phone.waitForFunction(
+    () =>
+      (window as any).__planets.snapshot().state.planet === "orbis" &&
+      !(window as any).__planets.snapshot().flying,
+    {},
+    { timeout: 60000 },
+  );
+  const landed = await state();
+  assert.equal(landed.planet, "orbis");
+  assert.equal(landed.flight, null);
+  assert.equal(landed.worlds.home.buildings.length, 2);
   assert.deepEqual(errors, []);
   await context.close();
   console.log(
-    "PASS: production blocks local login; /planets/ HTML/assets/SDK/API; real signed Telegram authentication, SQLite save/reload, native-event fullscreen and safe areas. HTTPS and physical Telegram clients were not exercised.",
+    "PASS: production blocks local login; /planets/ assets/SDK/API; signed Telegram identity, SQLite, fullscreen/safe areas; server-authoritative flight, airborne reload/resume and controlled landing. HTTPS and physical Telegram clients were not exercised.",
   );
 } finally {
   await browser.close();

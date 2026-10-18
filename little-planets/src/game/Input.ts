@@ -12,6 +12,11 @@ export class Input {
         if (e.target instanceof HTMLInputElement) return;
         if (
           [
+            "KeyQ",
+            "KeyE",
+            "ShiftLeft",
+            "ShiftRight",
+            "Space",
             "KeyW",
             "KeyA",
             "KeyS",
@@ -84,6 +89,13 @@ export class Input {
         Number(this.keys.has("KeyW") || this.keys.has("ArrowUp")),
       length = Math.max(1, Math.hypot(x, z));
     return { x: x / length, z: z / length };
+  }
+  flight() {
+    return {
+      pitch: Number(this.keys.has("KeyE")) - Number(this.keys.has("KeyQ")),
+      boost: this.keys.has("ShiftLeft") || this.keys.has("ShiftRight"),
+      brake: this.keys.has("Space"),
+    };
   }
   clear() {
     this.keys.clear();

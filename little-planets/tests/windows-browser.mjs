@@ -24,7 +24,7 @@ try {
   save = applyAction(save, { type: "enter", id: "home-hq" }, Date.now());
   save.inventory["furniture:chair"] = 1;
   await page.addInitScript({
-    content: `localStorage.setItem('little-planets-v3',${JSON.stringify(JSON.stringify(save))});`,
+    content: `localStorage.setItem('little-planets-v4',${JSON.stringify(JSON.stringify(save))});`,
   });
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));

@@ -1,6 +1,6 @@
 {
   "name": "little-planets",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -19,7 +19,8 @@
     "test:upgrade": "node --import tsx tests/upgrade.mjs",
     "test:frontiers": "node --import tsx tests/frontiers-browser.mjs",
     "test:events": "node --import tsx tests/events-browser.mjs",
-    "test:runtime": "node tests/runtime.mjs"
+    "test:runtime": "node tests/runtime.mjs",
+    "test:odyssey": "node --import tsx tests/odyssey-browser.mjs"
   },
   "dependencies": {
     "three": "^0.180.0",

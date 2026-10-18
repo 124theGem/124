@@ -1,3 +1,4 @@
+import { completeFlight } from "./flight-browser.mjs";
 import { chromium } from "@playwright/test";
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
@@ -143,6 +144,7 @@ try {
   for (const planet of ["listoria", "mycelia", "pyros", "home"]) {
     await menuClick("galaxy");
     await page.locator(`[data-planet="${planet}"]`).click();
+    await completeFlight(page, planet);
     await page.waitForFunction(
       (p) =>
         window.__planets.snapshot().state.planet === p &&
@@ -152,9 +154,8 @@ try {
     );
     const s = await snap();
     assert.deepEqual(s.state.inventory, inventory);
-    const launch = s.flightSamples.filter((s) => s.phase === "launch"),
-      landing = s.flightSamples.filter((s) => s.phase === "landing");
-    for (const samples of [launch, landing]) {
+    const launch = s.flightSamples.filter((s) => s.phase === "launch");
+    for (const samples of [launch]) {
       assert(samples.length > 1);
       assert(
         Math.max(...samples.map((s) => s.x)) -

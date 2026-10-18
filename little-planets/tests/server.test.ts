@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { verifyTelegram } from "../server/auth";
 import { createApp } from "../server/app";
 import { Store, Conflict } from "../server/store";
+import { autoInput } from "./fly";
 const token = "123456:test-token-for-automated-validation";
 function signed(
   user = 123,
@@ -54,6 +55,48 @@ describe("Telegram identity verification", () => {
   });
 });
 describe("SQLite persistence and authenticated API", () => {
+  it("persists an unfinished flight, resumes timed controls after reopening and prevents remote landing", () => {
+    const dir = mkdtempSync(join(tmpdir(), "planets-flight-")),
+      file = join(dir, "save.sqlite");
+    let store = new Store(file);
+    try {
+      let state = store.get(91, 1000);
+      state = store.action(
+        91,
+        state.revision,
+        { type: "move", x: 21, z: 23 },
+        2000,
+      );
+      state = store.action(
+        91,
+        state.revision,
+        { type: "travel", planet: "granit" },
+        3000,
+      );
+      const action = {
+        type: "pilot",
+        commands: Array.from({ length: 10 }, () => ({
+          input: autoInput,
+          dt: 0.1,
+        })),
+      };
+      state = store.action(91, state.revision, action, 4000);
+      store.close();
+      store = new Store(file);
+      expect(store.get(91, 4000)).toEqual(state);
+      expect(state.planet).toBe("home");
+      expect(state.flight!.distance).toBeGreaterThan(0);
+      expect(() =>
+        store.action(91, state.revision, { type: "land" }, 4000),
+      ).toThrow(/маяку/);
+      state = store.action(91, state.revision, action, 5000);
+      expect(state.flight!.distance).toBeGreaterThan(15);
+      expect(store.get(92, 5000).flight).toBeNull();
+    } finally {
+      store.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
   it("resets old prototype saves once and persists the new world in SQLite", () => {
     const dir = mkdtempSync(join(tmpdir(), "planets-migration-")),
       file = join(dir, "save.sqlite");
@@ -68,7 +111,7 @@ describe("SQLite persistence and authenticated API", () => {
     store = new Store(file);
     try {
       const migrated = store.get(7);
-      expect(migrated.version).toBe(3);
+      expect(migrated.version).toBe(4);
       expect(migrated.revision).toBe(0);
       store.close();
       store = new Store(file);
@@ -78,7 +121,7 @@ describe("SQLite persistence and authenticated API", () => {
         const raw = verify
           .prepare("SELECT state FROM saves WHERE user_id='7'")
           .get() as { state: string };
-        expect(JSON.parse(raw.state).version).toBe(3);
+        expect(JSON.parse(raw.state).version).toBe(4);
       } finally {
         verify.close();
       }

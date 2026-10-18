@@ -64,10 +64,10 @@ export class Weather {
     this.root.visible = rain || wind;
     if (!this.root.visible) return;
     if (isSphere(save.planet)) {
-      this.root.position.copy(spherePoint(position));
+      this.root.position.copy(spherePoint(position, 0, save.planet));
       this.root.quaternion.setFromUnitVectors(
         T.Object3D.DEFAULT_UP,
-        sphereUp(position),
+        sphereUp(position, save.planet),
       );
     } else {
       this.root.position.set(

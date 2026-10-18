@@ -8,8 +8,24 @@ export type PlanetId =
   | "ferra"
   | "nox"
   | "orbis"
+  | "verdia"
+  | "cryonia"
+  | "duna"
+  | "vulcanis"
+  | "aquaria"
+  | "mycelion"
+  | "granit"
   | `wild-${number}`;
 export type Biome = "listoria" | "mycelia" | "pyros";
+export type SphereTheme =
+  | "meadow"
+  | "forest"
+  | "ice"
+  | "desert"
+  | "volcanic"
+  | "tropical"
+  | "fungal"
+  | "alpine";
 export interface PlanetDefinition {
   id: PlanetId;
   name: string;
@@ -28,14 +44,10 @@ export interface PlanetDefinition {
   size?: number;
   hostile?: boolean;
   seed?: number;
+  sphereTheme?: SphereTheme;
 }
 export type GearKind =
-  | "sword"
-  | "spear"
-  | "blaster"
-  | "scout"
-  | "guardian"
-  | "aegis";
+  "sword" | "spear" | "blaster" | "scout" | "guardian" | "aegis";
 export const GEAR: Record<
   GearKind,
   {
@@ -128,13 +140,7 @@ export type BuildingKind =
   | "extractor"
   | "bioextractor";
 export type FurnitureKind =
-  | "chair"
-  | "table"
-  | "bed"
-  | "sofa"
-  | "cabinet"
-  | "fireplace"
-  | "rug";
+  "chair" | "table" | "bed" | "sofa" | "cabinet" | "fireplace" | "rug";
 export const RESOURCE_LABELS: Record<string, string> = {
   wood: "Древесина",
   stone: "Камень",
@@ -250,6 +256,131 @@ PLANETS.orbis = {
   biome: "listoria",
   color: "#76bcb3",
 };
+PLANETS.orbis.sphereTheme = "meadow";
+export const SPHERE_PLANETS: PlanetId[] = [
+  "orbis",
+  "verdia",
+  "cryonia",
+  "duna",
+  "vulcanis",
+  "aquaria",
+  "mycelion",
+  "granit",
+];
+const spheres: [
+  PlanetId,
+  string,
+  SphereTheme,
+  number,
+  Biome,
+  string,
+  number,
+  string,
+][] = [
+  [
+    "verdia",
+    "Вердия",
+    "forest",
+    150,
+    "listoria",
+    "#458c67",
+    0x53875a,
+    "Леса, папоротники, заросли ягодных кустов и лесные водопады.",
+  ],
+  [
+    "cryonia",
+    "Криония",
+    "ice",
+    160,
+    "mycelia",
+    "#b6ddec",
+    0xc3dfdf,
+    "Снежные квадраты, ледяные скалы, хвойные рощи и синие пещеры.",
+  ],
+  [
+    "duna",
+    "Дюна",
+    "desert",
+    90,
+    "pyros",
+    "#e7bd79",
+    0xd5b079,
+    "Песчаные плато, кактусы, сухие травы и каменные арки.",
+  ],
+  [
+    "vulcanis",
+    "Вулканис",
+    "volcanic",
+    140,
+    "pyros",
+    "#d06f54",
+    0x62575b,
+    "Вулканы с жерлами, текущая лава, базальтовые скалы и дым.",
+  ],
+  [
+    "aquaria",
+    "Аквария",
+    "tropical",
+    180,
+    "listoria",
+    "#69c6ba",
+    0x74b7a0,
+    "Пальмы, мелководные лагуны, тропические кусты и каскады воды.",
+  ],
+  [
+    "mycelion",
+    "Мицелион",
+    "fungal",
+    96,
+    "mycelia",
+    "#a484d5",
+    0x766297,
+    "Гигантские грибы, светящиеся заросли, кристальные пещеры.",
+  ],
+  [
+    "granit",
+    "Гранит",
+    "alpine",
+    200,
+    "listoria",
+    "#9ba99e",
+    0x919e8b,
+    "Самая большая сфера: скальные гряды, альпийские луга и высокие водопады.",
+  ],
+];
+for (const [
+  id,
+  name,
+  sphereTheme,
+  size,
+  biome,
+  color,
+  soil,
+  description,
+] of spheres)
+  PLANETS[id] = {
+    ...PLANETS[biome],
+    id,
+    name,
+    tag: "Круглый мир · 360°",
+    description,
+    sphereTheme,
+    size,
+    biome,
+    color,
+    soil,
+    seed: SPHERE_PLANETS.indexOf(id) * 7919,
+    icon: {
+      forest: "🌲",
+      ice: "❄️",
+      desert: "🌵",
+      volcanic: "🌋",
+      tropical: "🌴",
+      fungal: "🍄",
+      alpine: "⛰️",
+      meadow: "🌾",
+    }[sphereTheme],
+  };
 for (let i = 1; i <= 24; i++) {
   const biome = (["listoria", "mycelia", "pyros"] as const)[(i * 7) % 3],
     base = PLANETS[biome],
@@ -286,16 +417,16 @@ export const INITIAL_PLANETS: PlanetId[] = [
   "pyros",
   "ferra",
   "nox",
-  "orbis",
+  ...SPHERE_PLANETS,
 ];
 export function biomeOf(p: PlanetId): Biome {
   return PLANETS[p].biome ?? (p === "home" ? "listoria" : (p as Biome));
 }
 export function isSphere(p: PlanetId) {
-  return p === "orbis";
+  return !!PLANETS[p]?.sphereTheme;
 }
 export function planetDepth(p: PlanetId) {
-  return isSphere(p) ? 60 : planetSize(p);
+  return isSphere(p) ? planetSize(p) / 2 : planetSize(p);
 }
 export const PLANTS: Record<
   string,
@@ -546,7 +677,7 @@ export function beds(p: PlanetId) {
   }));
 }
 export function ship(p: PlanetId) {
-  if (isSphere(p)) return { x: 30, z: 30 };
+  if (isSphere(p)) return { x: planetSize(p) / 4, z: planetSize(p) / 4 };
   return {
     x: SHIP.x + (p === "home" ? 10 : 0),
     z: SHIP.z + (p === "home" ? 10 : 0),
@@ -686,8 +817,8 @@ export function nodes(planet: PlanetId) {
   if (isSphere(planet))
     return Array.from({ length: 50 }, (_, i) => ({
       id: `node-${i}`,
-      x: (i * 29 + 8) % 120,
-      z: 5 + ((i * 13) % 50),
+      x: (((i * 29 + 8) % 120) / 120) * planetSize(planet),
+      z: ((5 + ((i * 13) % 50)) / 60) * planetDepth(planet),
       resource: PLANETS[planet].resource[i % 2],
       variant: i,
     }));

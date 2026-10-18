@@ -1,3 +1,4 @@
+import { landingInfo, type FlightState } from "../../shared/space";
 import { illustration } from "./Illustrations";
 import {
   GEAR,
@@ -54,6 +55,10 @@ export class UI {
   readonly root = document.createElement("div");
   onInventory = () => {};
   onScan = () => {};
+  onSpaceAuto = () => {};
+  onSpaceLand = () => {};
+  onSpaceCourse = () => {};
+  readonly flightControls = { pitch: 0, brake: false, boost: false };
   onAttack = () => {};
   onAudio = () => {};
   onEquip = (slot: "weapon" | "armor", item: GearKind | null) => {};
@@ -87,13 +92,14 @@ export class UI {
   constructor(readonly local: boolean) {
     this.root.className = "hud";
     this.root.innerHTML = `
- <header class="topbar"><div class="identity"><div class="avatar">🧑‍🚀</div><div><div class="brand">LITTLE PLANETS <span>✦ FRONTIERS</span></div><strong id="planet-name">Родная</strong><small id="planet-tag"></small></div></div><div class="top-buttons"><button id="view" title="Камера" aria-label="Переключить камеру">🌐</button><button id="audio-toggle" title="Звук" aria-label="Включить или выключить звук">♫</button><button id="settings" title="Настройки" aria-label="Настройки">⚙</button></div></header>
+ <header class="topbar"><div class="identity"><div class="avatar">🧑‍🚀</div><div><div class="brand">LITTLE PLANETS <span>✦ ODYSSEY</span></div><strong id="planet-name">Родная</strong><small id="planet-tag"></small></div></div><div class="top-buttons"><button id="view" title="Камера" aria-label="Переключить камеру">🌐</button><button id="audio-toggle" title="Звук" aria-label="Включить или выключить звук">♫</button><button id="settings" title="Настройки" aria-label="Настройки">⚙</button></div></header>
  <aside class="minimap"><canvas id="minimap" width="240" height="240" aria-label="Мини-карта планеты"></canvas></aside>
  <div id="combat-hud" class="combat-hud hidden"><span>♥ <b id="health-value">100</b></span><div class="health-track"><i id="health-fill"></i></div><small id="equipped-label"></small></div><button id="attack" class="attack-button hidden" aria-label="Атаковать">⚔<small>Атака</small></button>
  <div id="event-banner" class="event-banner hidden" role="status"></div><div id="context" class="context panel hidden"></div><div id="build-panel" class="build-panel panel hidden"></div>
  <div class="bottom"><nav id="menu-items" class="hidden" aria-label="Меню игры"><button id="inventory"><span>🎒</span>Рюкзак</button><button id="craft"><span>🛠️</span>Крафт</button><button id="plant"><span>🌱</span>Сад</button><button id="build"><span>🏗️</span>Строить</button><button id="galaxy"><span>🚀</span>Планеты</button><button id="menu-settings"><span>⚙️</span>Настройки</button></nav><button id="menu-toggle" aria-label="Открыть меню" aria-expanded="false"><span>☰</span><small>Меню</small></button><span class="save-status" id="save-status">${local ? "Локальный мир" : "Telegram"} · сохранено</span></div>
  <div id="joystick" aria-label="Джойстик движения"><span></span></div><div class="keyboard">WASD · движение <b> / </b> колесо · масштаб <b> / </b> потяните · поворот</div>
  <div id="toast" role="status"></div><div id="modal" class="modal hidden"><section class="sheet"><button class="close" id="close-modal" aria-label="Закрыть окно">×</button><div id="modal-content"></div></section></div>
+ <section id="space-hud" class="space-hud hidden"><header><span class="eyebrow">КОСМИЧЕСКИЙ ПОЛЁТ</span><h3 id="space-target"></h3><div class="flight-readings"><span><small>ДО МАЯКА</small><b id="flight-distance"></b></span><span><small>СКОРОСТЬ</small><b id="flight-speed"></b></span></div><p id="flight-help"></p></header><div class="flight-actions"><button id="space-auto">Автопилот</button><button id="space-course">Выбрать курс</button><button id="space-land" class="primary" disabled>Посадка</button></div><div class="flight-thrust"><button id="flight-up" aria-label="Поднять нос">↑</button><button id="flight-down" aria-label="Опустить нос">↓</button><button id="flight-brake">Тормоз</button><button id="flight-boost">Ускорение</button></div><div class="flight-hint">W/S · тяга &nbsp; A/D · поворот &nbsp; Q/E · высота &nbsp; пробел · тормоз</div><div id="flight-reticle" class="flight-reticle">◇</div></section>
  <div id="flight" class="flight hidden"><span>🚀</span><h2 id="flight-title"></h2><p>Ваш маленький мир всегда ждёт возвращения</p></div>`;
     document.querySelector("#app")!.append(this.root);
     for (const [id, callback] of [
@@ -110,6 +116,28 @@ export class UI {
       ["audio-toggle", () => this.onAudio()],
     ] as const)
       this.button(id, callback);
+    this.button("space-auto", () => this.onSpaceAuto());
+    this.button("space-land", () => this.onSpaceLand());
+    this.button("space-course", () => this.onSpaceCourse());
+    for (const [id, key, value] of [
+      ["flight-up", "pitch", 1],
+      ["flight-down", "pitch", -1],
+      ["flight-brake", "brake", true],
+      ["flight-boost", "boost", true],
+    ] as const) {
+      const button = this.el(id);
+      const hold = (active: boolean) => {
+        if (key === "pitch")
+          this.flightControls.pitch = active ? Number(value) : 0;
+        else this.flightControls[key] = active;
+      };
+      button.onpointerdown = (e) => {
+        button.setPointerCapture(e.pointerId);
+        hold(true);
+      };
+      for (const event of ["pointerup", "pointercancel", "lostpointercapture"])
+        button.addEventListener(event, () => hold(false));
+    }
     this.button("menu-toggle", () => this.toggleMenu());
     this.el("modal").addEventListener("click", (e) => {
       if (e.target === this.el("modal")) this.close();
@@ -480,8 +508,9 @@ export class UI {
       .map((id) => PLANETS[id])
       .filter((p) => p.name.toLowerCase().includes(query.toLowerCase()));
     this.show(
-      `<span class="eyebrow">ЗВЁЗДНЫЙ АТЛАС</span><h2>За пределами знакомого</h2><div class="planet-search"><input id="planet-search" type="search" placeholder="Найти планету по названию…" value="${escape(query)}" aria-label="Название планеты"><button id="scan-planets" class="primary">✦ Найти случайную планету</button></div><p class="atlas-note">Сканер открывает новые экспедиционные миры. ${save.discovered.filter((p) => p.startsWith("wild-")).length} / 24 найдено.</p>${save.lastDiscovery ? `<p class="discovery-note">✦ Открыта ${PLANETS[save.lastDiscovery].name}</p>` : ""}<div class="planet-cards">${planets.map((p) => `<button data-planet="${p.id}" ${p.id === save.planet ? "disabled" : ""} style="--planet:${p.color}"><div class="mini-planet">${p.icon}</div><strong>${p.name}</strong><small>${p.description}</small><em>${isSphere(p.id) ? "Сфера · обхват 120 м" : `${planetSize(p.id)} × ${planetSize(p.id)}`} · ${p.hostile ? "⚔ Противники" : p.id === "home" ? "База" : "Мирная"}</em><b>${p.id === save.planet ? "Вы здесь" : "Отправиться ↗"}</b></button>`).join("") || "<p>Такая планета пока не найдена. Воспользуйтесь сканером.</p>"}</div>`,
+      `<span class="eyebrow">ЗВЁЗДНЫЙ АТЛАС</span><h2>За пределами знакомого</h2><div class="planet-search"><input id="planet-search" type="search" placeholder="Найти планету по названию…" value="${escape(query)}" aria-label="Название планеты"><button id="scan-planets" class="primary">✦ Найти случайную планету</button></div><p class="atlas-note">Сканер открывает новые экспедиционные миры. ${save.discovered.filter((p) => p.startsWith("wild-")).length} / 24 найдено.</p>${save.lastDiscovery ? `<p class="discovery-note">✦ Открыта ${PLANETS[save.lastDiscovery].name}</p>` : ""}<div class="planet-cards">${planets.map((p) => `<button data-planet="${p.id}" ${p.id === save.planet && !save.flight ? "disabled" : ""} style="--planet:${p.color}"><div class="mini-planet">${p.icon}</div><strong>${p.name}</strong><small>${p.description}</small><em>${isSphere(p.id) ? `Сфера · обхват ${planetSize(p.id)} м` : `${planetSize(p.id)} × ${planetSize(p.id)}`} · ${p.hostile ? "⚔ Противники" : p.id === "home" ? "База" : "Мирная"}</em><b>${save.flight ? (p.id === save.flight.target ? "Текущий курс" : "Задать курс ↗") : p.id === save.planet ? "Вы здесь" : "Отправиться ↗"}</b></button>`).join("") || "<p>Такая планета пока не найдена. Воспользуйтесь сканером.</p>"}</div>`,
     );
+    (this.el("scan-planets") as HTMLButtonElement).disabled = !!save.flight;
     this.button("scan-planets", () => this.onScan());
     const input = this.el("planet-search") as HTMLInputElement;
     input.oninput = () => {
@@ -520,6 +549,45 @@ export class UI {
         sound(key, (e.target as HTMLInputElement).checked);
     (this.el("sound-volume") as HTMLInputElement).oninput = (e) =>
       sound("volume", Number((e.target as HTMLInputElement).value));
+  }
+  space(
+    f: FlightState | null,
+    busy = false,
+    reticle?: { x: number; y: number; z: number },
+  ) {
+    this.root.classList.toggle("space-flight", !!f);
+    this.el("space-hud").classList.toggle("hidden", !f);
+    if (!f) return;
+    const info = landingInfo(f);
+    this.el("space-target").textContent = PLANETS[f.target].name;
+    this.el("flight-distance").textContent = `${Math.round(info.distance)} м`;
+    this.el("flight-speed").textContent = `${info.speed.toFixed(1)} м/с`;
+    this.el("flight-help").textContent = busy
+      ? "Посадочные двигатели…"
+      : info.allowed
+        ? "Маяк достигнут. Можно садиться."
+        : f.autopilot
+          ? "Автопилот ведёт корабль к посадочному маяку."
+          : "Ведите корабль джойстиком или включите автопилот.";
+    this.el("space-auto").textContent = f.autopilot
+      ? "Автопилот ✓"
+      : "Автопилот";
+    (this.el("space-land") as HTMLButtonElement).disabled =
+      busy || !info.allowed;
+    for (const id of ["space-auto", "space-course"])
+      (this.el(id) as HTMLButtonElement).disabled = busy;
+    if (reticle) {
+      const x = Math.max(
+          22,
+          Math.min(innerWidth - 22, ((reticle.x + 1) * innerWidth) / 2),
+        ),
+        y = Math.max(
+          160,
+          Math.min(innerHeight - 130, ((1 - reticle.y) * innerHeight) / 2),
+        );
+      this.el("flight-reticle").style.left = `${x}px`;
+      this.el("flight-reticle").style.top = `${y}px`;
+    }
   }
   flight(name: string, show: boolean) {
     this.el("flight-title").textContent = `Курс на ${name}`;

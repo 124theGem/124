@@ -1,3 +1,4 @@
+import { finishFlight } from "./fly";
 import { describe, it, expect } from "vitest";
 import {
   newGame,
@@ -63,11 +64,11 @@ describe("home world and prototype saves", () => {
       expect(s.worlds[p].buildings).toHaveLength(0);
   });
   it("starts a fresh world for old prototype formats without transferring progress", () => {
-    for (const version of [1, 2]) {
+    for (const version of [1, 2, 3]) {
       const old = legacySave();
       old.version = version;
       const save = parseSave(JSON.stringify(old));
-      expect(save.version).toBe(3);
+      expect(save.version).toBe(4);
       expect(save.planet).toBe("home");
       expect(save.revision).toBe(0);
       expect(save.inventory.wood).toBe(90);
@@ -356,7 +357,8 @@ describe("events, paths and travel", () => {
     for (const p of ["listoria", "mycelia", "pyros", "home"] as PlanetId[]) {
       const pad = ship(s.planet);
       s.position = { x: pad.x - 2, z: pad.z };
-      s = applyAction(s, { type: "travel", planet: p }, 0);
+      s = applyAction(s, { type: "travel", planet: p }, s.updatedAt + 1000);
+      s = finishFlight(s);
     }
     expect(s.worlds.home.buildings).toHaveLength(2);
     expect(s.inventory.wood).toBe(72);

@@ -1,3 +1,4 @@
+import { completeFlight } from "./flight-browser.mjs";
 import { chromium } from "@playwright/test";
 import assert from "node:assert/strict";
 import { newGame } from "../shared/model.ts";
@@ -31,7 +32,7 @@ try {
     fixture.equipment.weapon = "sword";
   }
   await page.addInitScript({
-    content: `if(!localStorage.getItem('little-planets-v3'))localStorage.setItem('little-planets-v3',${JSON.stringify(JSON.stringify(fixture))});`,
+    content: `if(!localStorage.getItem('little-planets-v4'))localStorage.setItem('little-planets-v4',${JSON.stringify(JSON.stringify(fixture))});`,
   });
   const snap = () => page.evaluate(() => window.__planets.snapshot()),
     wait = (fn) => page.waitForFunction(fn, {}, { timeout: 90000 }),
@@ -108,7 +109,7 @@ try {
     await page.locator("#scan-planets").click();
     await wait(
       () =>
-        window.__planets.snapshot().state.discovered.length === 8 &&
+        window.__planets.snapshot().state.discovered.length === 15 &&
         !window.__planets.snapshot().busy,
     );
     const found = (await snap()).state.lastDiscovery;
@@ -121,6 +122,7 @@ try {
     await page.locator("#planet-search").fill("");
     await page.screenshot({ path: "test-results/frontiers-scanner.png" });
     await page.locator('[data-planet="ferra"]').click();
+    await completeFlight(page, "ferra");
     await wait(
       () =>
         window.__planets.snapshot().state.planet === "ferra" &&
@@ -144,6 +146,7 @@ try {
     );
     await menu("galaxy");
     await page.locator('[data-planet="orbis"]').click();
+    await completeFlight(page, "orbis");
     await wait(
       () =>
         window.__planets.snapshot().state.planet === "orbis" &&
@@ -196,6 +199,7 @@ try {
   );
   await menu("galaxy");
   await page.locator('[data-planet="home"]').click();
+  await completeFlight(page, "home");
   await wait(
     () =>
       window.__planets.snapshot().state.planet === "home" &&
