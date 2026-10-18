@@ -1264,3 +1264,829 @@ small {
     display: none;
   }
 }
+/* Frontiers: a quiet HUD, one expandable action menu and illustrated field catalog. */
+.topbar {
+  right: auto;
+  max-width: calc(100% - 150px);
+  gap: 13px;
+}
+.top-buttons {
+  margin-left: 4px;
+}
+.identity strong {
+  font-size: 17px;
+}
+.brand span {
+  color: #c2d7b3;
+}
+.resources {
+  display: none;
+}
+.minimap {
+  top: calc(var(--top) + 12px);
+  right: calc(var(--right) + 12px);
+  width: 126px;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  pointer-events: auto;
+}
+.minimap canvas {
+  border-radius: 0;
+  filter: drop-shadow(0 5px 8px #00172944);
+}
+.bottom {
+  bottom: calc(var(--bottom) + 16px);
+  left: calc(var(--left) + 18px);
+  transform: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+}
+.bottom nav {
+  position: absolute;
+  bottom: 78px;
+  left: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 76px);
+  gap: 6px;
+  padding: 10px;
+  border-radius: 19px;
+  background: #102c3ff5;
+  box-shadow: 0 12px 40px #00121c66;
+}
+.bottom nav button {
+  min-width: 0;
+  padding: 10px 5px;
+  gap: 6px;
+  font-size: 10px;
+}
+.bottom nav button span {
+  font-size: 25px;
+}
+.bottom #menu-toggle {
+  display: grid;
+  place-items: center;
+  gap: 1px;
+  width: 60px;
+  height: 60px;
+  padding: 5px;
+  background: #153d49f2;
+  border: 1px solid #c9d8b750;
+  box-shadow: 0 5px 22px #00172966;
+  border-radius: 19px;
+}
+.bottom #menu-toggle span {
+  font-size: 26px;
+  line-height: 1;
+}
+.bottom #menu-toggle small {
+  font-size: 8px;
+  letter-spacing: 1px;
+  color: #dbe3c7;
+}
+.bottom .save-status {
+  font-size: 8px;
+  opacity: 0.72;
+  margin: 0;
+  max-width: 90px;
+  line-height: 1.5;
+}
+#joystick {
+  bottom: calc(var(--bottom) + 108px);
+  left: calc(var(--left) + 22px);
+  width: 88px;
+  height: 88px;
+}
+.bottom:has(nav:not(.hidden)) ~ #joystick {
+  opacity: 0.25;
+  pointer-events: none;
+}
+.keyboard {
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--bottom) + 13px);
+  font-size: 8px;
+  white-space: nowrap;
+}
+.context {
+  top: auto;
+  bottom: calc(var(--bottom) + 24px);
+  right: calc(var(--right) + 20px);
+  max-height: calc(100dvh - var(--top) - var(--bottom) - 190px);
+  width: 270px;
+}
+.build-panel {
+  top: calc(var(--top) + 70px);
+  right: calc(var(--right) + 152px);
+  max-height: calc(100dvh - var(--top) - var(--bottom) - 88px);
+  padding: 0 18px 18px;
+  overflow: auto;
+  scroll-padding-top: 50px;
+}
+.placement-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: #14323f;
+  padding: 17px 30px 12px 0;
+  min-height: 48px;
+}
+.placement-header .close {
+  right: -5px;
+  top: 8px;
+  width: 34px;
+  height: 34px;
+}
+.build-actions {
+  bottom: -18px;
+  padding: 10px 0 0;
+  background: #102b39;
+}
+.modal {
+  z-index: 15;
+}
+.sheet {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  max-height: 100%;
+  min-height: 0;
+}
+.sheet > .close {
+  right: 14px;
+  top: 13px;
+  width: 36px;
+  height: 36px;
+  background: #34505a;
+  box-shadow: 0 3px 15px #00152455;
+}
+.sheet #modal-content {
+  padding: 26px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  min-height: 0;
+  scroll-padding-top: 16px;
+}
+.workshop-heading {
+  padding: 13px 45px 22px 0;
+}
+.workshop-heading h2 {
+  font-family: Georgia, serif;
+  font-weight: 500;
+  letter-spacing: -0.7px;
+  font-size: 34px;
+  max-width: 520px;
+  line-height: 1.08;
+  margin: 12px 0;
+}
+.workshop-heading p {
+  max-width: 480px;
+  font-size: 12px;
+  color: #c2ccb8;
+}
+.craft-layout {
+  grid-template-columns: minmax(0, 1fr) 255px;
+  gap: 20px;
+}
+.recipe-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+}
+.recipe {
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+  background: #123341;
+  border: 1px solid #c9d8b72e;
+  border-radius: 14px;
+  align-items: stretch;
+  transition:
+    transform 0.15s,
+    border-color 0.15s;
+}
+.recipe:hover {
+  border-color: #e5ce8c;
+  transform: translateY(-2px);
+}
+.recipe-illustration {
+  width: 100%;
+  height: auto;
+  display: block;
+  flex-shrink: 0;
+}
+.recipe .recipe-illustration {
+  border-radius: 0;
+  aspect-ratio: 320/220;
+}
+.recipe-caption {
+  padding: 12px 13px;
+  display: grid;
+  gap: 6px;
+  min-height: 91px;
+}
+.recipe-caption strong {
+  font-size: 13px;
+  color: #eff1df;
+  line-height: 1.25;
+}
+.recipe-caption small {
+  text-transform: uppercase;
+  font-size: 8px;
+  letter-spacing: 1.5px;
+  color: #d7c78f;
+}
+.recipe-caption > span {
+  font-size: 9px;
+  color: #9fb8b2;
+}
+.recipe-detail {
+  position: sticky;
+  top: 0;
+  padding: 15px;
+  gap: 12px;
+  border-color: #d8c79733;
+}
+.recipe-detail > .recipe-illustration {
+  border-radius: 9px;
+}
+.recipe-detail h3 {
+  font-family: Georgia, serif;
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 1.1;
+}
+.recipe-detail p {
+  font-size: 12px;
+  line-height: 1.6;
+}
+.recipe-detail .primary {
+  padding: 12px;
+}
+.recipe.selected {
+  box-shadow:
+    0 0 0 1px #e1c78b,
+    0 5px 20px #00121b33;
+}
+.recipe-cost .cost small {
+  display: none;
+}
+.item-detail > .recipe-illustration {
+  margin: 0;
+  width: 100%;
+  height: auto;
+}
+.equipment-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+.equipment-row > div {
+  flex: 1;
+  min-width: 120px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #0e2938;
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 9px;
+  align-items: center;
+}
+.equipment-row small {
+  font-size: 8px;
+  letter-spacing: 1px;
+  display: block;
+  width: 100%;
+}
+.equipment-row strong {
+  font-size: 11px;
+  font-weight: 550;
+  margin-top: 4px;
+  flex: 1;
+}
+.equipment-row button {
+  padding: 3px 8px;
+  font-size: 9px;
+  margin-top: 5px;
+}
+.equipment-row > span {
+  padding: 8px 12px;
+  font-size: 11px;
+  line-height: 1.8;
+  color: #dfc99c;
+}
+.equipped-mark {
+  position: absolute;
+  left: 6px;
+  top: 5px;
+  background: #b5dfab;
+  color: #17392f;
+  padding: 0 3px;
+  border-radius: 4px;
+  font-size: 9px;
+}
+.planet-search {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 10px 0;
+}
+.planet-search input {
+  flex: 1;
+  min-width: 180px;
+  border: 1px solid #bbd0ba40;
+  border-radius: 12px;
+  background: #092735;
+  color: #f0efdf;
+  padding: 12px 14px;
+  font: inherit;
+  font-size: 13px;
+  outline-color: #ddcd94;
+}
+.planet-search button {
+  font-size: 12px;
+}
+.atlas-note {
+  font-size: 11px;
+  color: #9fb8b5;
+}
+.discovery-note {
+  font-size: 13px;
+  padding: 10px 13px;
+  border: 1px solid #b1d1a550;
+  border-radius: 10px;
+  color: #d4e8b9;
+  margin-top: 13px;
+  background: #54774722;
+}
+.planet-cards {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.combat-hud {
+  position: absolute;
+  top: calc(var(--top) + 82px);
+  left: calc(var(--left) + 20px);
+  width: 190px;
+  padding: 10px 13px;
+  border-radius: 12px;
+  background: #112d3cdd;
+  border: 1px solid #a3c6b22b;
+}
+.combat-hud > span {
+  font-size: 12px;
+  color: #f2bcac;
+}
+.combat-hud small {
+  font-size: 9px;
+  display: block;
+  margin-top: 7px;
+  color: #e0ddc4;
+}
+.health-track {
+  height: 5px;
+  background: #7b524d66;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-top: 7px;
+}
+.health-track i {
+  height: 100%;
+  display: block;
+  background: #c7dc9d;
+  transition: width 0.3s;
+}
+.attack-button {
+  position: absolute;
+  right: calc(var(--right) + 24px);
+  bottom: calc(var(--bottom) + 24px);
+  width: 73px;
+  height: 73px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: 50%;
+  background: #843d40dd;
+  border: 1px solid #ecc0a76b;
+  box-shadow: 0 5px 25px #00111c66;
+  font-size: 29px;
+}
+.attack-button small {
+  font-size: 9px;
+  color: #ffe6c7;
+}
+.attack-button:active {
+  background: #c66751;
+}
+.hud:has(.context:not(.hidden)) .attack-button {
+  bottom: calc(var(--bottom) + 195px);
+}
+.sound-controls {
+  margin-top: 24px;
+  border-top: 1px solid var(--line);
+  padding-top: 15px;
+}
+.sound-controls label {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 13px;
+  margin: 13px 0;
+  color: #d2decf;
+}
+.sound-controls input {
+  accent-color: #c1dba6;
+  touch-action: auto;
+  max-width: 250px;
+}
+.sound-controls input[type="range"] {
+  flex: 1;
+}
+.sound-controls p {
+  font-size: 11px;
+}
+.in-flight .combat-hud,
+.in-flight #attack {
+  visibility: hidden;
+}
+#toast {
+  bottom: calc(var(--bottom) + 25px);
+  max-width: 43%;
+  z-index: 18;
+}
+.hud .flight {
+  pointer-events: none;
+}
+.hud .flight button {
+  pointer-events: auto;
+}
+@media (max-width: 600px) {
+  .topbar {
+    top: calc(var(--top) + 12px);
+    left: calc(var(--left) + 12px);
+    max-width: calc(100% - 108px);
+    gap: 8px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .identity {
+    gap: 7px;
+    flex: 0 1 auto;
+  }
+  .identity strong {
+    font-size: 15px;
+  }
+  .avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 21px;
+  }
+  .brand {
+    font-size: 7px;
+    letter-spacing: 0.7px;
+  }
+  .identity small {
+    font-size: 8px;
+  }
+  .top-buttons {
+    margin: 0 0 0 38px;
+    gap: 5px;
+  }
+  .top-buttons button {
+    height: 28px;
+    width: 28px;
+    font-size: 14px;
+  }
+  .minimap {
+    top: calc(var(--top) + 10px);
+    right: calc(var(--right) + 8px);
+    width: 96px;
+  }
+  .bottom {
+    left: calc(var(--left) + 12px);
+    bottom: calc(var(--bottom) + 12px);
+  }
+  .bottom #menu-toggle {
+    width: 54px;
+    height: 54px;
+    border-radius: 17px;
+  }
+  .bottom nav {
+    bottom: 68px;
+    grid-template-columns: repeat(3, 71px);
+    padding: 7px;
+    gap: 3px;
+  }
+  .bottom .save-status {
+    display: none;
+  }
+  #joystick {
+    left: calc(var(--left) + 16px);
+    bottom: calc(var(--bottom) + 95px);
+    width: 80px;
+    height: 80px;
+  }
+  .context {
+    right: calc(var(--right) + 12px);
+    bottom: calc(var(--bottom) + 15px);
+    width: calc(100% - 111px);
+    max-height: calc(100dvh - var(--top) - var(--bottom) - 170px);
+    padding: 15px;
+  }
+  .build-panel {
+    top: calc(var(--top) + 112px);
+    right: calc(var(--right) + 12px);
+    width: calc(100% - 111px);
+    max-height: calc(100dvh - var(--top) - var(--bottom) - 130px);
+    padding: 0 12px 12px;
+  }
+  .build-actions {
+    bottom: -12px;
+  }
+  .build-choices {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .build-panel h3 {
+    font-size: 15px;
+  }
+  .sheet #modal-content {
+    padding: 19px 16px;
+  }
+  .sheet > .close {
+    right: 8px;
+    top: 8px;
+  }
+  .modal {
+    padding: calc(var(--top) + 10px) calc(var(--right) + 8px)
+      calc(var(--bottom) + 10px) calc(var(--left) + 8px);
+  }
+  .craft-layout {
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 14px;
+  }
+  .recipe-detail {
+    position: relative;
+    top: auto;
+    display: grid;
+    grid-template-columns: 92px minmax(0, 1fr);
+    padding: 11px;
+    gap: 8px 12px;
+  }
+  .recipe-detail > .recipe-illustration {
+    grid-row: span 3;
+    align-self: start;
+  }
+  .recipe-detail > .eyebrow {
+    font-size: 7px;
+  }
+  .recipe-detail h3 {
+    font-size: 19px;
+  }
+  .recipe-detail p {
+    font-size: 10px;
+    grid-column: 1/-1;
+  }
+  .recipe-detail .recipe-cost {
+    grid-column: 1/-1;
+    margin: 0;
+  }
+  .recipe-detail > .primary {
+    grid-column: 1/-1;
+    margin: 0;
+    padding: 9px;
+  }
+  .recipe-detail > small {
+    grid-column: 1/-1;
+    font-size: 9px;
+  }
+  .workshop-heading {
+    padding: 9px 28px 16px 0;
+  }
+  .workshop-heading h2 {
+    font-size: 26px;
+    margin: 10px 0;
+  }
+  .workshop-heading p {
+    font-size: 11px;
+  }
+  .recipe-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+  }
+  .recipe-caption {
+    padding: 10px;
+    min-height: 83px;
+  }
+  .recipe-caption strong {
+    font-size: 11px;
+  }
+  .planet-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .planet-search {
+    gap: 7px;
+  }
+  .planet-search input {
+    min-width: 100%;
+    padding: 10px;
+  }
+  .planet-search button {
+    width: 100%;
+    font-size: 11px;
+  }
+  .combat-hud {
+    top: calc(var(--top) + 103px);
+    left: calc(var(--left) + 12px);
+    width: 168px;
+    padding: 8px 10px;
+  }
+  .attack-button {
+    width: 64px;
+    height: 64px;
+    right: calc(var(--right) + 16px);
+    bottom: calc(var(--bottom) + 20px);
+  }
+  #toast {
+    bottom: calc(var(--bottom) + 20px);
+    left: calc(var(--left) + 79px);
+    transform: translateY(8px);
+    max-width: calc(100% - 175px);
+    font-size: 10px;
+  }
+  #toast.visible {
+    transform: none;
+  }
+  .keyboard {
+    display: none;
+  }
+}
+@media (orientation: landscape) and (max-height: 600px) {
+  .topbar {
+    top: calc(var(--top) + 9px);
+    left: calc(var(--left) + 12px);
+    right: auto;
+    max-width: calc(100% - 120px);
+    gap: 10px;
+    flex-wrap: nowrap;
+  }
+  .top-buttons {
+    margin: 0 0 0 5px;
+  }
+  .minimap {
+    top: calc(var(--top) + 8px);
+    width: 96px;
+    right: calc(var(--right) + 8px);
+  }
+  .bottom {
+    left: calc(var(--left) + 12px);
+    bottom: calc(var(--bottom) + 10px);
+  }
+  .bottom #menu-toggle {
+    width: 48px;
+    height: 48px;
+    border-radius: 15px;
+  }
+  .bottom #menu-toggle span {
+    font-size: 22px;
+  }
+  .bottom nav {
+    bottom: 59px;
+    grid-template-columns: repeat(3, 70px);
+    padding: 7px;
+    gap: 2px;
+  }
+  .bottom nav button {
+    padding: 8px 4px;
+    font-size: 9px;
+  }
+  .bottom nav button span {
+    font-size: 20px;
+  }
+  .bottom .save-status {
+    display: none;
+  }
+  #joystick {
+    left: calc(var(--left) + 80px);
+    bottom: calc(var(--bottom) + 15px);
+    width: 70px;
+    height: 70px;
+  }
+  .context {
+    top: auto;
+    right: calc(var(--right) + 18px);
+    bottom: calc(var(--bottom) + 15px);
+    width: 230px;
+    max-height: calc(100dvh - var(--top) - var(--bottom) - 140px);
+  }
+  .build-panel {
+    top: calc(var(--top) + 58px);
+    right: calc(var(--right) + 119px);
+    width: 245px;
+    max-height: calc(100dvh - var(--top) - var(--bottom) - 72px);
+    padding: 0 12px 12px;
+  }
+  .placement-header {
+    padding: 12px 32px 9px 0;
+    min-height: 40px;
+  }
+  .placement-header .close {
+    top: 3px;
+  }
+  .build-actions {
+    bottom: -12px;
+  }
+  .combat-hud {
+    top: calc(var(--top) + 59px);
+    left: calc(var(--left) + 12px);
+    width: 165px;
+    padding: 7px 10px;
+  }
+  .attack-button {
+    width: 62px;
+    height: 62px;
+    right: calc(var(--right) + 20px);
+    bottom: calc(var(--bottom) + 16px);
+  }
+  .hud:has(.context:not(.hidden)) .attack-button {
+    right: calc(var(--right) + 261px);
+    bottom: calc(var(--bottom) + 20px);
+  }
+  .event-banner {
+    top: calc(var(--top) + 58px);
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: calc(100% - 420px);
+  }
+  .sheet #modal-content {
+    padding: 18px 22px;
+  }
+  .workshop-heading {
+    padding: 5px 45px 15px 0;
+  }
+  .workshop-heading h2 {
+    font-size: 27px;
+    max-width: 600px;
+  }
+  .workshop-heading p {
+    font-size: 11px;
+  }
+  .craft-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 210px;
+  }
+  .recipe-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 9px;
+  }
+  .recipe-caption {
+    padding: 9px;
+    min-height: 75px;
+    gap: 5px;
+  }
+  .recipe-caption strong {
+    font-size: 10px;
+  }
+  .recipe-caption span {
+    font-size: 8px;
+  }
+  .recipe-detail {
+    position: sticky;
+    padding: 11px;
+    gap: 8px;
+  }
+  .recipe-detail h3 {
+    font-size: 21px;
+  }
+  .recipe-detail p {
+    font-size: 11px;
+  }
+  .recipe-detail .primary {
+    padding: 9px;
+  }
+  .planet-cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  #toast {
+    bottom: calc(var(--bottom) + 14px);
+    left: 50%;
+    max-width: 39%;
+    font-size: 10px;
+    transform: translate(-50%, 8px);
+  }
+  #toast.visible {
+    transform: translate(-50%, 0);
+  }
+  .keyboard {
+    display: none;
+  }
+}

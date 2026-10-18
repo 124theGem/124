@@ -38,7 +38,7 @@ export class Persistence {
   }
   async load() {
     if (this.local) {
-      const saved = localStorage.getItem("little-planets-v1");
+      const saved = localStorage.getItem("little-planets-v3");
       if (saved) {
         try {
           this.state = parseSave(saved);
@@ -63,7 +63,7 @@ export class Persistence {
     const task = this.queue.then(async () => {
       if (this.local) {
         const next = applyAction(this.state, action, this.now());
-        localStorage.setItem("little-planets-v1", JSON.stringify(next));
+        localStorage.setItem("little-planets-v3", JSON.stringify(next));
         this.state = next;
       } else
         this.state = (

@@ -1,6 +1,124 @@
 export const SIZE = 17;
 export const HOME_SIZE = 38;
-export type PlanetId = "home" | "listoria" | "mycelia" | "pyros";
+export type PlanetId =
+  | "home"
+  | "listoria"
+  | "mycelia"
+  | "pyros"
+  | "ferra"
+  | "nox"
+  | "orbis"
+  | `wild-${number}`;
+export type Biome = "listoria" | "mycelia" | "pyros";
+export interface PlanetDefinition {
+  id: PlanetId;
+  name: string;
+  tag: string;
+  description: string;
+  color: string;
+  soil: number;
+  side: number;
+  rock: number;
+  sky: number;
+  accent: number;
+  resource: readonly string[];
+  plants: readonly string[];
+  icon: string;
+  biome?: Biome;
+  size?: number;
+  hostile?: boolean;
+  seed?: number;
+}
+export type GearKind =
+  | "sword"
+  | "spear"
+  | "blaster"
+  | "scout"
+  | "guardian"
+  | "aegis";
+export const GEAR: Record<
+  GearKind,
+  {
+    name: string;
+    description: string;
+    icon: string;
+    slot: "weapon" | "armor";
+    cost: Record<string, number>;
+    damage?: number;
+    range?: number;
+    cooldown?: number;
+    defense?: number;
+    lab?: boolean;
+    color: number;
+  }
+> = {
+  sword: {
+    name: "Клинок разведчика",
+    description: "Надёжный клинок для ближнего боя. 14 урона, дистанция 2.7 м.",
+    icon: "⚔️",
+    slot: "weapon",
+    cost: { wood: 8, stone: 10 },
+    damage: 14,
+    range: 2.7,
+    cooldown: 520,
+    color: 0xc9dce0,
+  },
+  spear: {
+    name: "Кристальное копьё",
+    description:
+      "Длинное копьё с кристальным остриём. 23 урона, дистанция 3.8 м.",
+    icon: "🔱",
+    slot: "weapon",
+    cost: { wood: 12, crystal: 8 },
+    damage: 23,
+    range: 3.8,
+    cooldown: 700,
+    color: 0x83eff1,
+  },
+  blaster: {
+    name: "Импульсный бластер",
+    description:
+      "Стреляет энергетическими импульсами без расхода боеприпасов. 20 урона, дистанция 8 м.",
+    icon: "🔫",
+    slot: "weapon",
+    cost: { stone: 12, crystal: 12, obsidian: 5 },
+    damage: 20,
+    range: 8,
+    cooldown: 650,
+    lab: true,
+    color: 0x8be6d0,
+  },
+  scout: {
+    name: "Броня разведчика",
+    description: "Лёгкий защитный жилет. Поглощает 2 урона каждого удара.",
+    icon: "🦺",
+    slot: "armor",
+    cost: { wood: 10, spores: 4 },
+    defense: 2,
+    color: 0xb8a273,
+  },
+  guardian: {
+    name: "Броня стража",
+    description:
+      "Пластины из камня и обсидиана. Поглощает 5 урона каждого удара.",
+    icon: "🛡️",
+    slot: "armor",
+    cost: { stone: 18, obsidian: 6 },
+    defense: 5,
+    color: 0x819ba8,
+  },
+  aegis: {
+    name: "Кристальная эгида",
+    description:
+      "Защитный костюм лаборатории. Поглощает 8 урона каждого удара.",
+    icon: "💠",
+    slot: "armor",
+    cost: { crystal: 14, obsidian: 10, thermal: 4 },
+    defense: 8,
+    lab: true,
+    color: 0xa09ee2,
+  },
+};
 export type BuildingKind =
   | "headquarters"
   | "house"
@@ -33,7 +151,7 @@ export const RESOURCE_ICONS: Record<string, string> = {
   obsidian: "🌑",
   thermal: "🔥",
 };
-export const PLANETS = {
+export const PLANETS: Record<PlanetId, PlanetDefinition> = {
   home: {
     id: "home",
     name: "Родная",
@@ -95,7 +213,90 @@ export const PLANETS = {
     plants: ["fireflower", "ashcactus", "lavalily"],
     icon: "🔥",
   },
-} as const;
+} as unknown as Record<PlanetId, PlanetDefinition>;
+PLANETS.ferra = {
+  ...PLANETS.pyros,
+  id: "ferra",
+  name: "Ферра",
+  tag: "Враждебный мир",
+  description: "Ржавые пустоши, панцирные хищники и древние дроны.",
+  hostile: true,
+  size: 23,
+  soil: 0x9c775a,
+  sky: 0x1d1e31,
+  icon: "🦂",
+  biome: "pyros",
+};
+PLANETS.nox = {
+  ...PLANETS.mycelia,
+  id: "nox",
+  name: "Нокс",
+  tag: "Враждебный мир",
+  description: "Ночная чаща с кристальными стражами. Подготовьте броню.",
+  hostile: true,
+  size: 25,
+  icon: "👾",
+  biome: "mycelia",
+};
+PLANETS.orbis = {
+  ...PLANETS.listoria,
+  id: "orbis",
+  name: "Орбис",
+  tag: "Круглый мир · 360°",
+  description:
+    "Большая сферическая планета. Пройдите экватор, полюса и обратную сторону.",
+  size: 120,
+  icon: "🌍",
+  biome: "listoria",
+  color: "#76bcb3",
+};
+for (let i = 1; i <= 24; i++) {
+  const biome = (["listoria", "mycelia", "pyros"] as const)[(i * 7) % 3],
+    base = PLANETS[biome],
+    id = `wild-${i}` as PlanetId;
+  const name = [
+    "Виридия",
+    "Астра",
+    "Туманность",
+    "Эмбер",
+    "Селена",
+    "Люмен",
+    "Кварц",
+    "Ветра",
+  ][i % 8];
+  PLANETS[id] = {
+    ...base,
+    id,
+    name: `${name} ${100 + i * 13}`,
+    tag: "Экспедиция",
+    description:
+      i % 3
+        ? "Неизвестные существа охраняют богатые источники ресурсов."
+        : "Тихий затерянный мир с новыми месторождениями.",
+    hostile: i % 3 !== 0,
+    size: 19 + (i % 4) * 2,
+    seed: i * 7919,
+    biome,
+  };
+}
+export const INITIAL_PLANETS: PlanetId[] = [
+  "home",
+  "listoria",
+  "mycelia",
+  "pyros",
+  "ferra",
+  "nox",
+  "orbis",
+];
+export function biomeOf(p: PlanetId): Biome {
+  return PLANETS[p].biome ?? (p === "home" ? "listoria" : (p as Biome));
+}
+export function isSphere(p: PlanetId) {
+  return p === "orbis";
+}
+export function planetDepth(p: PlanetId) {
+  return isSphere(p) ? 60 : planetSize(p);
+}
 export const PLANTS: Record<
   string,
   {
@@ -335,21 +536,24 @@ export const ROOM = {
 };
 export const HOME_HQ = { x: 12, z: 15 };
 export function planetSize(p: PlanetId) {
-  return p === "home" ? HOME_SIZE : SIZE;
+  return p === "home" ? HOME_SIZE : (PLANETS[p]?.size ?? SIZE);
 }
 export function beds(p: PlanetId) {
+  if (isSphere(p)) return [];
   return BEDS.map((b) => ({
     x: b.x + (p === "home" ? 10 : 0),
     z: b.z + (p === "home" ? 10 : 0),
   }));
 }
 export function ship(p: PlanetId) {
+  if (isSphere(p)) return { x: 30, z: 30 };
   return {
     x: SHIP.x + (p === "home" ? 10 : 0),
     z: SHIP.z + (p === "home" ? 10 : 0),
   };
 }
 export function allowedBuildings(p: PlanetId) {
+  if (isSphere(p)) return [];
   return (Object.keys(BUILDINGS) as BuildingKind[]).filter(
     (k) =>
       BUILDINGS[k].zone === (p === "home" ? "home" : "outpost") &&
@@ -378,6 +582,14 @@ export function itemInfo(id: string): {
       group: prefix === "seed" ? "Семена" : "Урожай",
     };
   }
+  if (prefix === "gear") {
+    const g = GEAR[value as GearKind];
+    return {
+      name: g?.name ?? value,
+      icon: g?.icon ?? "⚔️",
+      group: "Экипировка",
+    };
+  }
   if (prefix === "kit") {
     const b = BUILDINGS[value as BuildingKind];
     return {
@@ -398,6 +610,15 @@ export function itemInfo(id: string): {
 }
 export function recipes() {
   return [
+    ...Object.entries(GEAR).map(([id, g]) => ({
+      id: `gear:${id}`,
+      name: g.name,
+      icon: g.icon,
+      cost: g.cost,
+      group: g.slot === "weapon" ? "Оружие" : "Броня",
+      lab: !!g.lab,
+      description: g.description,
+    })),
     ...Object.entries(BUILDINGS).map(([id, b]) => ({
       id: `kit:${id}`,
       name: b.name,
@@ -462,6 +683,14 @@ export function nodes(planet: PlanetId) {
     [3, 5],
     [10, 6],
   ];
+  if (isSphere(planet))
+    return Array.from({ length: 50 }, (_, i) => ({
+      id: `node-${i}`,
+      x: (i * 29 + 8) % 120,
+      z: 5 + ((i * 13) % 50),
+      resource: PLANETS[planet].resource[i % 2],
+      variant: i,
+    }));
   if (planet === "home") {
     coords.length = 0;
     for (let x = 2; x < HOME_SIZE - 2; x += 4)
@@ -469,6 +698,31 @@ export function nodes(planet: PlanetId) {
         if (!(x >= 10 && x <= 26 && z >= 10 && z <= 26) && !waterCell(x, z))
           coords.push([x, z]);
     coords.push([11, 21], [21, 13], [26, 17], [18, 25], [9, 17], [27, 24]);
+  }
+  if (planet.startsWith("wild-")) {
+    const seed = PLANETS[planet].seed ?? 1,
+      size = planetSize(planet),
+      generated: number[][] = [];
+    const random = (n: number) => {
+      n = Math.imul(n ^ (n >>> 16), 0x45d9f3b);
+      return (n ^ (n >>> 16)) >>> 0;
+    };
+    for (let i = 0; i < 18; i++)
+      for (let attempt = 0; attempt < 200; attempt++) {
+        const x = 2 + (random(seed + i * 977 + attempt * 37) % (size - 4)),
+          z = 2 + (random(seed + i * 631 + attempt * 71 + 13) % (size - 4)),
+          pad = ship(planet);
+        if (
+          waterCell(x, z) ||
+          beds(planet).some((b) => b.x === x && b.z === z) ||
+          Math.hypot(x - pad.x, z - pad.z) <= 3 ||
+          generated.some((p) => p[0] === x && p[1] === z)
+        )
+          continue;
+        generated.push([x, z]);
+        break;
+      }
+    coords.splice(0, coords.length, ...generated);
   }
   return coords.map(([x, z], i) => ({
     id: `node-${i}`,

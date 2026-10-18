@@ -1,4 +1,5 @@
 import * as T from "three";
+import { GEAR, type GearKind } from "../../shared/catalog";
 import { Models } from "./Models";
 export class Astronaut {
   readonly root = new T.Group();
@@ -6,9 +7,14 @@ export class Astronaut {
   private arms: T.Group[] = [];
   private legs: T.Group[] = [];
   private tool = new T.Group();
-  mode: "idle" | "walk" | "plant" | "gather" | "tool" = "idle";
+  mode: "idle" | "walk" | "plant" | "gather" | "tool" | "attack" = "idle";
   private animation = 0;
+  private equipment = new T.Group();
+  private armor = new T.Group();
+  private equippedKey = "";
+  private kit: Models;
   constructor(kit: Models) {
+    this.kit = kit;
     const b = (
       p: T.Object3D,
       x: number,
@@ -47,15 +53,50 @@ export class Astronaut {
     }
     b(this.tool, 0, -0.32, 0.18, 0.06, 0.55, 0.06, 0xa98555);
     b(this.tool, 0, -0.55, 0.18, 0.36, 0.09, 0.09, 0xa9c0c4);
-    this.arms[1].add(this.tool);
+    this.arms[1].add(this.tool, this.equipment);
+    this.body.add(this.armor);
     this.tool.visible = false;
     for (const part of this.root.children) part.position.y -= 0.19;
     this.root.scale.setScalar(0.83);
   }
+  equip(weapon: GearKind | null, armor: GearKind | null) {
+    const key = `${weapon}|${armor}`;
+    if (key === this.equippedKey) return;
+    this.equippedKey = key;
+    this.equipment.clear();
+    this.armor.clear();
+    if (weapon) {
+      const object = this.kit.gear(weapon);
+      object.scale.setScalar(0.55);
+      object.position.set(0, -0.3, 0.15);
+      object.rotation.x = Math.PI / 2;
+      this.equipment.add(object);
+    }
+    if (armor) {
+      const color = GEAR[armor].color;
+      this.kit.box(this.armor, 0, 0.8, 0.015, 0.49, 0.5, 0.39, color);
+      for (const side of [-1, 1])
+        this.kit.box(this.armor, side * 0.32, 0.95, 0, 0.22, 0.19, 0.34, color);
+      this.kit.box(
+        this.armor,
+        0,
+        0.88,
+        0.23,
+        0.2,
+        0.2,
+        0.04,
+        armor === "aegis" ? 0x99f4e7 : 0xdec38e,
+        true,
+      );
+    }
+  }
   update(time: number, dt: number, moving: boolean) {
     this.animation += dt;
     const work =
-      this.mode === "plant" || this.mode === "gather" || this.mode === "tool";
+      this.mode === "plant" ||
+      this.mode === "gather" ||
+      this.mode === "tool" ||
+      this.mode === "attack";
     const stride = moving ? Math.sin(time * 11) * 0.6 : 0;
     this.legs.forEach((leg, i) => (leg.rotation.x = stride * (i ? 1 : -1)));
     this.arms.forEach(

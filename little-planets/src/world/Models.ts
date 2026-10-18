@@ -1,5 +1,7 @@
 import * as T from "three";
 import {
+  GEAR,
+  type GearKind,
   PLANTS,
   FURNITURE,
   type FurnitureKind,
@@ -194,6 +196,78 @@ export class Models {
       }
       if (planet === "pyros")
         this.box(root, 0, 0.6, 0, 0.09, 0.15, 0.5, 0xffb057, true);
+    }
+    return root;
+  }
+  gear(kind: GearKind) {
+    const root = new T.Group(),
+      g = GEAR[kind],
+      color = g.color;
+    if (g.slot === "weapon") {
+      if (kind === "blaster") {
+        this.box(root, 0, 0.65, 0, 0.3, 0.3, 0.8, 0x576e82);
+        this.box(root, 0, 0.65, 0.5, 0.17, 0.16, 0.35, color, true);
+        this.box(root, 0, 0.4, -0.1, 0.15, 0.35, 0.18, 0x9a805e);
+        this.box(root, 0.17, 0.65, 0.05, 0.04, 0.15, 0.32, color, true);
+        this.box(root, 0, 0.86, 0, 0.12, 0.1, 0.15, 0xd8bb78);
+      } else {
+        this.box(root, 0, 0.4, 0, 0.09, 0.7, 0.09, 0x9d7853);
+        this.box(
+          root,
+          0,
+          0.76,
+          0,
+          kind === "spear" ? 0.3 : 0.6,
+          0.1,
+          0.14,
+          0xe2ba70,
+        );
+        this.box(
+          root,
+          0,
+          kind === "spear" ? 1.5 : 1.22,
+          0,
+          kind === "spear" ? 0.17 : 0.22,
+          kind === "spear" ? 1.4 : 0.85,
+          0.09,
+          color,
+          kind === "spear",
+        );
+        const tip = this.box(
+          root,
+          0,
+          kind === "spear" ? 2.25 : 1.7,
+          0,
+          0.15,
+          0.24,
+          0.07,
+          color,
+          kind === "spear",
+        );
+        tip.rotation.z = Math.PI / 4;
+        this.box(root, 0, 0.05, 0, 0.18, 0.12, 0.16, 0xd6b77c);
+      }
+    } else {
+      this.box(root, 0, 0.85, 0, 0.65, 0.7, 0.38, color);
+      for (const side of [-1, 1]) {
+        this.box(root, side * 0.43, 1.1, 0, 0.25, 0.26, 0.43, color);
+        this.box(root, side * 0.19, 0.25, 0, 0.27, 0.45, 0.33, color);
+      }
+      this.box(root, 0, 1.5, 0, 0.55, 0.48, 0.5, color);
+      this.box(root, 0, 1.5, 0.27, 0.42, 0.2, 0.04, 0x253e55);
+      this.box(
+        root,
+        0,
+        0.9,
+        0.22,
+        0.29,
+        0.28,
+        0.06,
+        kind === "aegis" ? 0xa8f5ef : 0xe1be7b,
+        kind === "aegis",
+      );
+      for (const side of [-1, 1])
+        this.box(root, side * 0.24, 0.8, 0.21, 0.06, 0.52, 0.04, 0xd5d3c2);
     }
     return root;
   }

@@ -54,7 +54,7 @@ describe("Telegram identity verification", () => {
   });
 });
 describe("SQLite persistence and authenticated API", () => {
-  it("migrates version 1 once in SQLite and retains revisions and inventory after reopen", () => {
+  it("resets old prototype saves once and persists the new world in SQLite", () => {
     const dir = mkdtempSync(join(tmpdir(), "planets-migration-")),
       file = join(dir, "save.sqlite");
     let store = new Store(file);
@@ -68,8 +68,8 @@ describe("SQLite persistence and authenticated API", () => {
     store = new Store(file);
     try {
       const migrated = store.get(7);
-      expect(migrated.version).toBe(2);
-      expect(migrated.revision).toBe(12);
+      expect(migrated.version).toBe(3);
+      expect(migrated.revision).toBe(0);
       store.close();
       store = new Store(file);
       expect(store.get(7)).toEqual(migrated);
@@ -78,7 +78,7 @@ describe("SQLite persistence and authenticated API", () => {
         const raw = verify
           .prepare("SELECT state FROM saves WHERE user_id='7'")
           .get() as { state: string };
-        expect(JSON.parse(raw.state).version).toBe(2);
+        expect(JSON.parse(raw.state).version).toBe(3);
       } finally {
         verify.close();
       }

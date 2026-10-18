@@ -44,7 +44,7 @@ if (conf.HOST !== "127.0.0.1" || conf.PORT !== "8003")
 if (!conf.BOT_TOKEN)
   fail("BOT_TOKEN is missing in the existing .env. No changes made.");
 const database = conf.DATABASE_PATH;
-const archive = join(source, "releases/little-planets-colony-v2.tar.gz"),
+const archive = join(source, "releases/little-planets-frontiers-v3.tar.gz"),
   expected = readFileSync(`${archive}.sha256`, "utf8").trim().split(/\s+/)[0];
 if (
   createHash("sha256").update(readFileSync(archive)).digest("hex") !== expected
@@ -96,7 +96,7 @@ try {
       db.close();
     }
   }
-  // Validate every existing save with the new migration before changing the live application.
+  // Validate saved JSON; old prototype versions start fresh on first login.
   const validator = join(stage, "check-saves.mjs");
   writeFileSync(
     validator,
@@ -130,7 +130,7 @@ try {
   }
   if (!healthy) fail("New service did not pass the health check.");
   console.log(
-    "Updated successfully. Reopen the Telegram Mini App. Existing .env and saves are preserved.",
+    "Updated successfully. Reopen the Telegram Mini App. Settings are preserved. Earlier prototype progress starts fresh in this version.",
   );
   console.log("Caddy, DNS and other services were not changed.");
 } catch (error) {

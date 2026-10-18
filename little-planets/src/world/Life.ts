@@ -1,6 +1,12 @@
 import * as T from "three";
 import { Models } from "./Models";
-import { planetSize, terrainHeight, type PlanetId } from "../../shared/catalog";
+import {
+  isSphere,
+  biomeOf,
+  planetSize,
+  terrainHeight,
+  type PlanetId,
+} from "../../shared/catalog";
 import {
   walkable,
   worldEvent,
@@ -52,14 +58,24 @@ export class Life {
         },
         model = new T.Group();
       const color =
-        planet === "mycelia"
+        biomeOf(planet) === "mycelia"
           ? 0xa18ce4
-          : planet === "pyros"
+          : biomeOf(planet) === "pyros"
             ? 0xb6a391
             : 0xd9bb91;
-      kit.box(model, 0, 0.35, 0, 0.46, 0.4, 0.7, color, planet === "mycelia");
+      kit.box(
+        model,
+        0,
+        0.35,
+        0,
+        0.46,
+        0.4,
+        0.7,
+        color,
+        biomeOf(planet) === "mycelia",
+      );
       kit.box(model, 0, 0.55, 0.35, 0.4, 0.38, 0.36, color);
-      if (planet === "pyros") {
+      if (biomeOf(planet) === "pyros") {
         kit.box(model, 0, 0.57, -0.07, 0.65, 0.25, 0.7, 0x8d8586);
         kit.box(model, 0, 0.28, -0.54, 0.16, 0.13, 0.4, color);
       } else
@@ -73,7 +89,7 @@ export class Life {
             0.5,
             0.12,
             color,
-            planet === "mycelia",
+            biomeOf(planet) === "mycelia",
           );
           ear.rotation.z = side * 0.12;
           kit.box(model, side * 0.12, 0.94, 0.38, 0.05, 0.3, 0.025, 0xc48f9a);
@@ -199,6 +215,7 @@ export class Atmosphere {
   private launch?: { x: number; y: number; z: number; time: number };
   private clock = 0;
   private exhaustY = 0;
+  private launchUp = new T.Vector3(0, 1, 0);
   smokeCount = 0;
   constructor(private kit: Models) {
     this.plume = new T.InstancedMesh(this.geometry, this.material, 64);
@@ -223,9 +240,10 @@ export class Atmosphere {
       this.clouds.add(cloud);
     }
   }
-  startLaunch(x: number, y: number, z: number) {
+  startLaunch(x: number, y: number, z: number, up = new T.Vector3(0, 1, 0)) {
     this.launch = { x, y, z, time: this.clock };
-    this.exhaustY = y;
+    this.exhaustY = 0;
+    this.launchUp.copy(up);
   }
   setExhaust(y: number) {
     this.exhaustY = y;
@@ -282,7 +300,7 @@ export class Atmosphere {
       );
       this.meteor.rotation.y = progress * 3;
     } else this.meteor.visible = false;
-    const wind = event?.type === "wind";
+    const wind = event?.type === "wind" && !isSphere(save.planet);
     this.clouds.visible = !!wind;
     if (wind) {
       const size = planetSize(save.planet);
@@ -304,10 +322,17 @@ export class Atmosphere {
           angle = i * 2.4,
           s = 0.12 + age * 0.48;
         const pos = new T.Vector3(
-          launch.x + Math.cos(angle) * spread,
-          Math.max(launch.y + 0.1, this.exhaustY - age * 5) + age * 0.3,
-          launch.z + Math.sin(angle) * spread,
-        );
+          Math.cos(angle) * spread,
+          Math.max(0.1, this.exhaustY - age * 5) + age * 0.3,
+          Math.sin(angle) * spread,
+        )
+          .applyQuaternion(
+            new T.Quaternion().setFromUnitVectors(
+              T.Object3D.DEFAULT_UP,
+              this.launchUp,
+            ),
+          )
+          .add(new T.Vector3(launch.x, launch.y, launch.z));
         this.plume.setMatrixAt(
           i,
           new T.Matrix4().compose(

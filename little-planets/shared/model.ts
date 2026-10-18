@@ -1,5 +1,12 @@
+import { surfaceDistance } from "./sphere";
 import { z } from "zod";
 import {
+  GEAR,
+  INITIAL_PLANETS,
+  biomeOf,
+  isSphere,
+  planetDepth,
+  type GearKind,
   BUILDINGS,
   FURNITURE,
   PLANTS,
@@ -38,15 +45,29 @@ export interface Furniture {
   z: number;
   rotation: number;
 }
+export interface Enemy {
+  id: string;
+  kind: "beetle" | "drone" | "stalker";
+  x: number;
+  z: number;
+  homeX: number;
+  homeZ: number;
+  hp: number;
+  maxHp: number;
+  lastAttack: number;
+  defeatedAt: number | null;
+}
 export interface PlanetState {
   crops: Record<string, Crop>;
   buildings: Building[];
   depleted: Record<string, number>;
   eventEpoch: number;
   salvaged: number[];
+  enemies: Enemy[];
+  lastSimAt: number;
 }
 export interface Save {
-  version: 2;
+  version: 3;
   revision: number;
   planet: PlanetId;
   position: { x: number; z: number };
@@ -56,17 +77,36 @@ export interface Save {
   inside: string | null;
   outsidePosition: { x: number; z: number } | null;
   interiors: Record<string, Furniture[]>;
-  migration?: { from: 1; movedBuildings: number };
+  discovered: PlanetId[];
+  lastDiscovery: PlanetId | null;
+  equipment: { weapon: GearKind | null; armor: GearKind | null };
+  health: number;
+  kills: number;
+  deaths: number;
+  lastAttack: number;
+  lastDamage: number;
 }
 export class RuleError extends Error {}
-const planet = z.enum(["home", "listoria", "mycelia", "pyros"]),
-  cell = z.number().int().min(0).max(84);
+const planet = z.string().refine((p) => Object.hasOwn(PLANETS, p)),
+  cell = z.number().int().min(0).max(128);
 export const ActionSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("scan") }).strict(),
+  z
+    .object({
+      type: z.literal("equip"),
+      slot: z.enum(["weapon", "armor"]),
+      item: z
+        .enum(["sword", "spear", "blaster", "scout", "guardian", "aegis"])
+        .nullable(),
+    })
+    .strict(),
+  z.object({ type: z.literal("attack"), id: z.string().max(100) }).strict(),
+  z.object({ type: z.literal("combatTick") }).strict(),
   z
     .object({
       type: z.literal("move"),
-      x: z.number().finite().min(0).max(84),
-      z: z.number().finite().min(0).max(84),
+      x: z.number().finite().min(0).max(128),
+      z: z.number().finite().min(0).max(128),
     })
     .strict(),
   z
@@ -148,6 +188,8 @@ export function newGame(now = Date.now()): Save {
       depleted: {},
       eventEpoch: now,
       salvaged: [],
+      enemies: spawnEnemies(p),
+      lastSimAt: now,
     };
   const inventory: Record<string, number> = {
     wood: 90,
@@ -159,7 +201,7 @@ export function newGame(now = Date.now()): Save {
   };
   for (const id of Object.keys(PLANTS)) inventory[`seed:${id}`] = 6;
   return {
-    version: 2,
+    version: 3,
     revision: 0,
     planet: "home",
     position: { x: 18, z: 21 },
@@ -169,6 +211,14 @@ export function newGame(now = Date.now()): Save {
     inside: null,
     outsidePosition: null,
     interiors: { "home-hq": [] },
+    discovered: [...INITIAL_PLANETS],
+    lastDiscovery: null,
+    equipment: { weapon: null, armor: null },
+    health: 100,
+    kills: 0,
+    deaths: 0,
+    lastAttack: 0,
+    lastDamage: 0,
   };
 }
 export function stage(crop: Crop, now: number) {
@@ -220,6 +270,15 @@ export function walkable(
   z: number,
   _now = Date.now(),
 ): boolean {
+  if (!save.inside && isSphere(p))
+    return (
+      Number.isFinite(x) &&
+      Number.isFinite(z) &&
+      x >= 0 &&
+      x < 120 &&
+      z >= 0 &&
+      z <= 60
+    );
   const cx = Math.round(x),
     cz = Math.round(z);
   if (save.inside) {
@@ -253,7 +312,7 @@ export function walkable(
 }
 export interface WorldEvent {
   id: number;
-  type: "meteor" | "wind";
+  type: "meteor" | "wind" | "rain" | "storm" | "hurricane";
   x: number;
   z: number;
   startsAt: number;
@@ -281,8 +340,9 @@ export function worldEvent(
         Math.floor(world.eventEpoch / 1000),
     );
   const startsAt = world.eventEpoch + 25000 + id * 85000 + (seed % 12000);
-  const type = id % 2 === 0 ? "meteor" : "wind",
-    endsAt = startsAt + (type === "meteor" ? 65000 : 20000);
+  const types = ["meteor", "wind", "rain", "storm", "hurricane"] as const;
+  const type = isSphere(p) ? types[1 + (id % 4)] : types[id % 5],
+    endsAt = startsAt + (type === "meteor" ? 65000 : 40000);
   if (now < startsAt || now > endsAt) return null;
   const size = planetSize(p);
   let x = 3,
@@ -314,7 +374,13 @@ export function canBuild(
   kind: BuildingKind = "house",
   now = Date.now(),
 ): boolean {
-  if (save.inside || !Number.isInteger(x) || !Number.isInteger(z)) return false;
+  if (
+    save.inside ||
+    isSphere(save.planet) ||
+    !Number.isInteger(x) ||
+    !Number.isInteger(z)
+  )
+    return false;
   const b = BUILDINGS[kind];
   if (!b || b.zone !== (save.planet === "home" ? "home" : "outpost"))
     return false;
@@ -400,7 +466,9 @@ function charge(save: Save, cost: Record<string, number>, count = 1) {
   for (const [r, n] of Object.entries(cost)) save.inventory[r] -= n * count;
 }
 function nearby(save: Save, x: number, z: number, distance = 2.7) {
-  if (Math.hypot(save.position.x - x, save.position.z - z) > distance)
+  if (
+    surfaceDistance(save.position, { x, z }, isSphere(save.planet)) > distance
+  )
     throw new RuleError("Подойдите поближе к объекту.");
 }
 export function applyAction(
@@ -411,14 +479,72 @@ export function applyAction(
   const action = ActionSchema.parse(raw),
     save = structuredClone(original),
     world = save.worlds[save.planet];
+  if (advanceEnemies(save, now)) {
+    save.revision++;
+    save.updatedAt = now;
+    return save;
+  }
   if (
     save.inside &&
-    !["move", "craft", "placeFurniture", "takeFurniture", "exit"].includes(
-      action.type,
-    )
+    ![
+      "move",
+      "craft",
+      "placeFurniture",
+      "takeFurniture",
+      "exit",
+      "equip",
+      "combatTick",
+    ].includes(action.type)
   )
     throw new RuleError("Сначала выйдите из дома.");
   switch (action.type) {
+    case "combatTick":
+      break;
+    case "equip": {
+      if (action.item) {
+        const gear = GEAR[action.item];
+        if (
+          gear.slot !== action.slot ||
+          !(save.inventory[`gear:${action.item}`] > 0)
+        )
+          throw new RuleError("Сначала создайте подходящую экипировку.");
+      }
+      save.equipment[action.slot] = action.item;
+      break;
+    }
+    case "scan": {
+      const pad = ship(save.planet);
+      nearby(save, pad.x, pad.z, 3);
+      const pool = Object.keys(PLANETS).filter(
+        (p) =>
+          p.startsWith("wild-") && !save.discovered.includes(p as PlanetId),
+      ) as PlanetId[];
+      if (!pool.length)
+        throw new RuleError("Все 24 экспедиционных мира уже обнаружены.");
+      const p = pool[hash(Math.floor(now) ^ save.revision) % pool.length];
+      save.discovered.push(p);
+      save.lastDiscovery = p;
+      break;
+    }
+    case "attack": {
+      const enemy = world.enemies.find((e) => e.id === action.id && e.hp > 0);
+      if (!enemy) throw new RuleError("Противник уже повержен.");
+      const weapon = save.equipment.weapon ? GEAR[save.equipment.weapon] : null;
+      if (now - save.lastAttack < (weapon?.cooldown ?? 650))
+        throw new RuleError("Оружие ещё не готово.");
+      nearby(save, enemy.x, enemy.z, weapon?.range ?? 1.9);
+      enemy.hp = Math.max(0, enemy.hp - (weapon?.damage ?? 5));
+      save.lastAttack = now;
+      if (!enemy.hp) {
+        enemy.defeatedAt = now;
+        save.kills++;
+        const resource =
+          PLANETS[save.planet].resource[world.enemies.indexOf(enemy) % 2];
+        save.inventory[resource] = (save.inventory[resource] ?? 0) + 5;
+        save.inventory.crystal = (save.inventory.crystal ?? 0) + 2;
+      }
+      break;
+    }
     case "move":
       if (!walkable(save, save.planet, action.x, action.z, now))
         throw new RuleError("Здесь нельзя пройти.");
@@ -430,7 +556,7 @@ export function applyAction(
         k = key(action.x, action.z);
       if (
         !plant ||
-        (plant.planet !== save.planet &&
+        (plant.planet !== biomeOf(save.planet) &&
           !(save.planet === "home" && plant.planet === "listoria"))
       )
         throw new RuleError("Это растение для другого биома.");
@@ -545,8 +671,12 @@ export function applyAction(
     case "travel": {
       const pad = ship(save.planet);
       nearby(save, pad.x, pad.z, 3);
+      if (!save.discovered.includes(action.planet as PlanetId))
+        throw new RuleError("Сначала найдите эту планету сканером.");
       if (save.planet === action.planet) throw new RuleError("Вы уже здесь.");
-      save.planet = action.planet;
+      save.planet = action.planet as PlanetId;
+      save.worlds[save.planet].lastSimAt = now;
+      if (save.planet === "home") save.health = 100;
       const dest = ship(save.planet);
       save.position = { x: dest.x - 2, z: dest.z };
       break;
@@ -675,91 +805,58 @@ const worldSchema = z.object({
   depleted: z.record(z.string(), z.number().finite()),
   eventEpoch: z.number().finite(),
   salvaged: z.array(z.number().int().nonnegative()),
+  enemies: z.array(
+    z.object({
+      id: z.string(),
+      kind: z.enum(["beetle", "drone", "stalker"]),
+      x: z.number().finite(),
+      z: z.number().finite(),
+      homeX: z.number().finite(),
+      homeZ: z.number().finite(),
+      hp: z.number().nonnegative(),
+      maxHp: z.number().positive(),
+      lastAttack: z.number().finite(),
+      defeatedAt: z.number().finite().nullable(),
+    }),
+  ),
+  lastSimAt: z.number().finite(),
 });
 const positionSchema = z.object({
   x: z.number().finite().nonnegative(),
   z: z.number().finite().nonnegative(),
 });
 const saveSchema = z.object({
-  version: z.literal(2),
+  version: z.literal(3),
   revision: z.number().int().nonnegative(),
   planet,
   position: positionSchema,
   inventory: z.record(z.string(), z.number().int().nonnegative()),
-  worlds: z.object({
-    home: worldSchema,
-    listoria: worldSchema,
-    mycelia: worldSchema,
-    pyros: worldSchema,
-  }),
+  worlds: z.record(planet, worldSchema),
   updatedAt: z.number().finite(),
   inside: z.string().nullable(),
   outsidePosition: positionSchema.nullable(),
   interiors: z.record(z.string(), z.array(fSchema)),
-  migration: z
-    .object({
-      from: z.literal(1),
-      movedBuildings: z.number().int().nonnegative(),
-    })
-    .optional(),
+  discovered: z.array(planet),
+  lastDiscovery: planet.nullable(),
+  equipment: z.object({
+    weapon: z.enum(["sword", "spear", "blaster"]).nullable(),
+    armor: z.enum(["scout", "guardian", "aegis"]).nullable(),
+  }),
+  health: z.number().min(1).max(100),
+  kills: z.number().int().nonnegative(),
+  deaths: z.number().int().nonnegative(),
+  lastAttack: z.number().finite(),
+  lastDamage: z.number().finite(),
 });
 export function parseSave(raw: string): Save {
-  let data = JSON.parse(raw);
-  if (data?.version === 1) {
-    // Validate the old structure before adding the new world; never reset progress.
-    if (
-      !Number.isSafeInteger(data.revision) ||
-      !["listoria", "mycelia", "pyros"].includes(data.planet) ||
-      !data.inventory ||
-      !data.worlds ||
-      !data.position
-    )
-      throw new Error("Повреждённое старое сохранение");
-    const next = newGame(data.updatedAt);
-    next.revision = data.revision;
-    next.inventory = data.inventory;
-    next.planet = data.planet;
-    next.position = data.position;
-    const moved: Building[] = [];
-    for (const p of ["listoria", "mycelia", "pyros"] as const) {
-      const w = data.worlds[p];
-      if (!w || !Array.isArray(w.buildings) || !w.crops || !w.depleted)
-        throw new Error("Повреждённая старая планета");
-      next.worlds[p].crops = w.crops;
-      next.worlds[p].depleted = w.depleted;
-      for (const b of w.buildings) {
-        if (!["house", "warehouse", "greenhouse"].includes(b.kind))
-          throw new Error("Повреждённая старая постройка");
-        if (b.id !== "starter-home")
-          moved.push({ ...b, id: `legacy-${p}-${b.id}` });
-      }
-    }
-    for (const building of moved) {
-      let placed = false;
-      for (let z = 2; z < 35 && !placed; z++)
-        for (let x = 2; x < 35 && !placed; x++) {
-          if (
-            canBuild(
-              { ...next, planet: "home", inside: null },
-              x,
-              z,
-              building.kind,
-              Number.MIN_SAFE_INTEGER,
-            )
-          ) {
-            next.worlds.home.buildings.push({ ...building, x, z });
-            placed = true;
-          }
-        }
-      if (!placed) {
-        const item = `kit:${building.kind}`;
-        next.inventory[item] = (next.inventory[item] ?? 0) + 1;
-      }
-    }
-    next.migration = { from: 1, movedBuildings: moved.length };
-    data = next;
-  }
+  const data = JSON.parse(raw);
+  // Prototype builds deliberately start a new world; no version-to-version migration.
+  if (data?.version === 1 || data?.version === 2) return newGame();
   const save = saveSchema.parse(data) as Save;
+  for (const p of Object.keys(PLANETS) as PlanetId[])
+    if (!save.worlds[p]) throw new Error("Отсутствует планета");
+  if (!save.discovered.includes(save.planet))
+    throw new Error("Планета не открыта");
   for (const p of Object.keys(PLANETS) as PlanetId[])
     for (const [k, crop] of Object.entries(save.worlds[p].crops)) {
       const [x, z] = k.split(",").map(Number);
@@ -777,8 +874,8 @@ export function parseSave(raw: string): Save {
   )
     throw new Error("Повреждённый интерьер");
   const maxX = save.inside ? ROOM.width : planetSize(save.planet),
-    maxZ = save.inside ? ROOM.depth : planetSize(save.planet);
-  if (save.position.x >= maxX || save.position.z >= maxZ)
+    maxZ = save.inside ? ROOM.depth : planetDepth(save.planet);
+  if (save.position.x >= maxX || save.position.z > maxZ)
     throw new Error("Повреждённая позиция");
   return save;
 }
@@ -824,4 +921,89 @@ export function findPath(
     k = previous.get(k) ?? null;
   }
   return path;
+}
+
+export function spawnEnemies(p: PlanetId): Enemy[] {
+  if (!PLANETS[p].hostile) return [];
+  const size = planetSize(p),
+    result: Enemy[] = [];
+  for (let i = 0; i < 6; i++) {
+    let x = 3 + ((i * 7 + 3 + (PLANETS[p].seed ?? 0)) % (size - 6)),
+      z = 3 + ((i * 5 + 4) % (size - 6));
+    for (let n = 0; n < 100; n++) {
+      if (
+        !waterCell(x, z) &&
+        !beds(p).some((b) => b.x === x && b.z === z) &&
+        !nodes(p).some((b) => b.x === x && b.z === z) &&
+        Math.hypot(x - ship(p).x, z - ship(p).z) > 4
+      )
+        break;
+      x = 2 + ((x + 3) % (size - 4));
+      z = 2 + ((z + 7) % (size - 4));
+    }
+    const kind = (["beetle", "drone", "stalker"] as const)[i % 3],
+      maxHp = kind === "stalker" ? 65 : kind === "drone" ? 42 : 35;
+    result.push({
+      id: `enemy-${i}`,
+      kind,
+      x,
+      z,
+      homeX: x,
+      homeZ: z,
+      hp: maxHp,
+      maxHp,
+      lastAttack: 0,
+      defeatedAt: null,
+    });
+  }
+  return result;
+}
+/** Only connected play advances combat; offline time never kills the player. */
+export function advanceEnemies(save: Save, now: number): boolean {
+  const world = save.worlds[save.planet];
+  if (save.inside || !PLANETS[save.planet].hostile) return false;
+  const dt = Math.max(0, Math.min(1.5, (now - world.lastSimAt) / 1000));
+  world.lastSimAt = now;
+  for (const [i, e] of world.enemies.entries()) {
+    if (e.hp <= 0) continue;
+    const distance = Math.hypot(e.x - save.position.x, e.z - save.position.z),
+      chasing = distance < 9;
+    const target = chasing
+      ? save.position
+      : {
+          x: e.homeX + Math.sin(now / 3500 + i) * 1.4,
+          z: e.homeZ + Math.cos(now / 3000 + i) * 1.4,
+        };
+    const dx = target.x - e.x,
+      dz = target.z - e.z,
+      d = Math.hypot(dx, dz),
+      speed = (e.kind === "stalker" ? 1.25 : 0.85) * dt;
+    if (d > 1.1) {
+      const x = e.x + (dx / d) * Math.min(speed, d),
+        z = e.z + (dz / d) * Math.min(speed, d);
+      if (walkable(save, save.planet, x, e.z, now)) e.x = x;
+      if (walkable(save, save.planet, e.x, z, now)) e.z = z;
+    }
+    if (
+      Math.hypot(e.x - save.position.x, e.z - save.position.z) < 1.8 &&
+      now - e.lastAttack >= 1200
+    ) {
+      const defense = save.equipment.armor
+        ? (GEAR[save.equipment.armor].defense ?? 0)
+        : 0;
+      save.health -= Math.max(1, (e.kind === "stalker" ? 14 : 9) - defense);
+      save.lastDamage = now;
+      e.lastAttack = now;
+    }
+    if (save.health <= 0) {
+      save.health = 100;
+      save.deaths++;
+      save.planet = "home";
+      save.position = { x: 18, z: 21 };
+      save.inside = null;
+      save.outsidePosition = null;
+      return true;
+    }
+  }
+  return false;
 }

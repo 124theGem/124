@@ -23,6 +23,11 @@ try {
   activePage = page;
   page.setDefaultTimeout(90000);
   page.on("pageerror", (e) => errors.push(e.message));
+  const menuClick = async (id) => {
+    if (await page.locator(`#${id}`).isHidden())
+      await page.locator("#menu-toggle").click();
+    await page.locator(`#${id}`).click();
+  };
   const snap = () => page.evaluate(() => window.__planets.snapshot()),
     wait = (fn) => page.waitForFunction(fn, {}, { timeout: 90000 }),
     settle = () => wait(() => !window.__planets.snapshot().busy);
@@ -53,7 +58,7 @@ try {
   await page.keyboard.down("d");
   await wait(() => window.__planets.snapshot().position.x > 18.15);
   await page.keyboard.up("d");
-  await page.locator("#plant").click();
+  await menuClick("plant");
   await page.locator("#context-action").waitFor();
   assert(await page.locator("#modal").isHidden());
   await page.locator("#context-action").click();
@@ -79,7 +84,7 @@ try {
   console.log(
     "PASS: movement, contextual beds, growing/harvesting and dismissed panels stay closed.",
   );
-  await page.locator("#build").click();
+  await menuClick("build");
   assert(await page.locator("#confirm-build").isEnabled());
   await page.screenshot({ path: "test-results/home-build.png" });
   await page.locator("#confirm-build").click();
@@ -89,14 +94,14 @@ try {
       !window.__planets.snapshot().busy,
   );
   assert.equal((await snap()).state.inventory.wood, 72);
-  await page.locator("#craft").click();
+  await menuClick("craft");
   await page.locator('[data-recipe="furniture:chair"]').click();
   await page.locator("#craft-one").click();
   await wait(
     () => window.__planets.snapshot().state.inventory["furniture:chair"] === 1,
   );
   await page.locator("#close-modal").click();
-  await page.locator("#inventory").click();
+  await menuClick("inventory");
   assert((await page.locator(".slot[data-item]").count()) > 10);
   assert((await page.locator(".slot svg").count()) >= 6);
   await page.locator('[data-item="furniture:chair"]').click();
@@ -112,7 +117,7 @@ try {
       window.__planets.snapshot().state.inside === "home-hq" &&
       !window.__planets.snapshot().busy,
   );
-  await page.locator("#build").click();
+  await menuClick("build");
   assert(await page.locator("#confirm-build").isEnabled());
   await page.locator("#confirm-build").click();
   await wait(
@@ -136,7 +141,7 @@ try {
   );
   const inventory = (await snap()).state.inventory;
   for (const planet of ["listoria", "mycelia", "pyros", "home"]) {
-    await page.locator("#galaxy").click();
+    await menuClick("galaxy");
     await page.locator(`[data-planet="${planet}"]`).click();
     await page.waitForFunction(
       (p) =>
@@ -170,7 +175,7 @@ try {
     }
     assert(launch.at(-1).y > launch[0].y + 10);
     if (planet !== "home") {
-      await page.locator("#build").click();
+      await menuClick("build");
       const kinds = await page
         .locator("[data-placement]")
         .evaluateAll((bs) => bs.map((b) => b.dataset.placement));
@@ -217,6 +222,7 @@ try {
   await phone.screenshot({ path: "test-results/mobile-portrait.png" });
   await phone.setViewportSize({ width: 844, height: 390 });
   await phone.waitForTimeout(1000);
+  await phone.locator("#menu-toggle").click();
   await phone.locator("#plant").click();
   await phone.locator("#context-action").waitFor();
   const fits = await phone.evaluate(() => {
@@ -247,6 +253,7 @@ try {
   await phone.locator("#close-context").click();
   await phone.waitForTimeout(600);
   assert(await phone.locator("#context").isHidden());
+  await phone.locator("#menu-toggle").click();
   await phone.locator("#craft").click();
   assert(await phone.locator("#craft-one").isVisible());
   await phone.screenshot({ path: "test-results/mobile-landscape-craft.png" });

@@ -1,6 +1,7 @@
 import * as T from "three";
 import { Models } from "./Models";
 import {
+  biomeOf,
   beds,
   ship,
   planetSize,
@@ -28,6 +29,7 @@ export class Planet {
     save: Save,
     now: number,
   ) {
+    const biome = biomeOf(id);
     const palette = PLANETS[id],
       size = planetSize(id),
       offset = id === "home" ? 10 : 0,
@@ -39,7 +41,9 @@ export class Planet {
         const h = terrainHeight(x, z),
           edge = x === 0 || z === 0 || x === size - 1 || z === size - 1;
         const tint = new T.Color(palette.soil)
-          .multiplyScalar(0.94 + ((x * 13 + z * 7) % 7) * 0.018)
+          .multiplyScalar(
+            0.94 + ((x * 13 + z * 7 + (palette.seed ?? 0)) % 7) * 0.018,
+          )
           .getHex();
         kit.box(
           this.terrain,
@@ -49,7 +53,7 @@ export class Planet {
           1,
           0.3,
           1,
-          waterCell(x, z) ? (id === "pyros" ? 0xf07d40 : 0x49a6bf) : tint,
+          waterCell(x, z) ? (biome === "pyros" ? 0xf07d40 : 0x49a6bf) : tint,
           waterCell(x, z),
         );
         if (edge) {
@@ -89,7 +93,7 @@ export class Planet {
               1.04,
               shade,
             );
-            if (id === "listoria" && (x + z + layer) % 5 === 0)
+            if (biome === "listoria" && (x + z + layer) % 5 === 0)
               kit.box(
                 this.terrain,
                 x + (x === 0 ? -0.13 : x === size - 1 ? 0.13 : 0),
@@ -110,13 +114,17 @@ export class Planet {
             1.03,
             0.2,
             1.03,
-            id === "pyros" ? 0xff9958 : id === "mycelia" ? 0x9580b9 : 0x6e965a,
-            id === "pyros",
+            biome === "pyros"
+              ? 0xff9958
+              : biome === "mycelia"
+                ? 0x9580b9
+                : 0x6e965a,
+            biome === "pyros",
           );
         }
         if (
           !waterCell(x, z) &&
-          (x * 19 + z * 11) % 23 === 0 &&
+          (x * 19 + z * 11 + (palette.seed ?? 0)) % 23 === 0 &&
           x > 0 &&
           z > 0
         ) {
@@ -128,9 +136,9 @@ export class Planet {
             0.08,
             0.25,
             0.08,
-            id === "listoria"
+            biome === "listoria"
               ? 0xb5d871
-              : id === "mycelia"
+              : biome === "mycelia"
                 ? 0xa5c3ef
                 : 0xd1a474,
           );
@@ -140,15 +148,15 @@ export class Planet {
           z > 0 &&
           x < size - 1 &&
           z < size - 1 &&
-          (x * 31 + z * 17) % 11 === 0 &&
+          (x * 31 + z * 17 + (palette.seed ?? 0)) % 11 === 0 &&
           !waterCell(x, z) &&
           !beds(id).some((b) => b.x === x && b.z === z) &&
           !(x >= 11 && z >= 11)
         ) {
           const species =
-              id === "mycelia"
+              biome === "mycelia"
                 ? "lightflower"
-                : id === "pyros"
+                : biome === "pyros"
                   ? "fireflower"
                   : "sunflower",
             flower = kit.plant(species);
@@ -164,9 +172,9 @@ export class Planet {
               0.15,
               0.2,
               0.17,
-              id === "listoria"
+              biome === "listoria"
                 ? 0x72a451
-                : id === "mycelia"
+                : biome === "mycelia"
                   ? 0x9c80b5
                   : 0x9f986d,
             );
@@ -193,7 +201,7 @@ export class Planet {
         0.74,
         0.65,
         0.1,
-        id === "pyros" ? 0xff994f : 0x70d5eb,
+        biome === "pyros" ? 0xff994f : 0x70d5eb,
         true,
         0.8,
       );
@@ -206,7 +214,7 @@ export class Planet {
         0.13,
         0.44,
         0.1,
-        id === "pyros" ? 0xffcf65 : 0xb2f4ff,
+        biome === "pyros" ? 0xffcf65 : 0xb2f4ff,
         true,
         0.8,
       );
@@ -282,8 +290,8 @@ export class Planet {
         0.76,
         0.08,
         0.65,
-        id === "mycelia" ? 0x8ec9e1 : 0xbcc2ad,
-        id === "mycelia",
+        biome === "mycelia" ? 0x8ec9e1 : 0xbcc2ad,
+        biome === "mycelia",
       );
     for (let x = pad.x - 2; x <= pad.x + 2; x++)
       for (let z = pad.z - 2; z <= pad.z + 2; z++)
@@ -320,7 +328,7 @@ export class Planet {
     this.lastNodes = this.nodeSignature(save, now);
     for (const n of nodes(this.id)) {
       if (nodeReady(save.worlds[this.id], n.id, now)) {
-        const object = this.kit.resource(this.id, n.variant);
+        const object = this.kit.resource(biomeOf(this.id), n.variant);
         object.position.set(n.x, terrainHeight(n.x, n.z) + 0.05, n.z);
         this.objects.add(object);
       } else

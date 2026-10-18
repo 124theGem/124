@@ -11,14 +11,15 @@ const browser = await chromium.launch({
   ],
 });
 try {
-  for (const type of ["meteor", "wind"]) {
+  const types = ["meteor", "wind", "rain", "storm", "hurricane"];
+  for (const type of types) {
     const context = await browser.newContext({
         viewport: { width: 1000, height: 700 },
         deviceScaleFactor: 0.5,
       }),
       page = await context.newPage(),
       now = Date.now(),
-      save = newGame(now - (type === "meteor" ? 45000 : 125000)),
+      save = newGame(now - (45000 + types.indexOf(type) * 85000)),
       event = worldEvent(save, "home", now);
     assert.equal(event.type, type);
     if (type === "meteor") {
@@ -33,7 +34,7 @@ try {
       assert(save.position);
     }
     await page.addInitScript({
-      content: `localStorage.setItem('little-planets-v1',${JSON.stringify(JSON.stringify(save))});`,
+      content: `localStorage.setItem('little-planets-v3',${JSON.stringify(JSON.stringify(save))});`,
     });
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
@@ -46,8 +47,26 @@ try {
     await page.locator("#event-banner").waitFor();
     assert.match(
       await page.locator("#event-banner").textContent(),
-      type === "wind" ? /ветер/ : /Метеорит упал/,
+      {
+        meteor: /Метеорит упал/,
+        wind: /ветер/,
+        rain: /Дождь/,
+        storm: /Гроза/,
+        hurricane: /Ураган/,
+      }[type],
     );
+    if (["rain", "storm", "hurricane"].includes(type)) {
+      await page.waitForFunction(
+        (t) => window.__planets.snapshot().weather.type === t,
+        type,
+      );
+      const weather = await page.evaluate(
+        () => window.__planets.snapshot().weather,
+      );
+      assert.equal(weather.rain, true);
+      assert.equal(weather.drops, 420);
+      assert.equal(weather.vortex, type === "hurricane");
+    }
     await page.screenshot({ path: `test-results/event-${type}.png` });
     if (type === "meteor") {
       const point = await page.evaluate(

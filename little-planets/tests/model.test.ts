@@ -52,7 +52,7 @@ function moduleSave() {
         } catch {}
   throw new Error("No module site");
 }
-describe("home world and migration", () => {
+describe("home world and prototype saves", () => {
   it("adds a 38×38 home, about five times the area, with one enterable HQ", () => {
     const s = newGame();
     expect(planetSize("home")).toBe(38);
@@ -62,29 +62,26 @@ describe("home world and migration", () => {
     for (const p of ["listoria", "mycelia", "pyros"] as const)
       expect(s.worlds[p].buildings).toHaveLength(0);
   });
-  it("migrates all inventory, crops, depleted nodes and built structures without resetting revisions", () => {
-    const old = legacySave(),
-      s = parseSave(JSON.stringify(old));
-    expect(s.version).toBe(2);
-    expect(s.revision).toBe(12);
-    expect(s.planet).toBe(old.planet);
-    expect(s.inventory).toEqual(old.inventory);
-    for (const p of ["listoria", "mycelia", "pyros"] as const) {
-      expect(s.worlds[p].crops).toEqual(old.worlds[p].crops);
-      expect(s.worlds[p].depleted).toEqual(old.worlds[p].depleted);
-      expect(s.worlds[p].buildings).toHaveLength(0);
+  it("starts a fresh world for old prototype formats without transferring progress", () => {
+    for (const version of [1, 2]) {
+      const old = legacySave();
+      old.version = version;
+      const save = parseSave(JSON.stringify(old));
+      expect(save.version).toBe(3);
+      expect(save.planet).toBe("home");
+      expect(save.revision).toBe(0);
+      expect(save.inventory.wood).toBe(90);
+      expect(save.worlds.home.buildings).toHaveLength(1);
+      expect(save.kills).toBe(0);
     }
-    expect(s.worlds.home.buildings).toHaveLength(2);
-    expect(s.worlds.home.buildings[1].kind).toBe("warehouse");
-    expect(parseSave(JSON.stringify(s))).toEqual(s);
   });
-  it("rejects corrupt saves and old saves with invalid inventory or crops", () => {
+  it("rejects malformed current saves with invalid inventory or crops", () => {
     expect(() => parseSave("{}")).toThrow();
     expect(() =>
       parseSave(JSON.stringify({ ...newGame(), inventory: { wood: -1 } })),
     ).toThrow();
-    const s = legacySave();
-    s.worlds.listoria.crops["6,9"].plant = "unknown";
+    const s = newGame();
+    s.worlds.listoria.crops["6,9"] = { plant: "unknown", plantedAt: 0 };
     expect(() => parseSave(JSON.stringify(s))).toThrow();
   });
 });

@@ -135,6 +135,7 @@ try {
   assert(events.some((e) => e.type === "web_app_request_fullscreen"));
   assert(events.some((e) => e.type === "web_app_ready"));
   assert(events.some((e) => e.type === "web_app_setup_swipe_behavior"));
+  await phone.locator("#menu-toggle").click();
   await phone.locator("#build").click();
   await phone.locator("#confirm-build").click();
   await phone.waitForFunction(
