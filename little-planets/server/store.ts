@@ -20,7 +20,14 @@ export class Store {
     const row = this.db
       .prepare("SELECT state FROM saves WHERE user_id=?")
       .get(String(userId)) as { state: string } | undefined;
-    if (row) return parseSave(row.state);
+    if (row) {
+      const save = parseSave(row.state);
+      if (JSON.parse(row.state).version === 1)
+        this.db
+          .prepare("UPDATE saves SET state=? WHERE user_id=? AND state=?")
+          .run(JSON.stringify(save), String(userId), row.state);
+      return save;
+    }
     const save = newGame(now);
     this.db
       .prepare("INSERT INTO saves(user_id,state) VALUES(?,?)")

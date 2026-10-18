@@ -117,7 +117,7 @@ try {
     throw new Error(
       `Production startup: ${await phone.locator("#error-message").textContent()}; browser errors: ${errors.join("; ")}`,
     );
-  await phone.waitForSelector("canvas");
+  await phone.waitForSelector("canvas.world");
   assert.match(
     (await phone.locator("#save-status").textContent()) ?? "",
     /Telegram/,
@@ -139,7 +139,7 @@ try {
   await phone.locator("#confirm-build").click();
   await phone.waitForFunction(
     () =>
-      (window as any).__planets.snapshot().state.worlds.listoria.buildings
+      (window as any).__planets.snapshot().state.worlds.home.buildings
         .length === 2 && !(window as any).__planets.snapshot().busy,
     {},
     { timeout: 60000 },
@@ -148,14 +148,13 @@ try {
     url: "/api/state",
     headers: { authorization: `tma ${initData}` },
   });
-  assert.equal(persisted.json().state.inventory.wood, 27);
+  assert.equal(persisted.json().state.inventory.wood, 72);
   await phone.goto(gameUrl);
-  await phone.waitForSelector("canvas");
+  await phone.waitForSelector("canvas.world");
   assert.equal(
     await phone.evaluate(
       () =>
-        (window as any).__planets.snapshot().state.worlds.listoria.buildings
-          .length,
+        (window as any).__planets.snapshot().state.worlds.home.buildings.length,
     ),
     2,
   );

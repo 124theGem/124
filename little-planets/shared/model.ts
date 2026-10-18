@@ -1,16 +1,22 @@
 import { z } from "zod";
 import {
-  BEDS,
   BUILDINGS,
+  FURNITURE,
   PLANTS,
   PLANETS,
-  SIZE,
-  SHIP,
+  ROOM,
+  HOME_HQ,
+  beds,
+  ship,
+  planetSize,
   key,
   nodes,
   waterCell,
+  moduleResources,
+  recipes,
   type PlanetId,
   type BuildingKind,
+  type FurnitureKind,
 } from "./catalog";
 export interface Crop {
   plant: string;
@@ -22,41 +28,45 @@ export interface Building {
   x: number;
   z: number;
   rotation: number;
+  resource?: string;
+  collectedAt?: number;
+}
+export interface Furniture {
+  id: string;
+  kind: FurnitureKind;
+  x: number;
+  z: number;
+  rotation: number;
 }
 export interface PlanetState {
   crops: Record<string, Crop>;
   buildings: Building[];
   depleted: Record<string, number>;
+  eventEpoch: number;
+  salvaged: number[];
 }
 export interface Save {
-  version: 1;
+  version: 2;
   revision: number;
   planet: PlanetId;
   position: { x: number; z: number };
   inventory: Record<string, number>;
   worlds: Record<PlanetId, PlanetState>;
   updatedAt: number;
+  inside: string | null;
+  outsidePosition: { x: number; z: number } | null;
+  interiors: Record<string, Furniture[]>;
+  migration?: { from: 1; movedBuildings: number };
 }
-const planet = z.enum(["listoria", "mycelia", "pyros"]);
-const cell = z
-  .number()
-  .int()
-  .min(0)
-  .max(SIZE - 1);
+export class RuleError extends Error {}
+const planet = z.enum(["home", "listoria", "mycelia", "pyros"]),
+  cell = z.number().int().min(0).max(84);
 export const ActionSchema = z.discriminatedUnion("type", [
   z
     .object({
       type: z.literal("move"),
-      x: z
-        .number()
-        .finite()
-        .min(0)
-        .max(SIZE - 1),
-      z: z
-        .number()
-        .finite()
-        .min(0)
-        .max(SIZE - 1),
+      x: z.number().finite().min(0).max(84),
+      z: z.number().finite().min(0).max(84),
     })
     .strict(),
   z
@@ -72,43 +82,93 @@ export const ActionSchema = z.discriminatedUnion("type", [
   z
     .object({
       type: z.literal("build"),
-      kind: z.enum(["house", "greenhouse", "warehouse"]),
+      kind: z.enum([
+        "headquarters",
+        "house",
+        "greenhouse",
+        "warehouse",
+        "laboratory",
+        "extractor",
+        "bioextractor",
+      ]),
+      x: cell,
+      z: cell,
+      rotation: z.union([z.literal(0), z.literal(1)]),
+      resource: z.string().max(20).optional(),
+    })
+    .strict(),
+  z.object({ type: z.literal("travel"), planet }).strict(),
+  z
+    .object({
+      type: z.literal("craft"),
+      recipe: z.string().max(50),
+      count: z.number().int().min(1).max(10).default(1),
+    })
+    .strict(),
+  z.object({ type: z.literal("collect"), id: z.string().max(100) }).strict(),
+  z.object({ type: z.literal("enter"), id: z.string().max(100) }).strict(),
+  z.object({ type: z.literal("exit") }).strict(),
+  z
+    .object({
+      type: z.literal("placeFurniture"),
+      kind: z.enum([
+        "chair",
+        "table",
+        "bed",
+        "sofa",
+        "cabinet",
+        "fireplace",
+        "rug",
+      ]),
       x: cell,
       z: cell,
       rotation: z.union([z.literal(0), z.literal(1)]),
     })
     .strict(),
-  z.object({ type: z.literal("travel"), planet }).strict(),
+  z
+    .object({ type: z.literal("takeFurniture"), id: z.string().max(100) })
+    .strict(),
+  z
+    .object({
+      type: z.literal("salvage"),
+      event: z.number().int().nonnegative(),
+    })
+    .strict(),
 ]);
 export type Action = z.infer<typeof ActionSchema>;
-export class RuleError extends Error {}
 export function newGame(now = Date.now()): Save {
   const worlds = {} as Save["worlds"];
   for (const p of Object.keys(PLANETS) as PlanetId[])
     worlds[p] = {
       crops: {},
-      buildings: [
-        { id: "starter-home", kind: "house", x: 3, z: 3, rotation: 0 },
-      ],
+      buildings:
+        p === "home"
+          ? [{ id: "home-hq", kind: "headquarters", ...HOME_HQ, rotation: 0 }]
+          : [],
       depleted: {},
+      eventEpoch: now,
+      salvaged: [],
     };
   const inventory: Record<string, number> = {
-    wood: 45,
-    stone: 30,
-    crystal: 6,
-    spores: 4,
-    obsidian: 8,
-    thermal: 4,
+    wood: 90,
+    stone: 75,
+    crystal: 20,
+    spores: 15,
+    obsidian: 12,
+    thermal: 8,
   };
   for (const id of Object.keys(PLANTS)) inventory[`seed:${id}`] = 6;
   return {
-    version: 1,
+    version: 2,
     revision: 0,
-    planet: "listoria",
-    position: { x: 8, z: 11 },
+    planet: "home",
+    position: { x: 18, z: 21 },
     inventory,
     worlds,
     updatedAt: now,
+    inside: null,
+    outsidePosition: null,
+    interiors: { "home-hq": [] },
   };
 }
 export function stage(crop: Crop, now: number) {
@@ -129,55 +189,217 @@ export function nodeReady(state: PlanetState, id: string, now: number) {
 }
 export function buildingAt(state: PlanetState, x: number, z: number) {
   return state.buildings.find(
-    (b) => x >= b.x && x < b.x + 2 && z >= b.z && z < b.z + 2,
+    (b) =>
+      x >= b.x &&
+      x < b.x + BUILDINGS[b.kind].size &&
+      z >= b.z &&
+      z < b.z + BUILDINGS[b.kind].size,
   );
+}
+export function buildingCenter(b: Building) {
+  const offset = (BUILDINGS[b.kind].size - 1) / 2;
+  return { x: b.x + offset, z: b.z + offset };
+}
+export function roomItems(save: Save) {
+  return save.inside ? (save.interiors[save.inside] ?? []) : [];
+}
+export function furnitureSize(kind: FurnitureKind, rotation: number) {
+  const f = FURNITURE[kind];
+  return rotation ? { w: f.d, d: f.w } : { w: f.w, d: f.d };
+}
+export function furnitureAt(save: Save, x: number, z: number) {
+  return roomItems(save).find((f) => {
+    const size = furnitureSize(f.kind, f.rotation);
+    return x >= f.x && x < f.x + size.w && z >= f.z && z < f.z + size.d;
+  });
 }
 export function walkable(
   save: Save,
   p: PlanetId,
   x: number,
   z: number,
-  now = Date.now(),
+  _now = Date.now(),
 ): boolean {
   const cx = Math.round(x),
     cz = Math.round(z);
+  if (save.inside) {
+    if (x < 0.6 || z < 0.6 || x > ROOM.width - 1.6 || z > ROOM.depth - 1.2)
+      return false;
+    return !roomItems(save).some((f) => {
+      const s = furnitureSize(f.kind, f.rotation);
+      return (
+        !FURNITURE[f.kind].walkable &&
+        cx >= f.x &&
+        cx < f.x + s.w &&
+        cz >= f.z &&
+        cz < f.z + s.d
+      );
+    });
+  }
+  const size = planetSize(p);
   if (
     x < 0.3 ||
     z < 0.3 ||
-    x > SIZE - 1.3 ||
-    z > SIZE - 1.3 ||
+    x > size - 1.3 ||
+    z > size - 1.3 ||
     waterCell(cx, cz)
   )
     return false;
-  const state = save.worlds[p];
-  if (buildingAt(state, cx, cz) || BEDS.some((b) => b.x === cx && b.z === cz))
-    return false;
-  // A depleted stump/base remains solid so a respawning source cannot trap a player.
-  return !nodes(p).some((n) => n.x === cx && n.z === cz);
+  return (
+    !buildingAt(save.worlds[p], cx, cz) &&
+    !beds(p).some((b) => b.x === cx && b.z === cz) &&
+    !nodes(p).some((n) => n.x === cx && n.z === cz)
+  );
 }
-export function canBuild(save: Save, x: number, z: number): boolean {
-  if (!Number.isInteger(x) || !Number.isInteger(z)) return false;
-  for (let dx = 0; dx < 2; dx++)
-    for (let dz = 0; dz < 2; dz++) {
+export interface WorldEvent {
+  id: number;
+  type: "meteor" | "wind";
+  x: number;
+  z: number;
+  startsAt: number;
+  impactAt: number;
+  endsAt: number;
+  claimed: boolean;
+}
+function hash(n: number) {
+  n = Math.imul(n ^ (n >>> 16), 0x45d9f3b);
+  n = Math.imul(n ^ (n >>> 16), 0x45d9f3b);
+  return (n ^ (n >>> 16)) >>> 0;
+}
+export function worldEvent(
+  save: Save,
+  p: PlanetId,
+  now: number,
+): WorldEvent | null {
+  const world = save.worlds[p],
+    elapsed = now - world.eventEpoch;
+  if (elapsed < 25000) return null;
+  const id = Math.floor((elapsed - 25000) / 85000),
+    seed = hash(
+      id * 131 +
+        (Object.keys(PLANETS).indexOf(p) + 1) * 4093 +
+        Math.floor(world.eventEpoch / 1000),
+    );
+  const startsAt = world.eventEpoch + 25000 + id * 85000 + (seed % 12000);
+  const type = id % 2 === 0 ? "meteor" : "wind",
+    endsAt = startsAt + (type === "meteor" ? 65000 : 20000);
+  if (now < startsAt || now > endsAt) return null;
+  const size = planetSize(p);
+  let x = 3,
+    z = 3;
+  for (let i = 0; i < 160; i++) {
+    x = 2 + (hash(seed + i * 17) % (size - 4));
+    z = 2 + (hash(seed + i * 29 + 1) % (size - 4));
+    if (
+      walkable({ ...save, inside: null }, p, x, z, now) &&
+      Math.hypot(x - ship(p).x, z - ship(p).z) > 3
+    )
+      break;
+  }
+  return {
+    id,
+    type,
+    x,
+    z,
+    startsAt,
+    impactAt: startsAt + 5000,
+    endsAt,
+    claimed: world.salvaged.includes(id),
+  };
+}
+export function canBuild(
+  save: Save,
+  x: number,
+  z: number,
+  kind: BuildingKind = "house",
+  now = Date.now(),
+): boolean {
+  if (save.inside || !Number.isInteger(x) || !Number.isInteger(z)) return false;
+  const b = BUILDINGS[kind];
+  if (!b || b.zone !== (save.planet === "home" ? "home" : "outpost"))
+    return false;
+  if (b.zone === "outpost" && !moduleResources(save.planet, kind).length)
+    return false;
+  const event = worldEvent(save, save.planet, now),
+    pad = ship(save.planet),
+    size = planetSize(save.planet);
+  for (let dx = 0; dx < b.size; dx++)
+    for (let dz = 0; dz < b.size; dz++) {
       const cx = x + dx,
         cz = z + dz;
       if (
         cx < 1 ||
         cz < 1 ||
-        cx >= SIZE - 1 ||
-        cz >= SIZE - 1 ||
+        cx >= size - 1 ||
+        cz >= size - 1 ||
         waterCell(cx, cz) ||
         buildingAt(save.worlds[save.planet], cx, cz) ||
-        BEDS.some((b) => b.x === cx && b.z === cz) ||
+        beds(save.planet).some((p) => p.x === cx && p.z === cz) ||
         nodes(save.planet).some((n) => n.x === cx && n.z === cz) ||
-        (Math.abs(cx - SHIP.x) <= 2 && Math.abs(cz - SHIP.z) <= 2) ||
-        Math.hypot(cx - save.position.x, cz - save.position.z) < 0.85
+        (Math.abs(cx - pad.x) <= 2 && Math.abs(cz - pad.z) <= 2) ||
+        Math.hypot(cx - save.position.x, cz - save.position.z) < 0.9 ||
+        (event?.type === "meteor" &&
+          Math.hypot(cx - event.x, cz - event.z) < 1.5)
       )
         return false;
     }
   return true;
 }
-function nearby(save: Save, x: number, z: number, distance = 2.4) {
+export function canPlaceFurniture(
+  save: Save,
+  x: number,
+  z: number,
+  kind: FurnitureKind,
+  rotation: number,
+) {
+  if (!save.inside || !Number.isInteger(x) || !Number.isInteger(z))
+    return false;
+  const s = furnitureSize(kind, rotation);
+  for (let dx = 0; dx < s.w; dx++)
+    for (let dz = 0; dz < s.d; dz++) {
+      const cx = x + dx,
+        cz = z + dz;
+      if (
+        cx < 1 ||
+        cz < 1 ||
+        cx >= ROOM.width - 1 ||
+        cz >= ROOM.depth - 1 ||
+        Math.hypot(cx - ROOM.door.x, cz - ROOM.door.z) < 1.5 ||
+        furnitureAt(save, cx, cz) ||
+        (!FURNITURE[kind].walkable &&
+          Math.hypot(cx - save.position.x, cz - save.position.z) < 0.9)
+      )
+        return false;
+    }
+  return true;
+}
+export function hasLab(save: Save) {
+  return save.worlds.home.buildings.some((b) => b.kind === "laboratory");
+}
+export function moduleCapacity(save: Save) {
+  return (
+    40 +
+    save.worlds.home.buildings.filter((b) => b.kind === "warehouse").length * 40
+  );
+}
+export function moduleAmount(save: Save, b: Building, now: number) {
+  return Math.min(
+    moduleCapacity(save),
+    Math.max(0, Math.floor((now - (b.collectedAt ?? now)) / 20000)) *
+      (BUILDINGS[b.kind].rate ?? 0),
+  );
+}
+export function canAfford(save: Save, cost: Record<string, number>, count = 1) {
+  return Object.entries(cost).every(
+    ([r, n]) => (save.inventory[r] ?? 0) >= n * count,
+  );
+}
+function charge(save: Save, cost: Record<string, number>, count = 1) {
+  if (!canAfford(save, cost, count))
+    throw new RuleError("Не хватает ресурсов.");
+  for (const [r, n] of Object.entries(cost)) save.inventory[r] -= n * count;
+}
+function nearby(save: Save, x: number, z: number, distance = 2.7) {
   if (Math.hypot(save.position.x - x, save.position.z - z) > distance)
     throw new RuleError("Подойдите поближе к объекту.");
 }
@@ -188,7 +410,14 @@ export function applyAction(
 ): Save {
   const action = ActionSchema.parse(raw),
     save = structuredClone(original),
-    state = save.worlds[save.planet];
+    world = save.worlds[save.planet];
+  if (
+    save.inside &&
+    !["move", "craft", "placeFurniture", "takeFurniture", "exit"].includes(
+      action.type,
+    )
+  )
+    throw new RuleError("Сначала выйдите из дома.");
   switch (action.type) {
     case "move":
       if (!walkable(save, save.planet, action.x, action.z, now))
@@ -199,56 +428,171 @@ export function applyAction(
       nearby(save, action.x, action.z);
       const plant = PLANTS[action.plant],
         k = key(action.x, action.z);
-      if (!plant || plant.planet !== save.planet)
-        throw new RuleError("Это растение растёт на другой планете.");
       if (
-        !BEDS.some((b) => b.x === action.x && b.z === action.z) ||
-        state.crops[k]
+        !plant ||
+        (plant.planet !== save.planet &&
+          !(save.planet === "home" && plant.planet === "listoria"))
+      )
+        throw new RuleError("Это растение для другого биома.");
+      if (
+        !beds(save.planet).some((b) => b.x === action.x && b.z === action.z) ||
+        world.crops[k]
       )
         throw new RuleError("Нужна свободная грядка.");
       const seed = `seed:${action.plant}`;
       if (!(save.inventory[seed] > 0))
         throw new RuleError("Закончились семена.");
       save.inventory[seed]--;
-      state.crops[k] = { plant: action.plant, plantedAt: now };
+      world.crops[k] = { plant: action.plant, plantedAt: now };
       break;
     }
     case "harvest": {
       nearby(save, action.x, action.z);
       const k = key(action.x, action.z),
-        crop = state.crops[k];
+        crop = world.crops[k];
       if (!crop || !ready(crop, now))
         throw new RuleError("Урожай ещё не созрел.");
-      const harvest = `crop:${crop.plant}`,
-        seed = `seed:${crop.plant}`;
-      save.inventory[harvest] = (save.inventory[harvest] ?? 0) + 3;
-      save.inventory[seed] = (save.inventory[seed] ?? 0) + 2;
-      delete state.crops[k];
+      for (const [item, n] of [
+        [`crop:${crop.plant}`, 3],
+        [`seed:${crop.plant}`, 2],
+      ] as const)
+        save.inventory[item] = (save.inventory[item] ?? 0) + n;
+      delete world.crops[k];
       break;
     }
     case "mine": {
-      const node = nodes(save.planet).find((n) => n.id === action.id);
-      if (!node) throw new RuleError("Ресурс не найден.");
-      nearby(save, node.x, node.z);
-      if (!nodeReady(state, node.id, now))
+      const n = nodes(save.planet).find((n) => n.id === action.id);
+      if (!n) throw new RuleError("Ресурс не найден.");
+      nearby(save, n.x, n.z);
+      if (!nodeReady(world, n.id, now))
         throw new RuleError("Ресурс восстанавливается.");
-      save.inventory[node.resource] = (save.inventory[node.resource] ?? 0) + 3;
-      state.depleted[node.id] = now;
+      save.inventory[n.resource] = (save.inventory[n.resource] ?? 0) + 3;
+      world.depleted[n.id] = now;
+      break;
+    }
+    case "craft": {
+      const recipe = recipes().find((r) => r.id === action.recipe);
+      if (!recipe) throw new RuleError("Рецепт не найден.");
+      if (recipe.lab && !hasLab(save))
+        throw new RuleError("Сначала постройте лабораторию на родной планете.");
+      charge(save, recipe.cost, action.count);
+      save.inventory[recipe.id] =
+        (save.inventory[recipe.id] ?? 0) + action.count;
       break;
     }
     case "build": {
-      if (!canBuild(save, action.x, action.z))
-        throw new RuleError(
-          "Выберите свободные клетки вдали от грядок и площадки.",
-        );
       const recipe = BUILDINGS[action.kind];
-      for (const [r, cost] of Object.entries(recipe.cost))
-        if ((save.inventory[r] ?? 0) < cost)
-          throw new RuleError("Не хватает ресурсов для постройки.");
-      for (const [r, cost] of Object.entries(recipe.cost))
-        save.inventory[r] -= cost;
-      state.buildings.push({
+      if (recipe.zone !== (save.planet === "home" ? "home" : "outpost"))
+        throw new RuleError(
+          save.planet === "home"
+            ? "Добывающие модули размещаются на исследовательских планетах."
+            : "Здания базы можно строить только на родной планете.",
+        );
+      if (!canBuild(save, action.x, action.z, action.kind, now))
+        throw new RuleError(
+          "Выберите свободные клетки вдали от грядок, ресурсов и площадки.",
+        );
+      let resource: string | undefined;
+      if (recipe.zone === "outpost") {
+        const valid = moduleResources(save.planet, action.kind);
+        resource = action.resource ?? valid[0];
+        if (!resource || !valid.includes(resource as never))
+          throw new RuleError("Этот модуль не добывает выбранный ресурс.");
+        const center = {
+          x: action.x + (recipe.size - 1) / 2,
+          z: action.z + (recipe.size - 1) / 2,
+        };
+        if (
+          !nodes(save.planet).some(
+            (n) =>
+              n.resource === resource &&
+              Math.hypot(n.x - center.x, n.z - center.z) <= 5,
+          )
+        )
+          throw new RuleError(
+            "Разместите модуль не дальше 5 клеток от нужного источника.",
+          );
+      }
+      if (action.kind === "bioextractor" && !hasLab(save))
+        throw new RuleError("Для биомодуля нужна лаборатория.");
+      const kit = `kit:${action.kind}`;
+      if ((save.inventory[kit] ?? 0) > 0) save.inventory[kit]--;
+      else charge(save, recipe.cost);
+      const b: Building = {
         id: `b-${now}-${action.x}-${action.z}`,
+        kind: action.kind,
+        x: action.x,
+        z: action.z,
+        rotation: action.rotation,
+        ...(resource ? { resource, collectedAt: now } : {}),
+      };
+      world.buildings.push(b);
+      if (b.kind === "headquarters") save.interiors[b.id] = [];
+      break;
+    }
+    case "collect": {
+      const b = world.buildings.find((b) => b.id === action.id);
+      if (!b?.resource || !BUILDINGS[b.kind].rate)
+        throw new RuleError("Добывающий модуль не найден.");
+      const c = buildingCenter(b);
+      nearby(save, c.x, c.z, 3);
+      const amount = moduleAmount(save, b, now);
+      if (!amount) throw new RuleError("Модуль ещё добывает ресурс.");
+      save.inventory[b.resource] = (save.inventory[b.resource] ?? 0) + amount;
+      b.collectedAt = now;
+      break;
+    }
+    case "travel": {
+      const pad = ship(save.planet);
+      nearby(save, pad.x, pad.z, 3);
+      if (save.planet === action.planet) throw new RuleError("Вы уже здесь.");
+      save.planet = action.planet;
+      const dest = ship(save.planet);
+      save.position = { x: dest.x - 2, z: dest.z };
+      break;
+    }
+    case "enter": {
+      if (save.planet !== "home")
+        throw new RuleError("Главный дом находится на родной планете.");
+      const b = world.buildings.find(
+        (b) => b.id === action.id && b.kind === "headquarters",
+      );
+      if (!b) throw new RuleError("Главный дом не найден.");
+      const c = buildingCenter(b);
+      nearby(save, c.x, c.z, 3.3);
+      save.inside = b.id;
+      save.outsidePosition = { ...save.position };
+      save.position = { ...ROOM.spawn };
+      save.interiors[b.id] ??= [];
+      break;
+    }
+    case "exit": {
+      if (!save.inside) throw new RuleError("Вы уже снаружи.");
+      nearby(save, ROOM.door.x, ROOM.door.z, 1.7);
+      save.position = save.outsidePosition ?? { x: 18, z: 21 };
+      save.inside = null;
+      save.outsidePosition = null;
+      break;
+    }
+    case "placeFurniture": {
+      if (
+        !canPlaceFurniture(
+          save,
+          action.x,
+          action.z,
+          action.kind,
+          action.rotation,
+        )
+      )
+        throw new RuleError(
+          "Мебель нельзя поставить здесь. Оставьте проход к двери.",
+        );
+      const item = `furniture:${action.kind}`;
+      if (!(save.inventory[item] > 0))
+        throw new RuleError("Сначала создайте предмет в разделе крафта.");
+      save.inventory[item]--;
+      save.interiors[save.inside!].push({
+        id: `f-${now}-${action.x}-${action.z}`,
         kind: action.kind,
         x: action.x,
         z: action.z,
@@ -256,61 +600,193 @@ export function applyAction(
       });
       break;
     }
-    case "travel":
-      nearby(save, SHIP.x, SHIP.z, 3);
-      if (save.planet === action.planet)
-        throw new RuleError("Вы уже на этой планете.");
-      save.planet = action.planet;
-      save.position = { x: SHIP.x - 2, z: SHIP.z };
+    case "takeFurniture": {
+      if (!save.inside) throw new RuleError("Нужно войти в дом.");
+      const items = roomItems(save),
+        item = items.find((f) => f.id === action.id);
+      if (!item) throw new RuleError("Предмет не найден.");
+      nearby(save, item.x, item.z, 4);
+      save.interiors[save.inside] = items.filter((f) => f.id !== item.id);
+      const id = `furniture:${item.kind}`;
+      save.inventory[id] = (save.inventory[id] ?? 0) + 1;
       break;
+    }
+    case "salvage": {
+      const event = worldEvent(save, save.planet, now);
+      if (
+        !event ||
+        event.type !== "meteor" ||
+        event.id !== action.event ||
+        now < event.impactAt ||
+        event.claimed
+      )
+        throw new RuleError("Метеорит недоступен.");
+      nearby(save, event.x, event.z);
+      save.inventory.crystal = (save.inventory.crystal ?? 0) + 4;
+      save.inventory.stone = (save.inventory.stone ?? 0) + 6;
+      world.salvaged.push(event.id);
+      world.salvaged = world.salvaged.slice(-30);
+      break;
+    }
   }
   save.revision++;
   save.updatedAt = now;
   return save;
 }
-// Accept only saves produced by this version; corrupt local data must not crash play.
+const cropSchema = z.object({
+  plant: z.string(),
+  plantedAt: z.number().finite(),
+});
+const bSchema = z.object({
+  id: z.string(),
+  kind: z.enum([
+    "headquarters",
+    "house",
+    "greenhouse",
+    "warehouse",
+    "laboratory",
+    "extractor",
+    "bioextractor",
+  ]),
+  x: cell,
+  z: cell,
+  rotation: z.number().int().min(0).max(1),
+  resource: z.string().optional(),
+  collectedAt: z.number().finite().optional(),
+});
+const fSchema = z.object({
+  id: z.string(),
+  kind: z.enum([
+    "chair",
+    "table",
+    "bed",
+    "sofa",
+    "cabinet",
+    "fireplace",
+    "rug",
+  ]),
+  x: cell,
+  z: cell,
+  rotation: z.number().int().min(0).max(1),
+});
+const worldSchema = z.object({
+  crops: z.record(z.string(), cropSchema),
+  buildings: z.array(bSchema),
+  depleted: z.record(z.string(), z.number().finite()),
+  eventEpoch: z.number().finite(),
+  salvaged: z.array(z.number().int().nonnegative()),
+});
+const positionSchema = z.object({
+  x: z.number().finite().nonnegative(),
+  z: z.number().finite().nonnegative(),
+});
+const saveSchema = z.object({
+  version: z.literal(2),
+  revision: z.number().int().nonnegative(),
+  planet,
+  position: positionSchema,
+  inventory: z.record(z.string(), z.number().int().nonnegative()),
+  worlds: z.object({
+    home: worldSchema,
+    listoria: worldSchema,
+    mycelia: worldSchema,
+    pyros: worldSchema,
+  }),
+  updatedAt: z.number().finite(),
+  inside: z.string().nullable(),
+  outsidePosition: positionSchema.nullable(),
+  interiors: z.record(z.string(), z.array(fSchema)),
+  migration: z
+    .object({
+      from: z.literal(1),
+      movedBuildings: z.number().int().nonnegative(),
+    })
+    .optional(),
+});
 export function parseSave(raw: string): Save {
-  const data = JSON.parse(raw) as Save;
-  if (
-    data.version !== 1 ||
-    !Number.isSafeInteger(data.revision) ||
-    data.revision < 0 ||
-    !PLANETS[data.planet] ||
-    !data.inventory ||
-    !data.worlds
-  )
-    throw new Error("Неподдерживаемое сохранение");
-  for (const value of Object.values(data.inventory))
-    if (!Number.isSafeInteger(value) || value < 0)
-      throw new Error("Повреждённый инвентарь");
-  for (const p of Object.keys(PLANETS) as PlanetId[]) {
-    const world = data.worlds[p];
+  let data = JSON.parse(raw);
+  if (data?.version === 1) {
+    // Validate the old structure before adding the new world; never reset progress.
     if (
-      !world ||
-      !Array.isArray(world.buildings) ||
-      !world.crops ||
-      !world.depleted
+      !Number.isSafeInteger(data.revision) ||
+      !["listoria", "mycelia", "pyros"].includes(data.planet) ||
+      !data.inventory ||
+      !data.worlds ||
+      !data.position
     )
-      throw new Error("Повреждённая планета");
-    for (const crop of Object.values(world.crops))
-      if (!PLANTS[crop.plant] || !Number.isFinite(crop.plantedAt))
-        throw new Error("Повреждённое растение");
+      throw new Error("Повреждённое старое сохранение");
+    const next = newGame(data.updatedAt);
+    next.revision = data.revision;
+    next.inventory = data.inventory;
+    next.planet = data.planet;
+    next.position = data.position;
+    const moved: Building[] = [];
+    for (const p of ["listoria", "mycelia", "pyros"] as const) {
+      const w = data.worlds[p];
+      if (!w || !Array.isArray(w.buildings) || !w.crops || !w.depleted)
+        throw new Error("Повреждённая старая планета");
+      next.worlds[p].crops = w.crops;
+      next.worlds[p].depleted = w.depleted;
+      for (const b of w.buildings) {
+        if (!["house", "warehouse", "greenhouse"].includes(b.kind))
+          throw new Error("Повреждённая старая постройка");
+        if (b.id !== "starter-home")
+          moved.push({ ...b, id: `legacy-${p}-${b.id}` });
+      }
+    }
+    for (const building of moved) {
+      let placed = false;
+      for (let z = 2; z < 35 && !placed; z++)
+        for (let x = 2; x < 35 && !placed; x++) {
+          if (
+            canBuild(
+              { ...next, planet: "home", inside: null },
+              x,
+              z,
+              building.kind,
+              Number.MIN_SAFE_INTEGER,
+            )
+          ) {
+            next.worlds.home.buildings.push({ ...building, x, z });
+            placed = true;
+          }
+        }
+      if (!placed) {
+        const item = `kit:${building.kind}`;
+        next.inventory[item] = (next.inventory[item] ?? 0) + 1;
+      }
+    }
+    next.migration = { from: 1, movedBuildings: moved.length };
+    data = next;
   }
+  const save = saveSchema.parse(data) as Save;
+  for (const p of Object.keys(PLANETS) as PlanetId[])
+    for (const [k, crop] of Object.entries(save.worlds[p].crops)) {
+      const [x, z] = k.split(",").map(Number);
+      if (!PLANTS[crop.plant] || !beds(p).some((b) => b.x === x && b.z === z))
+        throw new Error("Повреждённое растение");
+    }
   if (
-    !Number.isFinite(data.position?.x) ||
-    !Number.isFinite(data.position?.z) ||
-    data.position.x < 0 ||
-    data.position.x >= SIZE ||
-    data.position.z < 0 ||
-    data.position.z >= SIZE
+    save.inside &&
+    (save.planet !== "home" ||
+      !save.worlds.home.buildings.some(
+        (b) => b.id === save.inside && b.kind === "headquarters",
+      ) ||
+      !save.interiors[save.inside] ||
+      !save.outsidePosition)
   )
+    throw new Error("Повреждённый интерьер");
+  const maxX = save.inside ? ROOM.width : planetSize(save.planet),
+    maxZ = save.inside ? ROOM.depth : planetSize(save.planet);
+  if (save.position.x >= maxX || save.position.z >= maxZ)
     throw new Error("Повреждённая позиция");
-  return data;
+  return save;
 }
 export function findPath(
   save: Save,
   target: { x: number; z: number },
   now: number,
+  reach = 1.6,
 ): { x: number; z: number }[] {
   const start = {
       x: Math.round(save.position.x),
@@ -319,10 +795,10 @@ export function findPath(
     queue = [start],
     previous = new Map<string, string | null>([[key(start.x, start.z), null]]);
   let end: typeof start | undefined;
-  while (queue.length) {
-    const cell = queue.shift()!;
-    if (Math.hypot(cell.x - target.x, cell.z - target.z) <= 1.6) {
-      end = cell;
+  for (let cursor = 0; cursor < queue.length; cursor++) {
+    const c = queue[cursor];
+    if (Math.hypot(c.x - target.x, c.z - target.z) <= reach) {
+      end = c;
       break;
     }
     for (const [dx, dz] of [
@@ -331,14 +807,11 @@ export function findPath(
       [0, 1],
       [0, -1],
     ]) {
-      const next = { x: cell.x + dx, z: cell.z + dz },
-        k = key(next.x, next.z);
-      if (
-        !previous.has(k) &&
-        walkable(save, save.planet, next.x, next.z, now)
-      ) {
-        previous.set(k, key(cell.x, cell.z));
-        queue.push(next);
+      const n = { x: c.x + dx, z: c.z + dz },
+        k = key(n.x, n.z);
+      if (!previous.has(k) && walkable(save, save.planet, n.x, n.z, now)) {
+        previous.set(k, key(c.x, c.z));
+        queue.push(n);
       }
     }
   }

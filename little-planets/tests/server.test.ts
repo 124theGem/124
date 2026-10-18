@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { DatabaseSync } from "node:sqlite";
+import { legacySave } from "./fixtures";
 import { createHmac } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -52,6 +54,39 @@ describe("Telegram identity verification", () => {
   });
 });
 describe("SQLite persistence and authenticated API", () => {
+  it("migrates version 1 once in SQLite and retains revisions and inventory after reopen", () => {
+    const dir = mkdtempSync(join(tmpdir(), "planets-migration-")),
+      file = join(dir, "save.sqlite");
+    let store = new Store(file);
+    store.close();
+    const db = new DatabaseSync(file);
+    db.prepare("INSERT INTO saves(user_id,state) VALUES(?,?)").run(
+      "7",
+      JSON.stringify(legacySave()),
+    );
+    db.close();
+    store = new Store(file);
+    try {
+      const migrated = store.get(7);
+      expect(migrated.version).toBe(2);
+      expect(migrated.revision).toBe(12);
+      store.close();
+      store = new Store(file);
+      expect(store.get(7)).toEqual(migrated);
+      const verify = new DatabaseSync(file);
+      try {
+        const raw = verify
+          .prepare("SELECT state FROM saves WHERE user_id='7'")
+          .get() as { state: string };
+        expect(JSON.parse(raw.state).version).toBe(2);
+      } finally {
+        verify.close();
+      }
+    } finally {
+      store.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
   it("persists after reopening, isolates users and refuses stale revisions", () => {
     const dir = mkdtempSync(join(tmpdir(), "little-planets-db-")),
       file = join(dir, "save.sqlite");
@@ -61,14 +96,14 @@ describe("SQLite persistence and authenticated API", () => {
       store.action(1, initial.revision, {
         type: "build",
         kind: "house",
-        x: 7,
-        z: 5,
+        x: 16,
+        z: 14,
         rotation: 0,
       });
       store.close();
       store = new Store(file);
-      expect(store.get(1).worlds.listoria.buildings).toHaveLength(2);
-      expect(store.get(2).worlds.listoria.buildings).toHaveLength(1);
+      expect(store.get(1).worlds.home.buildings).toHaveLength(2);
+      expect(store.get(2).worlds.home.buildings).toHaveLength(1);
       expect(() => store.action(1, 0, { type: "move", x: 8, z: 11 })).toThrow(
         Conflict,
       );
@@ -105,11 +140,11 @@ describe("SQLite persistence and authenticated API", () => {
         headers,
         payload: {
           revision: 0,
-          action: { type: "build", kind: "house", x: 7, z: 5, rotation: 0 },
+          action: { type: "build", kind: "house", x: 16, z: 14, rotation: 0 },
         },
       });
       expect(built.statusCode).toBe(200);
-      expect(built.json().state.inventory.wood).toBe(27);
+      expect(built.json().state.inventory.wood).toBe(72);
       const conflict = await app.inject({
         method: "POST",
         url: "/api/action",
@@ -122,7 +157,7 @@ describe("SQLite persistence and authenticated API", () => {
         url: "/api/state",
         headers: { authorization: `tma ${signed(456)}` },
       });
-      expect(other.json().state.inventory.wood).toBe(45);
+      expect(other.json().state.inventory.wood).toBe(90);
       const forged = await app.inject({
         method: "POST",
         url: "/api/action",
@@ -140,7 +175,7 @@ describe("SQLite persistence and authenticated API", () => {
         headers,
         payload: {
           revision: 1,
-          action: { type: "build", kind: "house", x: 3, z: 3, rotation: 0 },
+          action: { type: "build", kind: "house", x: 12, z: 15, rotation: 0 },
         },
       });
       expect(invalid.statusCode).toBe(400);

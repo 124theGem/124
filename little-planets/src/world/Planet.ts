@@ -1,9 +1,11 @@
 import * as T from "three";
 import { Models } from "./Models";
 import {
-  BEDS,
+  beds,
+  ship,
+  planetSize,
   PLANETS,
-  SIZE,
+  BUILDINGS,
   SHIP,
   nodes,
   terrainHeight,
@@ -26,12 +28,16 @@ export class Planet {
     save: Save,
     now: number,
   ) {
-    const palette = PLANETS[id];
+    const palette = PLANETS[id],
+      size = planetSize(id),
+      offset = id === "home" ? 10 : 0,
+      center = (size - 1) / 2,
+      pad = ship(id);
     this.root.add(this.terrain, this.objects, this.crops, this.waterfall);
-    for (let x = 0; x < SIZE; x++)
-      for (let z = 0; z < SIZE; z++) {
+    for (let x = 0; x < size; x++)
+      for (let z = 0; z < size; z++) {
         const h = terrainHeight(x, z),
-          edge = x === 0 || z === 0 || x === SIZE - 1 || z === SIZE - 1;
+          edge = x === 0 || z === 0 || x === size - 1 || z === size - 1;
         const tint = new T.Color(palette.soil)
           .multiplyScalar(0.94 + ((x * 13 + z * 7) % 7) * 0.018)
           .getHex();
@@ -46,26 +52,28 @@ export class Planet {
           waterCell(x, z) ? (id === "pyros" ? 0xf07d40 : 0x49a6bf) : tint,
           waterCell(x, z),
         );
-        kit.box(
-          this.terrain,
-          x,
-          -0.7 + h * 0.5,
-          z,
-          0.98,
-          1.1 + h,
-          0.98,
-          palette.side,
-        );
-        kit.box(
-          this.terrain,
-          x,
-          -3.2,
-          z,
-          1,
-          4.2 + ((x * 3 + z * 11) % 5) * 0.18,
-          1,
-          palette.rock,
-        );
+        if (edge) {
+          kit.box(
+            this.terrain,
+            x,
+            -0.7 + h * 0.5,
+            z,
+            0.98,
+            1.1 + h,
+            0.98,
+            palette.side,
+          );
+          kit.box(
+            this.terrain,
+            x,
+            -3.2,
+            z,
+            1,
+            4.2 + ((x * 3 + z * 11) % 5) * 0.18,
+            1,
+            palette.rock,
+          );
+        }
         if (edge)
           for (let layer = 0; layer < 4; layer++) {
             const shade = new T.Color(palette.rock)
@@ -73,9 +81,9 @@ export class Planet {
               .getHex();
             kit.box(
               this.terrain,
-              x + (x === 0 ? -0.07 : x === 16 ? 0.07 : 0),
+              x + (x === 0 ? -0.07 : x === size - 1 ? 0.07 : 0),
               -1.5 - layer * 0.85,
-              z + (z === 0 ? -0.07 : z === 16 ? 0.07 : 0),
+              z + (z === 0 ? -0.07 : z === size - 1 ? 0.07 : 0),
               1.04,
               0.79,
               1.04,
@@ -84,9 +92,9 @@ export class Planet {
             if (id === "listoria" && (x + z + layer) % 5 === 0)
               kit.box(
                 this.terrain,
-                x + (x === 0 ? -0.13 : x === 16 ? 0.13 : 0),
+                x + (x === 0 ? -0.13 : x === size - 1 ? 0.13 : 0),
                 -1.4 - layer * 0.8,
-                z + (z === 0 ? -0.13 : z === 16 ? 0.13 : 0),
+                z + (z === 0 ? -0.13 : z === size - 1 ? 0.13 : 0),
                 1.06,
                 0.16,
                 1.06,
@@ -130,11 +138,11 @@ export class Planet {
         if (
           x > 0 &&
           z > 0 &&
-          x < 16 &&
-          z < 16 &&
+          x < size - 1 &&
+          z < size - 1 &&
           (x * 31 + z * 17) % 11 === 0 &&
           !waterCell(x, z) &&
-          !BEDS.some((b) => b.x === x && b.z === z) &&
+          !beds(id).some((b) => b.x === x && b.z === z) &&
           !(x >= 11 && z >= 11)
         ) {
           const species =
@@ -164,13 +172,24 @@ export class Planet {
             );
         }
       }
+    // The hidden core is one block; individual stone/soil columns are needed only on the rim.
+    kit.box(
+      this.terrain,
+      center,
+      -4.6,
+      center,
+      size - 2,
+      1.4,
+      size - 2,
+      palette.rock,
+    );
     // A visible ribbon pours from the top stream down the front face of the cube.
     for (let i = 0; i < 10; i++) {
       const drop = kit.box(
         this.waterfall,
         5,
         -i * 0.58,
-        16.48,
+        size - 0.52,
         0.74,
         0.65,
         0.1,
@@ -183,7 +202,7 @@ export class Planet {
         this.waterfall,
         5.22,
         -i * 0.58,
-        16.55,
+        size - 0.45,
         0.13,
         0.44,
         0.1,
@@ -194,7 +213,7 @@ export class Planet {
     }
     for (let i = 0; i < 12; i++) {
       const angle = i * 2.4,
-        radius = 10 + (i % 3) * 1.2;
+        radius = size * 0.64 + (i % 3) * 1.2;
       const cloud = new T.Group();
       for (let j = 0; j < 3; j++)
         kit.box(
@@ -210,13 +229,13 @@ export class Planet {
           0.72,
         );
       cloud.position.set(
-        8 + Math.cos(angle) * radius,
+        center + Math.cos(angle) * radius,
         -2 - (i % 4),
-        8 + Math.sin(angle) * radius,
+        center + Math.sin(angle) * radius,
       );
       this.terrain.add(cloud);
     }
-    for (const bed of BEDS) {
+    for (const bed of beds(id)) {
       const h = terrainHeight(bed.x, bed.z);
       kit.box(this.terrain, bed.x, h + 0.045, bed.z, 0.92, 0.1, 0.92, 0x76513e);
       for (const offset of [-0.27, 0, 0.27])
@@ -231,8 +250,8 @@ export class Planet {
           0x4e3e35,
         );
     }
-    for (const x of [5.5, 9.5])
-      for (const z of [7.5, 9.5]) {
+    for (const x of [5.5 + offset, 9.5 + offset])
+      for (const z of [7.5 + offset, 9.5 + offset]) {
         kit.box(
           this.terrain,
           x,
@@ -254,20 +273,20 @@ export class Planet {
           0xe1c591,
         );
       }
-    for (let x = 7; x <= 12; x++)
+    for (let x = 7 + offset; x <= 12 + offset; x++)
       kit.box(
         this.terrain,
         x,
-        terrainHeight(x, 11) + 0.04,
-        11,
+        terrainHeight(x, 11 + offset) + 0.04,
+        11 + offset,
         0.76,
         0.08,
         0.65,
         id === "mycelia" ? 0x8ec9e1 : 0xbcc2ad,
         id === "mycelia",
       );
-    for (let x = 11; x <= 15; x++)
-      for (let z = 11; z <= 15; z++)
+    for (let x = pad.x - 2; x <= pad.x + 2; x++)
+      for (let z = pad.z - 2; z <= pad.z + 2; z++)
         kit.box(
           this.terrain,
           x,
@@ -281,9 +300,9 @@ export class Planet {
     for (const side of [-1, 1])
       kit.box(
         this.terrain,
-        SHIP.x + side * 1.4,
-        terrainHeight(SHIP.x, SHIP.z) + 0.12,
-        SHIP.z,
+        pad.x + side * 1.4,
+        terrainHeight(pad.x, pad.z) + 0.12,
+        pad.z,
         0.1,
         0.04,
         2.8,
@@ -292,11 +311,7 @@ export class Planet {
       );
     kit.batch(this.terrain);
     this.ship = kit.ship();
-    this.ship.position.set(
-      SHIP.x,
-      terrainHeight(SHIP.x, SHIP.z) + 0.13,
-      SHIP.z,
-    );
+    this.ship.position.set(pad.x, terrainHeight(pad.x, pad.z) + 0.13, pad.z);
     this.root.add(this.ship);
     this.rebuild(save, now);
   }
@@ -323,9 +338,12 @@ export class Planet {
     for (const building of save.worlds[this.id].buildings) {
       const object = this.kit.building(building.kind, this.id);
       object.position.set(
-        building.x + 0.5,
-        terrainHeight(building.x + 0.5, building.z + 0.5),
-        building.z + 0.5,
+        building.x + (BUILDINGS[building.kind].size - 1) / 2,
+        terrainHeight(
+          building.x + (BUILDINGS[building.kind].size - 1) / 2,
+          building.z + (BUILDINGS[building.kind].size - 1) / 2,
+        ),
+        building.z + (BUILDINGS[building.kind].size - 1) / 2,
       );
       object.rotation.y = (building.rotation * Math.PI) / 2;
       this.objects.add(object);

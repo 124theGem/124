@@ -1,6 +1,22 @@
 export const SIZE = 17;
-export type PlanetId = "listoria" | "mycelia" | "pyros";
-export type BuildingKind = "house" | "greenhouse" | "warehouse";
+export const HOME_SIZE = 38;
+export type PlanetId = "home" | "listoria" | "mycelia" | "pyros";
+export type BuildingKind =
+  | "headquarters"
+  | "house"
+  | "greenhouse"
+  | "warehouse"
+  | "laboratory"
+  | "extractor"
+  | "bioextractor";
+export type FurnitureKind =
+  | "chair"
+  | "table"
+  | "bed"
+  | "sofa"
+  | "cabinet"
+  | "fireplace"
+  | "rug";
 export const RESOURCE_LABELS: Record<string, string> = {
   wood: "Древесина",
   stone: "Камень",
@@ -10,14 +26,30 @@ export const RESOURCE_LABELS: Record<string, string> = {
   thermal: "Термокристаллы",
 };
 export const RESOURCE_ICONS: Record<string, string> = {
-  wood: "▰",
-  stone: "◆",
-  spores: "◉",
-  crystal: "✧",
-  obsidian: "⬟",
-  thermal: "✦",
+  wood: "🪵",
+  stone: "🪨",
+  spores: "🍄",
+  crystal: "💎",
+  obsidian: "🌑",
+  thermal: "🔥",
 };
 export const PLANETS = {
+  home: {
+    id: "home",
+    name: "Родная",
+    tag: "Сердце вашей колонии",
+    description:
+      "Большой зелёный мир: главная база, лаборатория и ваш уютный дом.",
+    color: "#cce89a",
+    soil: 0x80b35b,
+    side: 0x9c7656,
+    rock: 0x687c86,
+    sky: 0x081a2b,
+    accent: 0xffd18a,
+    resource: ["wood", "stone"],
+    plants: ["sunflower", "carrot", "glowbush"],
+    icon: "🏡",
+  },
   listoria: {
     id: "listoria",
     name: "Листория",
@@ -148,37 +180,253 @@ export const PLANTS: Record<
     shape: "flower",
   },
 };
-export const BUILDINGS: Record<
-  BuildingKind,
-  {
-    name: string;
-    description: string;
-    cost: Record<string, number>;
-    icon: string;
-  }
-> = {
-  house: {
-    name: "Домик",
+export interface BuildingRecipe {
+  name: string;
+  description: string;
+  cost: Record<string, number>;
+  icon: string;
+  size: number;
+  zone: "home" | "outpost";
+  rate?: number;
+  resources?: readonly string[];
+}
+export const BUILDINGS: Record<BuildingKind, BuildingRecipe> = {
+  headquarters: {
+    name: "Главный дом",
     description:
-      "Уютный дом для путешественника. Внутренние помещения появятся позже.",
+      "Войдите внутрь: здесь можно поставить созданную мебель и камин.",
+    cost: { wood: 24, stone: 18 },
+    icon: "🏠",
+    size: 3,
+    zone: "home",
+  },
+  house: {
+    name: "Жилой дом",
+    description: "Новый дом для вашего растущего поселения.",
     cost: { wood: 18, stone: 12 },
-    icon: "⌂",
+    icon: "🏘️",
+    size: 2,
+    zone: "home",
   },
   greenhouse: {
     name: "Теплица",
-    description:
-      "Стеклянный сад для ваших любимых растений. Пока декоративная постройка.",
+    description: "Сад под стеклянной крышей.",
     cost: { wood: 14, stone: 14, crystal: 4 },
-    icon: "♧",
+    icon: "🌱",
+    size: 2,
+    zone: "home",
   },
   warehouse: {
     name: "Склад",
     description:
-      "Место для ящиков и инструментов. Инвентарь в MVP общий и не ограничен.",
+      "Каждый склад увеличивает буфер каждого добывающего модуля на 40 единиц.",
     cost: { wood: 12, stone: 8 },
-    icon: "▣",
+    icon: "📦",
+    size: 2,
+    zone: "home",
+  },
+  laboratory: {
+    name: "Лаборатория",
+    description: "Открывает рецепты продвинутых модулей и каминов.",
+    cost: { wood: 18, stone: 12, crystal: 4 },
+    icon: "🔬",
+    size: 3,
+    zone: "home",
+  },
+  extractor: {
+    name: "Буровой модуль",
+    description:
+      "Добывает выбранный минерал каждые 20 секунд, даже пока вас нет.",
+    cost: { wood: 10, stone: 12, crystal: 3 },
+    icon: "⛏️",
+    size: 2,
+    zone: "outpost",
+    rate: 3,
+    resources: ["stone", "crystal", "obsidian", "thermal"],
+  },
+  bioextractor: {
+    name: "Биомодуль",
+    description: "Автоматически собирает древесину или споры каждые 20 секунд.",
+    cost: { wood: 12, stone: 8, spores: 2 },
+    icon: "🌿",
+    size: 2,
+    zone: "outpost",
+    rate: 3,
+    resources: ["wood", "spores"],
   },
 };
+export const FURNITURE: Record<
+  FurnitureKind,
+  {
+    name: string;
+    description: string;
+    icon: string;
+    cost: Record<string, number>;
+    w: number;
+    d: number;
+    walkable?: boolean;
+    lab?: boolean;
+  }
+> = {
+  chair: {
+    name: "Стул",
+    description: "Деревянный стул для тихого вечера.",
+    icon: "🪑",
+    cost: { wood: 4 },
+    w: 1,
+    d: 1,
+  },
+  table: {
+    name: "Стол",
+    description: "Большой стол для планов и находок.",
+    icon: "🪵",
+    cost: { wood: 8, stone: 2 },
+    w: 2,
+    d: 2,
+  },
+  bed: {
+    name: "Кровать",
+    description: "Мягкая постель после дальних перелётов.",
+    icon: "🛏️",
+    cost: { wood: 10, spores: 2 },
+    w: 2,
+    d: 3,
+  },
+  sofa: {
+    name: "Диван",
+    description: "Уютный диван у окна.",
+    icon: "🛋️",
+    cost: { wood: 9, spores: 3 },
+    w: 2,
+    d: 1,
+  },
+  cabinet: {
+    name: "Шкаф",
+    description: "Место для вещей путешественника.",
+    icon: "🗄️",
+    cost: { wood: 7, stone: 2 },
+    w: 1,
+    d: 1,
+  },
+  fireplace: {
+    name: "Камин",
+    description: "Живой огонь и тёплый свет в главном доме.",
+    icon: "🔥",
+    cost: { stone: 12, wood: 5, thermal: 2 },
+    w: 2,
+    d: 1,
+    lab: true,
+  },
+  rug: {
+    name: "Ковёр",
+    description: "Цветной ковёр, по которому можно ходить.",
+    icon: "🧶",
+    cost: { spores: 4 },
+    w: 3,
+    d: 2,
+    walkable: true,
+  },
+};
+export const ROOM = {
+  width: 12,
+  depth: 10,
+  door: { x: 6, z: 8.6 },
+  spawn: { x: 6, z: 7.5 },
+};
+export const HOME_HQ = { x: 12, z: 15 };
+export function planetSize(p: PlanetId) {
+  return p === "home" ? HOME_SIZE : SIZE;
+}
+export function beds(p: PlanetId) {
+  return BEDS.map((b) => ({
+    x: b.x + (p === "home" ? 10 : 0),
+    z: b.z + (p === "home" ? 10 : 0),
+  }));
+}
+export function ship(p: PlanetId) {
+  return {
+    x: SHIP.x + (p === "home" ? 10 : 0),
+    z: SHIP.z + (p === "home" ? 10 : 0),
+  };
+}
+export function allowedBuildings(p: PlanetId) {
+  return (Object.keys(BUILDINGS) as BuildingKind[]).filter(
+    (k) =>
+      BUILDINGS[k].zone === (p === "home" ? "home" : "outpost") &&
+      (!BUILDINGS[k].resources ||
+        BUILDINGS[k].resources!.some((r) =>
+          (PLANETS[p].resource as readonly string[]).includes(r),
+        )),
+  );
+}
+export function moduleResources(p: PlanetId, kind: BuildingKind) {
+  return PLANETS[p].resource.filter((r) =>
+    BUILDINGS[kind].resources?.includes(r),
+  );
+}
+export function itemInfo(id: string): {
+  name: string;
+  icon: string;
+  group: string;
+} {
+  const [prefix, value] = id.split(":");
+  if (prefix === "seed" || prefix === "crop") {
+    const p = PLANTS[value];
+    return {
+      name: p?.name ?? value,
+      icon: p?.icon ?? "🌱",
+      group: prefix === "seed" ? "Семена" : "Урожай",
+    };
+  }
+  if (prefix === "kit") {
+    const b = BUILDINGS[value as BuildingKind];
+    return {
+      name: b?.name ?? value,
+      icon: b?.icon ?? "📦",
+      group: "Постройки",
+    };
+  }
+  if (prefix === "furniture") {
+    const f = FURNITURE[value as FurnitureKind];
+    return { name: f?.name ?? value, icon: f?.icon ?? "🪑", group: "Мебель" };
+  }
+  return {
+    name: RESOURCE_LABELS[id] ?? id,
+    icon: RESOURCE_ICONS[id] ?? "📦",
+    group: "Ресурсы",
+  };
+}
+export function recipes() {
+  return [
+    ...Object.entries(BUILDINGS).map(([id, b]) => ({
+      id: `kit:${id}`,
+      name: b.name,
+      icon: b.icon,
+      cost: b.cost,
+      group: b.zone === "home" ? "База" : "Модули",
+      lab: id === "bioextractor",
+      description: b.description,
+    })),
+    ...Object.entries(FURNITURE).map(([id, f]) => ({
+      id: `furniture:${id}`,
+      name: f.name,
+      icon: f.icon,
+      cost: f.cost,
+      group: "Мебель",
+      lab: !!f.lab,
+      description: f.description,
+    })),
+    ...Object.entries(PLANTS).map(([id, p]) => ({
+      id: `seed:${id}`,
+      name: `Семена: ${p.name}`,
+      icon: p.icon,
+      cost: { [`crop:${id}`]: 2 },
+      group: "Семена",
+      lab: false,
+      description: "Получите семя из двух единиц урожая этого растения.",
+    })),
+  ];
+}
 export const BEDS = Array.from({ length: 8 }, (_, i) => ({
   x: 6 + (i % 4),
   z: 8 + Math.floor(i / 4),
@@ -194,7 +442,7 @@ export function waterCell(x: number, z: number) {
   return (x === 5 && z >= 12) || (x >= 11 && x <= 13 && z >= 4 && z <= 5);
 }
 export function nodes(planet: PlanetId) {
-  return [
+  const coords: number[][] = [
     [2, 7],
     [3, 11],
     [5, 4],
@@ -213,7 +461,16 @@ export function nodes(planet: PlanetId) {
     [15, 2],
     [3, 5],
     [10, 6],
-  ].map(([x, z], i) => ({
+  ];
+  if (planet === "home") {
+    coords.length = 0;
+    for (let x = 2; x < HOME_SIZE - 2; x += 4)
+      for (let z = 2; z < HOME_SIZE - 2; z += 4)
+        if (!(x >= 10 && x <= 26 && z >= 10 && z <= 26) && !waterCell(x, z))
+          coords.push([x, z]);
+    coords.push([11, 21], [21, 13], [26, 17], [18, 25], [9, 17], [27, 24]);
+  }
+  return coords.map(([x, z], i) => ({
     id: `node-${i}`,
     x,
     z,

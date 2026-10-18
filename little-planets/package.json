@@ -1,6 +1,6 @@
 {
   "name": "little-planets",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -14,7 +14,9 @@
     "start": "tsx server/index.ts",
     "test": "vitest run",
     "test:browser": "node tests/browser.mjs",
-    "test:production": "tsx tests/production-browser.ts"
+    "test:production": "tsx tests/production-browser.ts",
+    "package:server": "npm run build && node scripts/package-server.mjs",
+    "test:upgrade": "node --import tsx tests/upgrade.mjs"
   },
   "dependencies": {
     "three": "^0.180.0",

@@ -1,5 +1,11 @@
 import * as T from "three";
-import { PLANTS, type BuildingKind, type PlanetId } from "../../shared/catalog";
+import {
+  PLANTS,
+  FURNITURE,
+  type FurnitureKind,
+  type BuildingKind,
+  type PlanetId,
+} from "../../shared/catalog";
 /** Small procedural factories; their roots can later be replaced by GLTF models. */
 export class Models {
   private boxGeo = new T.BoxGeometry(1, 1, 1);
@@ -113,7 +119,7 @@ export class Models {
   }
   resource(planet: PlanetId, variant: number) {
     const root = new T.Group();
-    if (variant % 2 === 0 && planet === "listoria") {
+    if (variant % 2 === 0 && (planet === "listoria" || planet === "home")) {
       this.box(root, 0, 0.7, 0, 0.28, 1.4, 0.3, 0x8b6043);
       for (const [x, y, z, s] of [
         [0, 1.8, 0, 1.05],
@@ -142,7 +148,11 @@ export class Models {
         small.scale.setScalar(0.65);
         root.add(small);
       }
-    } else if (variant % 2 === 1 && planet !== "listoria") {
+    } else if (
+      variant % 2 === 1 &&
+      planet !== "listoria" &&
+      planet !== "home"
+    ) {
       const color = planet === "mycelia" ? 0x70dcff : 0xff8054;
       for (const [x, z, s] of [
         [0, 0, 1],
@@ -187,7 +197,58 @@ export class Models {
     }
     return root;
   }
-  building(kind: BuildingKind, planet: PlanetId = "listoria") {
+  building(kind: BuildingKind, planet: PlanetId = "listoria"): T.Group {
+    if (kind === "headquarters" || kind === "laboratory") {
+      const root = this.building(
+        kind === "headquarters" ? "house" : "warehouse",
+        planet,
+      );
+      root.scale.set(1.5, 1.15, 1.5);
+      if (kind === "headquarters") {
+        this.box(root, -0.6, 2.7, 0.2, 0.055, 0.9, 0.055, 0xb7c6c5);
+        this.box(root, -0.37, 2.95, 0.2, 0.45, 0.3, 0.055, 0xe5ba6e);
+        this.box(root, 0, 1.52, 1.03, 0.6, 0.2, 0.05, 0xf0d694, true);
+      } else {
+        this.box(root, 0, 2.18, 0, 1, 0.6, 1, 0x9bd6df, false, 0.6);
+        this.box(root, 0.6, 2.65, -0.3, 0.05, 1, 0.05, 0xd8e7e3);
+        const dish = this.box(root, 0.6, 3.08, -0.3, 0.7, 0.1, 0.4, 0xb4d9e8);
+        dish.rotation.z = 0.4;
+        this.box(root, 0, 1.1, 1, 0.65, 0.42, 0.04, 0x91cce8, true);
+      }
+      return root;
+    }
+    if (kind === "extractor" || kind === "bioextractor") {
+      const root = new T.Group(),
+        bio = kind === "bioextractor";
+      this.box(root, 0, 0.12, 0, 1.9, 0.24, 1.9, 0x7c8f9c);
+      for (const side of [-1, 1])
+        this.box(root, side * 0.7, 0.9, -0.5, 0.15, 1.5, 0.18, 0xd9c294);
+      this.box(root, 0, 1.6, -0.5, 1.7, 0.16, 0.2, 0xe8bc72);
+      this.box(root, 0, 0.7, 0, 0.8, 1.2, 0.85, bio ? 0x78aa91 : 0x849cae);
+      this.box(root, 0, 1.45, 0, 0.65, 0.3, 0.65, 0xdbc09a);
+      this.box(
+        root,
+        0.52,
+        0.9,
+        0.48,
+        0.15,
+        0.55,
+        0.4,
+        bio ? 0x8fe3a0 : 0x81d9ef,
+        true,
+      );
+      for (let i = 0; i < 5; i++)
+        this.box(root, 0, 0.17 + i * 0.2, 0.05, 0.24, 0.12, 0.24, 0xb1c3ca);
+      for (const side of [-1, 1])
+        this.box(root, side * 0.7, 0.25, 0.5, 0.45, 0.22, 0.55, 0x546779);
+      if (bio) {
+        const sprout = this.plant("glowbush");
+        sprout.position.set(0, 1.5, 0);
+        root.add(sprout);
+      } else this.box(root, 0, 1.86, -0.5, 0.4, 0.13, 0.4, 0xf0aa5b, true);
+      return root;
+    }
+
     const root = new T.Group(),
       wood =
         planet === "pyros"
@@ -264,6 +325,77 @@ export class Models {
       this.box(root, s * 0.5, 0.3, -0.5, 0.16, 0.55, 0.2, 0x656774);
       this.box(root, s * 0.55, 0.12, -0.5, 0.4, 0.12, 0.45, 0xc4b690);
       this.box(root, s * 0.35, 0.68, -0.96, 0.25, 0.25, 0.24, 0x6ec7eb, true);
+    }
+    return root;
+  }
+  furniture(kind: FurnitureKind) {
+    const root = new T.Group(),
+      f = FURNITURE[kind],
+      w = f.w,
+      d = f.d,
+      wood = 0xb68a58,
+      cloth = 0x80a4b2;
+    if (kind === "rug") {
+      this.box(root, 0, 0.025, 0, w - 0.1, 0.04, d - 0.1, 0xb2756a);
+      this.box(root, 0, 0.05, 0, w - 0.5, 0.02, d - 0.5, 0xe0c79e);
+      return root;
+    }
+    if (kind === "chair" || kind === "table") {
+      const h = kind === "chair" ? 0.55 : 0.85;
+      this.box(root, 0, h, 0, w - 0.12, 0.13, d - 0.12, wood);
+      for (const x of [-1, 1])
+        for (const z of [-1, 1])
+          this.box(
+            root,
+            x * (w / 2 - 0.2),
+            h / 2,
+            z * (d / 2 - 0.2),
+            0.09,
+            h,
+            0.09,
+            0x896645,
+          );
+      if (kind === "chair") {
+        this.box(root, 0, 0.96, -0.38, 0.75, 0.8, 0.1, wood);
+        this.box(root, 0, 0.65, 0, 0.65, 0.08, 0.65, 0xc9a77b);
+      }
+    } else if (kind === "bed") {
+      this.box(root, 0, 0.3, 0, w - 0.1, 0.4, d - 0.1, wood);
+      this.box(root, 0, 0.61, 0.1, w - 0.25, 0.3, d - 0.3, 0xe8dec8);
+      this.box(root, 0, 0.8, -d / 2 + 0.5, w - 0.5, 0.2, 0.65, 0xf5ead7);
+      this.box(root, 0, 0.8, 0.5, w - 0.2, 0.16, 1.55, cloth);
+      this.box(root, 0, 0.75, -d / 2 + 0.08, w - 0.05, 1.2, 0.15, wood);
+    } else if (kind === "sofa") {
+      this.box(root, 0, 0.4, 0, w - 0.1, 0.7, 0.95, cloth);
+      this.box(root, 0, 0.9, -0.35, w, 1, 0.25, 0x6b919f);
+      for (const x of [-1, 1])
+        this.box(root, x * (w / 2 - 0.12), 0.7, 0, 0.22, 0.8, 1.02, 0x6b919f);
+      this.box(root, 0, 0.78, 0.1, w - 0.5, 0.12, 0.6, 0xb4cfce);
+    } else if (kind === "cabinet") {
+      this.box(root, 0, 0.9, 0, 0.9, 1.8, 0.9, wood);
+      this.box(root, 0, 0.9, 0.46, 0.035, 1.65, 0.03, 0x70533e);
+      for (const x of [-0.1, 0.1])
+        this.box(root, x, 0.9, 0.49, 0.04, 0.16, 0.03, 0xe0ca96);
+    } else {
+      this.box(root, 0, 0.7, 0, 1.95, 1.4, 0.95, 0x9b958d);
+      this.box(root, 0, 0.58, 0.49, 1.3, 0.8, 0.04, 0x343640);
+      this.box(root, 0, 1.45, 0, 2.15, 0.17, 1.1, 0xc9bba1);
+      this.box(root, 0, 1.85, -0.2, 0.65, 0.7, 0.6, 0x85857f);
+      this.box(root, 0, 0.3, 0.53, 1.15, 0.12, 0.1, 0x8a6142);
+      for (const x of [-0.3, 0, 0.3]) {
+        const flame = this.box(
+          root,
+          x,
+          0.6,
+          0.55,
+          0.2,
+          0.45,
+          0.06,
+          x === 0 ? 0xffdf88 : 0xff9245,
+          true,
+        );
+        flame.rotation.z = x;
+      }
     }
     return root;
   }
