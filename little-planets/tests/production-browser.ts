@@ -83,6 +83,7 @@ try {
     viewport: { width: 390, height: 844 },
     isMobile: true,
     hasTouch: true,
+    deviceScaleFactor: 0.5,
   });
   const phone = await context.newPage(),
     errors: string[] = [];
@@ -110,7 +111,7 @@ try {
   await phone.waitForFunction(() =>
     Boolean(
       document.querySelector("canvas") ||
-      document.querySelector("#error-message"),
+        document.querySelector("#error-message"),
     ),
   );
   if (await phone.locator("#error-message").count())
@@ -136,35 +137,40 @@ try {
   assert(events.some((e) => e.type === "web_app_ready"));
   assert(events.some((e) => e.type === "web_app_setup_swipe_behavior"));
   await phone.locator("#menu-toggle").click();
-  await phone.locator("#build").click();
-  await phone.locator("#confirm-build").click();
+  await phone.locator("#automation").click();
+  await phone.locator('[data-deploy="warehouse"]').click();
   await phone.waitForFunction(
     () =>
-      (window as any).__planets.snapshot().state.worlds.home.buildings
-        .length === 2 && !(window as any).__planets.snapshot().busy,
+      (window as any).__planets.snapshot().state.automation.devices.length ===
+      1,
     {},
     { timeout: 60000 },
+  );
+  await phone.locator('[data-deploy="collector"]').click();
+  await phone.waitForFunction(
+    () =>
+      (window as any).__planets.snapshot().state.automation.devices.length ===
+      2,
   );
   const persisted = await app.inject({
     url: "/api/state",
     headers: { authorization: `tma ${initData}` },
   });
-  assert.equal(persisted.json().state.inventory.wood, 72);
+  assert.equal(persisted.json().state.inventory.wood, 78);
+  assert.equal(persisted.json().state.automation.devices.length, 2);
+  await phone.locator("#close-modal").click();
   await phone.goto(gameUrl);
-  await phone.waitForSelector("canvas.world");
-  assert.equal(
-    await phone.evaluate(
-      () =>
-        (window as any).__planets.snapshot().state.worlds.home.buildings.length,
-    ),
-    2,
+  await phone.waitForFunction(
+    () =>
+      (window as any).__planets?.snapshot().state.automation.devices.length ===
+      2,
   );
   await mkdir("test-results", { recursive: true });
   await phone.screenshot({ path: "test-results/telegram-production.png" });
   await phone.setViewportSize({ width: 844, height: 390 });
   await phone.locator("#menu-toggle").click();
   await phone.locator("#galaxy").click();
-  await phone.locator('[data-planet="orbis"]').click({ timeout: 90000 });
+  await phone.locator('[data-planet="listoria"]').click({ timeout: 90000 });
   await phone.locator("#space-hud:not(.hidden)").waitFor({ timeout: 60000 });
   const state = async () =>
     (
@@ -174,7 +180,7 @@ try {
       })
     ).json().state;
   assert.equal((await state()).planet, "home");
-  assert.equal((await state()).flight.target, "orbis");
+  assert.equal((await state()).flight.target, "listoria");
   assert(await phone.locator("#space-land").isDisabled());
   await phone.locator("#space-auto").click();
   await phone.waitForFunction(
@@ -200,15 +206,16 @@ try {
   await phone.locator("#space-land").click();
   await phone.waitForFunction(
     () =>
-      (window as any).__planets.snapshot().state.planet === "orbis" &&
+      (window as any).__planets.snapshot().state.planet === "listoria" &&
       !(window as any).__planets.snapshot().flying,
     {},
     { timeout: 60000 },
   );
   const landed = await state();
-  assert.equal(landed.planet, "orbis");
+  assert.equal(landed.planet, "listoria");
   assert.equal(landed.flight, null);
-  assert.equal(landed.worlds.home.buildings.length, 2);
+  assert.equal(landed.automation.devices.length, 2);
+  assert.equal(landed.worlds.home.buildings.length, 1);
   assert.deepEqual(errors, []);
   await context.close();
   console.log(

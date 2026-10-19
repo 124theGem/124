@@ -53,6 +53,7 @@ const costs = (cost: Record<string, number>, save: Save) =>
     .join("");
 export class UI {
   readonly root = document.createElement("div");
+  onAutomation = () => {};
   onInventory = () => {};
   onScan = () => {};
   onSpaceAuto = () => {};
@@ -92,11 +93,11 @@ export class UI {
   constructor(readonly local: boolean) {
     this.root.className = "hud";
     this.root.innerHTML = `
- <header class="topbar"><div class="identity"><div class="avatar">🧑‍🚀</div><div><div class="brand">LITTLE PLANETS <span>✦ SANCTUARY</span></div><strong id="planet-name">Родная</strong><small id="planet-tag"></small></div></div><div class="top-buttons"><button id="view" title="Камера" aria-label="Переключить камеру">🌐</button><button id="audio-toggle" title="Звук" aria-label="Включить или выключить звук">♫</button><button id="settings" title="Настройки" aria-label="Настройки">⚙</button></div></header>
+ <header class="topbar"><div class="identity"><div class="avatar">🧑‍🚀</div><div><div class="brand">LITTLE PLANETS <span>✦ CUBEWORKS</span></div><strong id="planet-name">Родная</strong><small id="planet-tag"></small></div></div><div class="top-buttons"><button id="view" title="Камера" aria-label="Переключить камеру">🌐</button><button id="audio-toggle" title="Звук" aria-label="Включить или выключить звук">♫</button><button id="settings" title="Настройки" aria-label="Настройки">⚙</button></div></header>
  <aside class="minimap"><canvas id="minimap" width="240" height="240" aria-label="Мини-карта планеты"></canvas></aside>
  <div id="combat-hud" class="combat-hud hidden"><span>♥ <b id="health-value">100</b></span><div class="health-track"><i id="health-fill"></i></div><small id="equipped-label"></small></div><button id="attack" class="attack-button hidden" aria-label="Атаковать">⚔<small>Атака</small></button>
  <div id="event-banner" class="event-banner hidden" role="status"></div><div id="context" class="context panel hidden"></div><div id="build-panel" class="build-panel panel hidden"></div>
- <div class="bottom"><nav id="menu-items" class="hidden" aria-label="Меню игры"><button id="inventory"><span>🎒</span>Рюкзак</button><button id="craft"><span>🛠️</span>Крафт</button><button id="plant"><span>🌱</span>Сад</button><button id="build"><span>🏗️</span>Строить</button><button id="galaxy"><span>🚀</span>Планеты</button><button id="menu-settings"><span>⚙️</span>Настройки</button></nav><button id="menu-toggle" aria-label="Открыть меню" aria-expanded="false"><span>☰</span><small>Меню</small></button><span class="save-status" id="save-status">${local ? "Локальный мир" : "Telegram"} · сохранено</span></div>
+ <div class="bottom"><nav id="menu-items" class="hidden" aria-label="Меню игры"><button id="inventory"><span>🎒</span>Рюкзак</button><button id="craft"><span>🛠️</span>Крафт</button><button id="plant"><span>🌱</span>Сад</button><button id="build"><span>🏗️</span>Строить</button><button id="automation"><span>🤖</span>Автоматика</button><button id="galaxy"><span>🚀</span>Планеты</button><button id="menu-settings"><span>⚙️</span>Настройки</button></nav><button id="menu-toggle" aria-label="Открыть меню" aria-expanded="false"><span>☰</span><small>Меню</small></button><span class="save-status" id="save-status">${local ? "Локальный мир" : "Telegram"} · сохранено</span></div>
  <div id="joystick" aria-label="Джойстик движения"><span></span></div><div class="keyboard">WASD · движение <b> / </b> колесо · масштаб <b> / </b> потяните · поворот</div>
  <div id="toast" role="status"></div><div id="modal" class="modal hidden"><section class="sheet"><button class="close" id="close-modal" aria-label="Закрыть окно">×</button><div id="modal-content"></div></section></div>
  <section id="space-hud" class="space-hud hidden"><header><span class="eyebrow">КОСМИЧЕСКИЙ ПОЛЁТ</span><h3 id="space-target"></h3><div class="flight-readings"><span><small>ДО МАЯКА</small><b id="flight-distance"></b></span><span><small>СКОРОСТЬ</small><b id="flight-speed"></b></span></div><p id="flight-help"></p></header><div class="flight-actions"><button id="space-auto">Автопилот</button><button id="space-course">Выбрать курс</button><button id="space-land" class="primary" disabled>Посадка</button></div><div class="flight-thrust"><button id="flight-up" aria-label="Поднять нос">↑</button><button id="flight-down" aria-label="Опустить нос">↓</button><button id="flight-brake">Тормоз</button><button id="flight-boost">Ускорение</button></div><div class="flight-hint">W/S · тяга &nbsp; A/D · поворот &nbsp; Q/E · высота &nbsp; пробел · тормоз</div><div id="flight-reticle" class="flight-reticle">◇</div></section>
@@ -104,6 +105,7 @@ export class UI {
     document.querySelector("#app")!.append(this.root);
     for (const [id, callback] of [
       ["inventory", () => this.onInventory()],
+      ["automation", () => this.onAutomation()],
       ["plant", () => this.onPlant()],
       ["build", () => this.onBuild()],
       ["galaxy", () => this.onGalaxy()],
@@ -151,6 +153,7 @@ export class UI {
     this.el(id).addEventListener("click", () => {
       if (
         [
+          "automation",
           "inventory",
           "craft",
           "plant",
@@ -181,12 +184,9 @@ export class UI {
       : save.planet === "home"
         ? "Родная планета · база"
         : "Исследовательская планета · добыча";
-    this.el("plant").classList.toggle(
-      "hidden",
-      !!save.inside || isSphere(save.planet),
-    );
+    this.el("plant").classList.toggle("hidden", !!save.inside);
     this.el("galaxy").classList.toggle("hidden", !!save.inside);
-    this.el("build").classList.toggle("hidden", isSphere(save.planet));
+    this.el("build").classList.remove("hidden");
     this.el("build").innerHTML =
       `<span>${save.inside ? "🪑" : "🏗️"}</span>${save.inside ? "Мебель" : "Строить"}`;
     const combat = !!PLANETS[save.planet].hostile && !save.inside;
@@ -331,6 +331,10 @@ export class UI {
   close() {
     this.el("modal").classList.add("hidden");
     this.activeModal = null;
+  }
+  panel(html: string) {
+    this.activeModal = null;
+    this.show(html);
   }
   private show(html: string) {
     this.el("modal-content").innerHTML = html;
@@ -508,7 +512,7 @@ export class UI {
       .map((id) => PLANETS[id])
       .filter((p) => p.name.toLowerCase().includes(query.toLowerCase()));
     this.show(
-      `<span class="eyebrow">ЗВЁЗДНЫЙ АТЛАС</span><h2>За пределами знакомого</h2><div class="planet-search"><input id="planet-search" type="search" placeholder="Найти планету по названию…" value="${escape(query)}" aria-label="Название планеты"><button id="scan-planets" class="primary">✦ Найти случайную планету</button></div><p class="atlas-note">Сканер открывает новые экспедиционные миры. ${save.discovered.filter((p) => p.startsWith("wild-")).length} / 24 найдено.</p>${save.lastDiscovery ? `<p class="discovery-note">✦ Открыта ${PLANETS[save.lastDiscovery].name}</p>` : ""}<div class="planet-cards">${planets.map((p) => `<button data-planet="${p.id}" ${p.id === save.planet && !save.flight ? "disabled" : ""} style="--planet:${p.color}"><div class="mini-planet">${p.icon}</div><strong>${p.name}</strong><small>${p.description}</small><em>${isSphere(p.id) ? `Сфера · обхват ${planetSize(p.id)} м` : `${planetSize(p.id)} × ${planetSize(p.id)}`} · ${p.hostile ? "⚔ Противники" : p.id === "home" ? "База" : "Мирная"}</em><b>${save.flight ? (p.id === save.flight.target ? "Текущий курс" : "Задать курс ↗") : p.id === save.planet ? "Вы здесь" : "Отправиться ↗"}</b></button>`).join("") || "<p>Такая планета пока не найдена. Воспользуйтесь сканером.</p>"}</div>`,
+      `<span class="eyebrow">ЗВЁЗДНЫЙ АТЛАС</span><h2>За пределами знакомого</h2><div class="planet-search"><input id="planet-search" type="search" placeholder="Найти планету по названию…" value="${escape(query)}" aria-label="Название планеты"><button id="scan-planets" class="primary">✦ Найти случайную планету</button></div><p class="atlas-note">Сканер открывает новые экспедиционные миры. ${save.discovered.filter((p) => p.startsWith("wild-")).length} / 24 найдено.</p>${save.lastDiscovery ? `<p class="discovery-note">✦ Открыта ${PLANETS[save.lastDiscovery].name}</p>` : ""}<div class="planet-cards">${planets.map((p) => `<button data-planet="${p.id}" ${p.id === save.planet && !save.flight ? "disabled" : ""} style="--planet:${p.color}"><div class="mini-planet">${p.icon}</div><strong>${p.name}</strong><small>${p.description}</small><em>Куб · 6 граней ${planetSize(p.id)} × ${planetSize(p.id)} · ${p.hostile ? "⚔ Противники" : p.id === "home" ? "База" : "Мирная"}</em><b>${save.flight ? (p.id === save.flight.target ? "Текущий курс" : "Задать курс ↗") : p.id === save.planet ? "Вы здесь" : "Отправиться ↗"}</b></button>`).join("") || "<p>Такая планета пока не найдена. Воспользуйтесь сканером.</p>"}</div>`,
     );
     (this.el("scan-planets") as HTMLButtonElement).disabled = !!save.flight;
     this.button("scan-planets", () => this.onScan());

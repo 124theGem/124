@@ -1,5 +1,5 @@
 import * as T from "three";
-import { terrainHeight, isSphere } from "../../shared/catalog";
+import { ship, terrainHeight, isSphere } from "../../shared/catalog";
 import { worldEvent, type Save } from "../../shared/model";
 import { spherePoint, sphereUp } from "./SphereWorld";
 /** Rain, a rotating debris funnel, thunderclouds and intermittent lightning around the player. */
@@ -63,11 +63,12 @@ export class Weather {
       storm = this.type === "storm";
     this.root.visible = rain || wind;
     if (!this.root.visible) return;
+    const anchor = ship(save.planet);
     if (isSphere(save.planet)) {
-      this.root.position.copy(spherePoint(position, 0, save.planet));
+      this.root.position.copy(spherePoint(anchor, 0, save.planet));
       this.root.quaternion.setFromUnitVectors(
         T.Object3D.DEFAULT_UP,
-        sphereUp(position, save.planet),
+        sphereUp(anchor, save.planet),
       );
     } else {
       this.root.position.set(

@@ -22,7 +22,7 @@ export class Store {
       .get(String(userId)) as { state: string } | undefined;
     if (row) {
       const save = parseSave(row.state);
-      if (JSON.parse(row.state).version !== 4)
+      if (JSON.parse(row.state).version !== 6)
         this.db
           .prepare("UPDATE saves SET state=? WHERE user_id=? AND state=?")
           .run(JSON.stringify(save), String(userId), row.state);

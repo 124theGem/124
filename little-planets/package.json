@@ -1,6 +1,6 @@
 {
   "name": "little-planets",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -13,7 +13,7 @@
     "build": "tsc --noEmit && vite build",
     "start": "tsx server/index.ts",
     "test": "vitest run",
-    "test:browser": "node tests/browser.mjs",
+    "test:browser": "node --import tsx tests/cubeworks-browser.mjs",
     "test:production": "tsx tests/production-browser.ts",
     "package:server": "npm run build && node scripts/package-server.mjs",
     "test:upgrade": "node --import tsx tests/upgrade.mjs",
@@ -21,7 +21,8 @@
     "test:events": "node --import tsx tests/events-browser.mjs",
     "test:runtime": "node tests/runtime.mjs",
     "test:odyssey": "node --import tsx tests/odyssey-browser.mjs",
-    "test:sanctuary": "node --import tsx tests/sanctuary-browser.mjs"
+    "test:sanctuary": "node --import tsx tests/sanctuary-browser.mjs",
+    "test:cubeworks": "node --import tsx tests/cubeworks-browser.mjs"
   },
   "dependencies": {
     "three": "^0.180.0",

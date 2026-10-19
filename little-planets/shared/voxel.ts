@@ -1,5 +1,6 @@
 import { PLANETS, ship, type PlanetId } from "./catalog";
 import {
+  cubeUp,
   sphereNormal,
   sphereCoordinates,
   sphereRadius,
@@ -15,7 +16,7 @@ const normal = (v: Vec): Vec => {
   return { x: v.x / l, y: v.y / l, z: v.z / l };
 };
 export function voxelResolution(id: PlanetId) {
-  return Math.max(30, Math.min(52, Math.round(sphereRadius(id) * 1.8)));
+  return Math.round(sphereRadius(id) * 2);
 }
 export function cubeNormal(face: number, u: number, v: number): Vec {
   return normal(
@@ -133,7 +134,14 @@ export function offsetPoint(
     id,
   );
 }
-export function voxelLevel(n: Vec, id: PlanetId) {
+export function naturalVoxelLevel(n: Vec, id: PlanetId) {
+  // A level perimeter joins all six face grids at the exact same physical edge.
+  // Without this, independently extruded faces leave a gap and teleport feet at seams.
+  const cell = voxelCell(n, id),
+    steps = voxelResolution(id),
+    edge = Math.min(cell.i, cell.j, steps - 1 - cell.i, steps - 1 - cell.j);
+  if (edge === 0) return 0;
+
   const r = sphereRadius(id),
     seed = PLANETS[id].seed ?? 71,
     p = { x: n.x * r, y: n.y * r, z: n.z * r },
@@ -162,63 +170,96 @@ export function voxelLevel(n: Vec, id: PlanetId) {
   }
   return Math.max(
     VOXEL_STEP,
-    Math.min(MAX_TERRAIN_HEIGHT, Math.round(height / VOXEL_STEP) * VOXEL_STEP),
+    Math.min(
+      MAX_TERRAIN_HEIGHT,
+      edge * VOXEL_STEP * 2,
+      Math.round(height / VOXEL_STEP) * VOXEL_STEP,
+    ),
   );
 }
+// Runtime surface data is scoped by planet; server rules always pass explicit edits.
+export type TerrainEdits = Record<
+  string,
+  {
+    height: number;
+    material: string;
+    blocks?: Record<string, string>;
+    removed?: number[];
+  }
+>;
+const activeEdits = new Map<PlanetId, TerrainEdits>();
+export function setTerrainEdits(id: PlanetId, edits: TerrainEdits) {
+  activeEdits.set(id, edits);
+}
+export function cellKey(n: Vec, id: PlanetId) {
+  const c = voxelCell(n, id);
+  return `${c.face}:${c.i}:${c.j}`;
+}
+export function voxelLevel(n: Vec, id: PlanetId, edits = activeEdits.get(id)) {
+  return edits?.[cellKey(n, id)]?.height ?? naturalVoxelLevel(n, id);
+}
 export function terrainSurfaceHeight(p: Point, id: PlanetId) {
+  return voxelLevel(voxelCell(sphereNormal(p, id), id).normal, id);
+}
+export function surfacePoint(p: Point, id: PlanetId): Vec {
   const n = sphereNormal(p, id),
-    cell = voxelCell(n, id),
+    up = cubeUp(n),
     r = sphereRadius(id),
-    level = voxelLevel(cell.normal, id);
-  return (r + level) / dot(n, cell.normal) - r;
+    scale = r / Math.max(Math.abs(n.x), Math.abs(n.y), Math.abs(n.z)),
+    h = terrainSurfaceHeight(p, id);
+  return {
+    x: n.x * scale + up.x * h,
+    y: n.y * scale + up.y * h,
+    z: n.z * scale + up.z * h,
+  };
+}
+/** Convert a physical point on a known face back to the face's base-grid coordinates. */
+export function surfaceCoordinates(
+  q: Vec,
+  id: PlanetId,
+  faceUp = cubeUp(q),
+): Point {
+  const r = sphereRadius(id),
+    p = { ...q };
+  for (const axis of ["x", "y", "z"] as const)
+    if (faceUp[axis]) p[axis] = faceUp[axis] * r;
+  return sphereCoordinates(p, id);
 }
 export function sanctuaryPoint(id: PlanetId) {
   return offsetPoint(ship(id), -6.2, -9, id);
 }
-const decks = new Map<
-  PlanetId,
-  { normal: Vec; right: Vec; forward: Vec; radius: number }
->();
-/** Solid paving is a rigid tangent deck above the voxel terrace. Feet and picking share it. */
 export function surfaceHeight(p: Point, id: PlanetId) {
-  const base = terrainSurfaceHeight(p, id),
-    n = sphereNormal(p, id),
-    r = sphereRadius(id);
-  let deck = decks.get(id);
-  if (!deck) {
-    const point = sanctuaryPoint(id),
-      normal = sphereNormal(point, id),
-      d = Math.sqrt(2 * (1 + normal.y)),
-      qx = normal.z / d,
-      qz = -normal.x / d,
-      qw = d / 2;
-    deck = {
-      normal,
-      right: { x: 1 - 2 * qz * qz, y: 2 * qw * qz, z: 2 * qx * qz },
-      forward: { x: 2 * qx * qz, y: -2 * qw * qx, z: 1 - 2 * qx * qx },
-      radius: r + terrainSurfaceHeight(point, id),
-    };
-    decks.set(id, deck);
-  }
-  const facing = dot(n, deck.normal);
-  if (facing < 0.94) return base;
-  const distance = (deck.radius + 0.2) / facing,
-    delta = {
-      x: n.x * distance - deck.normal.x * deck.radius,
-      y: n.y * distance - deck.normal.y * deck.radius,
-      z: n.z * distance - deck.normal.z * deck.radius,
-    },
-    x = dot(delta, deck.right),
-    z = dot(delta, deck.forward);
-  if (
-    Math.abs(x) < 2.995 &&
-    Math.abs(z) < 2.995 &&
-    !(x < -2.15 && z > 2.15) &&
-    !(x > 2.15 && z < -2.15)
-  )
-    return Math.max(base, distance - r);
-  return base;
+  return terrainSurfaceHeight(p, id);
 }
 export function surfaceRadius(p: Point, id: PlanetId) {
-  return sphereRadius(id) + surfaceHeight(p, id);
+  const q = surfacePoint(p, id);
+  return Math.hypot(q.x, q.y, q.z);
+}
+
+export function terrainMaterial(n: Vec, id: PlanetId) {
+  return activeEdits.get(id)?.[cellKey(n, id)]?.material;
+}
+
+export function blockSolid(
+  n: Vec,
+  id: PlanetId,
+  level: number,
+  edits = activeEdits.get(id),
+): boolean {
+  const edit = edits?.[cellKey(n, id)],
+    natural = Math.round(naturalVoxelLevel(n, id) / VOXEL_STEP);
+  if (level <= -4) return true;
+  if (edit?.removed?.includes(level)) return false;
+  return level <= natural || !!edit?.blocks?.[String(level)];
+}
+export function blockMaterial(
+  n: Vec,
+  id: PlanetId,
+  level: number,
+  edits = activeEdits.get(id),
+) {
+  return edits?.[cellKey(n, id)]?.blocks?.[String(level)] ?? "stone";
+}
+export function columnEdits(id: PlanetId) {
+  return activeEdits.get(id);
 }

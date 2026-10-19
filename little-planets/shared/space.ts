@@ -1,4 +1,9 @@
-import { surfaceRadius, MAX_TERRAIN_HEIGHT } from "./voxel";
+import {
+  surfacePoint,
+  surfaceCoordinates,
+  surfaceRadius,
+  MAX_TERRAIN_HEIGHT,
+} from "./voxel";
 import {
   isSphere,
   planetSize,
@@ -6,7 +11,13 @@ import {
   terrainHeight,
   type PlanetId,
 } from "./catalog";
-import { sphereNormal, sphereRadius, type Vec } from "./sphere";
+import {
+  cubeUp,
+  sphereCoordinates,
+  sphereNormal,
+  sphereRadius,
+  type Vec,
+} from "./sphere";
 export interface PilotInput {
   throttle: number;
   turn: number;
@@ -74,17 +85,19 @@ export function bodyCenter(id: PlanetId): Vec {
 }
 export function bodyRadius(id: PlanetId) {
   return isSphere(id)
-    ? sphereRadius(id) + MAX_TERRAIN_HEIGHT
+    ? (sphereRadius(id) + MAX_TERRAIN_HEIGHT) * 1.74
     : planetSize(id) * 0.52;
 }
 export function padNormal(id: PlanetId): Vec {
-  return isSphere(id) ? sphereNormal(ship(id), id) : { x: 0, y: 1, z: 0 };
+  return isSphere(id)
+    ? cubeUp(sphereNormal(ship(id), id))
+    : { x: 0, y: 1, z: 0 };
 }
 export function padPoint(id: PlanetId, height = 0): Vec {
   const c = bodyCenter(id),
     p = ship(id);
   if (isSphere(id))
-    return add(c, mul(padNormal(id), surfaceRadius(p, id) + 0.14 + height));
+    return add(add(c, surfacePoint(p, id)), mul(padNormal(id), 0.14 + height));
   const offset = (planetSize(id) - 1) / 2;
   return add(c, {
     x: p.x - offset,
@@ -286,7 +299,10 @@ export function stepFlight(
     for (const id of known) {
       const center = bodyCenter(id),
         offset = sub(next, center),
-        radius = bodyRadius(id) + 0.8;
+        radius =
+          (isSphere(id)
+            ? surfaceRadius(surfaceCoordinates(offset, id), id)
+            : bodyRadius(id)) + 0.8;
       if (len(offset) < radius) {
         const normal = unit(offset);
         next = add(center, mul(normal, radius));

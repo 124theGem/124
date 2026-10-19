@@ -111,6 +111,6 @@ export class Astronaut {
         ? -0.12
         : Math.sin(time * (moving ? 22 : 2)) * (moving ? 0.025 : 0.012));
     this.body.rotation.x = work ? 0.22 : 0;
-    this.tool.visible = this.mode === "tool";
+    this.tool.visible = !this.equipment.children.length || this.mode === "tool";
   }
 }

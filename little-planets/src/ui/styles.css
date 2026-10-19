@@ -2333,3 +2333,158 @@ button:hover {
 #menu-items button:hover {
   background: #475c40;
 }
+/* Cubeworks: the graph remains a pan/scroll canvas on small touch screens. */
+.device-palette,
+.graph-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0;
+}
+.device-palette button {
+  flex: 1 1 140px;
+  padding: 12px;
+}
+.device-palette small,
+.device-list small {
+  display: block;
+  font-size: 11px;
+  opacity: 0.75;
+  margin-top: 5px;
+}
+.device-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.device-list button {
+  flex: 1 1 200px;
+  text-align: left;
+}
+.device-list .active {
+  outline: 2px solid #97b887;
+}
+#device-detail {
+  margin-top: 22px;
+}
+#device-detail label {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px;
+}
+#device-detail select,
+#device-detail input {
+  max-width: 100%;
+  padding: 8px;
+  background: #f0eddd;
+  color: #30453c;
+  border: 1px solid #9aaf99;
+  border-radius: 7px;
+}
+.graph-scroll {
+  overflow: auto;
+  max-width: 100%;
+  height: 540px;
+  border: 1px solid #637c70;
+  border-radius: 14px;
+  background: #182c2c;
+  overscroll-behavior: contain;
+}
+#program-graph {
+  position: relative;
+  width: 2000px;
+  height: 1600px;
+  background-image:
+    linear-gradient(#7a9b8820 1px, transparent 1px),
+    linear-gradient(90deg, #7a9b8820 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+#graph-wires {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.program-node {
+  position: absolute;
+  width: 235px;
+  border: 2px solid #88bca1;
+  border-radius: 12px;
+  background: #e9e5d3;
+  color: #294438;
+  box-shadow: 0 4px 18px #0005;
+}
+.program-node.condition {
+  border-color: #e1b16b;
+}
+.program-node header {
+  background: #426c59;
+  color: #fff5d9;
+  padding: 9px;
+  cursor: grab;
+  border-radius: 9px 9px 0 0;
+  touch-action: none;
+  font-size: 13px;
+}
+.program-node header button {
+  float: right;
+  padding: 1px 7px;
+  min-height: 24px;
+}
+.node-fields {
+  padding: 6px;
+}
+.node-fields label {
+  margin: 3px !important;
+  font-size: 11px !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  justify-content: space-between;
+}
+.node-fields select {
+  width: 143px;
+  font-size: 11px;
+  padding: 4px !important;
+}
+.node-fields input {
+  width: 68px;
+  padding: 4px !important;
+}
+.node-fields button {
+  font-size: 11px;
+  min-height: 27px;
+  padding: 4px 8px;
+}
+.node-ports {
+  display: flex;
+  justify-content: space-between;
+  gap: 3px;
+  margin: 9px 0;
+}
+.graph-tools button {
+  font-size: 12px;
+}
+#graph-message {
+  min-height: 24px;
+  color: #708b62;
+}
+.mini-planet {
+  border-radius: 12% !important;
+}
+
+.node-fields button {
+  background: #426c59;
+  color: #fff5dc;
+  border: 1px solid #82a88e;
+}
+.program-node header button {
+  color: #fff5dc;
+  background: #294d3d;
+}
+
+.program-node.executing {
+  box-shadow:
+    0 0 0 3px #edcd82,
+    0 4px 18px #0005;
+}

@@ -1,5 +1,5 @@
 import * as T from "three";
-import { SPHERE_PLANETS, type PlanetId } from "../../shared/catalog";
+import { PLANETS, type PlanetId } from "../../shared/catalog";
 import { bodyCenter, sub, len } from "../../shared/space";
 import { tiledSphere } from "./TiledSphere";
 export class StarSky {
@@ -56,7 +56,7 @@ export class StarSky {
     this.bodies.clear();
     for (const g of this.planetGeometries) g.dispose();
     this.planetGeometries = [];
-    for (const other of SPHERE_PLANETS) {
+    for (const other of Object.keys(PLANETS).slice(0, 8) as PlanetId[]) {
       if (other === id) continue;
       const delta = sub(bodyCenter(other), bodyCenter(id)),
         distance = len(delta),
@@ -73,25 +73,10 @@ export class StarSky {
       this.bodies.add(planet);
     }
   }
-  update(camera: T.Camera) {
-    this.root.position.copy(camera.position);
-    const orthographic = camera instanceof T.OrthographicCamera;
-    this.root.scale.setScalar(orthographic ? 0.22 : 10);
-    if (orthographic) {
-      this.bodies.children.slice(0, 2).forEach((body, i) => {
-        body.position
-          .copy(
-            new T.Vector3(
-              i === 0 ? -0.4 : 0.7,
-              i === 0 ? 0.57 : 0.62,
-              -0.8,
-            ).unproject(camera),
-          )
-          .sub(camera.position)
-          .divideScalar(0.22);
-        body.scale.setScalar(i === 0 ? 0.22 : 0.14);
-      });
-    }
+  update(_camera: T.Camera) {
+    // Bodies stay at fixed world positions when the player or camera moves.
+    this.root.position.set(0, 0, 0);
+    this.root.scale.setScalar(1);
   }
   get stats() {
     return { stars: 2400, planets: this.bodies.children.length };

@@ -1,6 +1,8 @@
+import { spherePoint, sphereUp } from "./SphereWorld";
 import * as T from "three";
 import { Models } from "./Models";
 import {
+  planetDepth,
   isSphere,
   biomeOf,
   planetSize,
@@ -42,10 +44,14 @@ export class Life {
       }[] = [];
     for (let i = 0; i < count; i++) {
       let x = 2 + ((i * 7 + 5) % (size - 4)),
-        z = 2 + ((i * 11 + 3) % (size - 4));
+        z =
+          2 + ((i * 11 + 3) % Math.max(1, Math.floor(planetDepth(planet) - 4)));
       for (let n = 0; n < 80 && !walkable(save, planet, x, z); n++) {
         x = 2 + ((i * 7 + n * 3 + 5) % (size - 4));
-        z = 2 + ((i * 11 + n * 7 + 3) % (size - 4));
+        z =
+          2 +
+          ((i * 11 + n * 7 + 3) %
+            Math.max(1, Math.floor(planetDepth(planet) - 4)));
       }
       const animal: Animal = {
           x,
@@ -168,14 +174,20 @@ export class Life {
           a.tz = a.z;
         }
       }
-      position.set(
-        a.x,
-        terrainHeight(a.x, a.z) +
-          0.05 +
-          Math.abs(Math.sin(time * 5 + i)) * 0.08,
-        a.z,
+      position.copy(
+        spherePoint(
+          a,
+          0.05 + Math.abs(Math.sin(time * 5 + i)) * 0.08,
+          this.planet,
+        ),
       );
-      rotation.setFromAxisAngle(T.Object3D.DEFAULT_UP, a.heading);
+      rotation.setFromUnitVectors(
+        T.Object3D.DEFAULT_UP,
+        sphereUp(a, this.planet),
+      );
+      rotation.multiply(
+        new T.Quaternion().setFromAxisAngle(T.Object3D.DEFAULT_UP, a.heading),
+      );
       matrix.compose(position, rotation, new T.Vector3(1, 1, 1));
       for (const part of a.parts)
         this.batches[part.bucket].setMatrixAt(
@@ -293,12 +305,14 @@ export class Atmosphere {
     if (event?.type === "meteor" && !event.claimed) {
       this.meteor.visible = true;
       const progress = T.MathUtils.clamp((now - event.startsAt) / 5000, 0, 1);
-      this.meteor.position.set(
-        event.x,
-        terrainHeight(event.x, event.z) + (1 - progress) ** 2 * 26,
-        event.z,
+      this.meteor.position.copy(
+        spherePoint(event, (1 - progress) ** 2 * 26, save.planet),
       );
-      this.meteor.rotation.y = progress * 3;
+      this.meteor.quaternion.setFromUnitVectors(
+        T.Object3D.DEFAULT_UP,
+        sphereUp(event, save.planet),
+      );
+      this.meteor.rotateY(progress * 3);
     } else this.meteor.visible = false;
     const wind = event?.type === "wind" && !isSphere(save.planet);
     this.clouds.visible = !!wind;

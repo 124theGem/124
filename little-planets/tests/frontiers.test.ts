@@ -38,7 +38,7 @@ function battle() {
   s = equip(s, "guardian");
   s.planet = "ferra";
   const e = s.worlds.ferra.enemies[0];
-  s.position = { x: e.x - 1, z: e.z };
+  s.position = { x: e.x, z: e.z };
   s.worlds.ferra.lastSimAt = 1000;
   return s;
 }
@@ -132,17 +132,17 @@ describe("weapons, armor and server combat", () => {
   });
 });
 describe("planet scanner and weather", () => {
-  it("starts with peaceful, hostile and spherical destinations", () => {
+  it("starts with peaceful and hostile cubic destinations", () => {
     const s = newGame(0);
     expect(s.discovered).toEqual(INITIAL_PLANETS);
     expect(PLANETS.ferra.hostile).toBe(true);
     expect(s.worlds.ferra.enemies).toHaveLength(6);
     expect(s.worlds.home.enemies).toHaveLength(0);
-    expect(planetSize("orbis")).toBe(120);
+    expect(Object.hasOwn(PLANETS, "orbis")).toBe(false);
   });
   it("discovers random unused worlds, gates travel and exhausts the 24-world pool", () => {
     let s = newGame(0);
-    s.position = { x: 21, z: 23 };
+    s.position = { ...ship("home") };
     expect(() =>
       applyAction(s, { type: "travel", planet: "wild-1" }, 1000),
     ).toThrow(/найдите/);
@@ -164,19 +164,19 @@ describe("planet scanner and weather", () => {
   it("generates stable, distinct resource layouts even for matching expedition sizes and biomes", () => {
     const first = nodes("wild-1"),
       other = nodes("wild-13");
-    expect(first).toHaveLength(18);
-    expect(new Set(first.map((n) => `${n.x},${n.z}`)).size).toBe(18);
+    expect(first).toHaveLength(50);
+    expect(new Set(first.map((n) => `${n.x},${n.z}`)).size).toBe(50);
     expect(first).toEqual(nodes("wild-1"));
     expect(first).not.toEqual(other);
     for (const n of first) {
       expect(n.x).toBeGreaterThan(0);
-      expect(n.x).toBeLessThan(planetSize("wild-1") - 1);
+      expect(n.x).toBeLessThan(planetSize("wild-1"));
     }
   });
   it("only scans near a ship and never repeats a discovery", () => {
     const s = newGame(0);
     expect(() => applyAction(s, { type: "scan" }, 1000)).toThrow(/поближе/);
-    s.position = { x: 21, z: 23 };
+    s.position = { ...ship("home") };
     const first = applyAction(s, { type: "scan" }, 1000),
       second = applyAction(first, { type: "scan" }, 1000);
     expect(first.lastDiscovery).not.toBe(second.lastDiscovery);
@@ -195,66 +195,22 @@ describe("planet scanner and weather", () => {
     expect(types).toEqual(["meteor", "wind", "rain", "storm", "hurricane"]);
   });
 });
-describe("complete spherical surface", () => {
-  it("round-trips normal coordinates and remains on a sphere", () => {
-    for (const p of [
-      { x: 0, z: 30 },
-      { x: 119.9, z: 59.9 },
-      { x: 35, z: 0.1 },
-    ]) {
-      const normal = sphereNormal(p);
-      expect(Math.hypot(normal.x, normal.y, normal.z)).toBeCloseTo(1, 12);
-      expect(surfaceDistance(p, sphereCoordinates(normal), true)).toBeLessThan(
-        0.00001,
-      );
-    }
-  });
-  it("wraps the longitude seam and permits both poles", () => {
-    const p = { x: 119.9, z: 30 },
-      lon = (p.x / 120) * Math.PI * 2,
-      next = sphereStep(p, { x: -Math.sin(lon), y: 0, z: Math.cos(lon) }, 0.3);
-    expect(next.x).toBeCloseTo(0.2, 5);
+describe("retired spherical destinations", () => {
+  it("rejects travel to deleted round planets without spending resources", () => {
     const s = newGame(0);
-    s.planet = "orbis";
-    expect(walkable(s, "orbis", 30, 0)).toBe(true);
-    expect(walkable(s, "orbis", 30, 60)).toBe(true);
-    expect(
-      surfaceDistance({ x: 0, z: 30 }, { x: 119, z: 30 }, true),
-    ).toBeCloseTo(1, 6);
-  });
-  it("walks a complete great circle through both poles and returns to its start", () => {
-    let p = { x: 30, z: 30 },
-      t = { x: 0, y: -1, z: 0 };
-    const start = { ...p };
-    let maxY = -1,
-      minY = 1;
-    const count = 2400,
-      step = 120 / count;
-    for (let i = 0; i < count; i++) {
-      const n = sphereNormal(p),
-        next = sphereStep(p, t, step),
-        m = sphereNormal(next),
-        angle = step / SPHERE_RADIUS; // Parallel transport along the great circle: t_new = t*cos(a) - n*sin(a).
-      t = {
-        x: t.x * Math.cos(angle) - n.x * Math.sin(angle),
-        y: t.y * Math.cos(angle) - n.y * Math.sin(angle),
-        z: t.z * Math.cos(angle) - n.z * Math.sin(angle),
-      };
-      p = next;
-      maxY = Math.max(maxY, m.y);
-      minY = Math.min(minY, m.y);
-      expect(Number.isFinite(p.x + p.z)).toBe(true);
-    }
-    expect(maxY).toBeGreaterThan(0.999);
-    expect(minY).toBeLessThan(-0.999);
-    expect(surfaceDistance(start, p, true)).toBeLessThan(0.0001);
-  });
-  it("checks ship proximity on the globe using surface distance rather than the flat chart", () => {
-    let s = newGame(0);
-    s.planet = "orbis";
-    s.position = { x: 28, z: 30 };
-    s = applyAction(s, { type: "travel", planet: "home" }, 1000);
-    expect(s.planet).toBe("orbis");
-    expect(s.flight?.target).toBe("home");
+    s.position = { ...ship("home") };
+    for (const planet of [
+      "orbis",
+      "verdia",
+      "cryonia",
+      "duna",
+      "vulcanis",
+      "aquaria",
+      "mycelion",
+      "granit",
+    ])
+      expect(() => applyAction(s, { type: "travel", planet }, 1000)).toThrow();
+    expect(s.flight).toBeNull();
+    expect(s.inventory.wood).toBe(90);
   });
 });

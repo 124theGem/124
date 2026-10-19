@@ -9,11 +9,13 @@ import {
 } from "../../shared/catalog";
 import { landmarks, terrainSeed, type Landmark } from "../../shared/surface";
 import {
+  cubeUp,
   sphereNormal,
   sphereRadius,
   surfaceDistance,
 } from "../../shared/sphere";
 import {
+  surfacePoint,
   surfaceHeight,
   terrainSurfaceHeight,
   sanctuaryPoint,
@@ -184,9 +186,7 @@ export class SphereNature {
     const ruin = sanctuary(kit, seed),
       anchor = sanctuaryPoint(id);
     this.place(ruin, anchor.x, anchor.z);
-    ruin.position.setLength(
-      sphereRadius(id) + terrainSurfaceHeight(anchor, id),
-    );
+
     this.staticRoot.add(ruin);
     // Water collecting at the foot of the ivory escarpment, with reeds and lily pads.
     if (moist) {
@@ -261,14 +261,13 @@ export class SphereNature {
   private place(object: T.Group, x: number, z: number) {
     const n = sphereNormal({ x, z }, this.id),
       up = new T.Vector3(n.x, n.y, n.z);
-    object.position.copy(
-      up
-        .clone()
-        .multiplyScalar(
-          sphereRadius(this.id) + surfaceHeight({ x, z }, this.id),
-        ),
+    const q = surfacePoint({ x, z }, this.id);
+    object.position.set(q.x, q.y, q.z);
+    const normal = cubeUp(n);
+    object.quaternion.setFromUnitVectors(
+      T.Object3D.DEFAULT_UP,
+      new T.Vector3(normal.x, normal.y, normal.z),
     );
-    object.quaternion.setFromUnitVectors(T.Object3D.DEFAULT_UP, up);
   }
   private fir(theme: SphereTheme) {
     const root = new T.Group();

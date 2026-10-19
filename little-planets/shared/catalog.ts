@@ -47,7 +47,12 @@ export interface PlanetDefinition {
   sphereTheme?: SphereTheme;
 }
 export type GearKind =
-  "sword" | "spear" | "blaster" | "scout" | "guardian" | "aegis";
+  | "sword"
+  | "spear"
+  | "blaster"
+  | "scout"
+  | "guardian"
+  | "aegis";
 export const GEAR: Record<
   GearKind,
   {
@@ -140,9 +145,17 @@ export type BuildingKind =
   | "extractor"
   | "bioextractor";
 export type FurnitureKind =
-  "chair" | "table" | "bed" | "sofa" | "cabinet" | "fireplace" | "rug";
+  | "chair"
+  | "table"
+  | "bed"
+  | "sofa"
+  | "cabinet"
+  | "fireplace"
+  | "rug";
 export const RESOURCE_LABELS: Record<string, string> = {
   wood: "Древесина",
+  composite: "Композит",
+  alloy: "Звёздный сплав",
   stone: "Камень",
   spores: "Споры",
   crystal: "Кристаллы",
@@ -249,143 +262,8 @@ for (const id of ["home", "listoria"] as const) {
   PLANETS[id].rock = 0xc4b99c;
   PLANETS[id].side = 0x92956c;
 }
-PLANETS.orbis = {
-  ...PLANETS.listoria,
-  id: "orbis",
-  name: "Орбис",
-  tag: "Круглый мир · 360°",
-  description:
-    "Большая сферическая планета. Пройдите экватор, полюса и обратную сторону.",
-  size: 120,
-  icon: "🌍",
-  biome: "listoria",
-  color: "#76bcb3",
-};
-PLANETS.orbis.sphereTheme = "meadow";
-export const SPHERE_PLANETS: PlanetId[] = [
-  "orbis",
-  "verdia",
-  "cryonia",
-  "duna",
-  "vulcanis",
-  "aquaria",
-  "mycelion",
-  "granit",
-];
-const spheres: [
-  PlanetId,
-  string,
-  SphereTheme,
-  number,
-  Biome,
-  string,
-  number,
-  string,
-][] = [
-  [
-    "verdia",
-    "Вердия",
-    "forest",
-    150,
-    "listoria",
-    "#458c67",
-    0x53875a,
-    "Леса, папоротники, заросли ягодных кустов и лесные водопады.",
-  ],
-  [
-    "cryonia",
-    "Криония",
-    "ice",
-    160,
-    "mycelia",
-    "#b6ddec",
-    0xc3dfdf,
-    "Снежные квадраты, ледяные скалы, хвойные рощи и синие пещеры.",
-  ],
-  [
-    "duna",
-    "Дюна",
-    "desert",
-    90,
-    "pyros",
-    "#e7bd79",
-    0xd5b079,
-    "Песчаные плато, кактусы, сухие травы и каменные арки.",
-  ],
-  [
-    "vulcanis",
-    "Вулканис",
-    "volcanic",
-    140,
-    "pyros",
-    "#d06f54",
-    0x62575b,
-    "Вулканы с жерлами, текущая лава, базальтовые скалы и дым.",
-  ],
-  [
-    "aquaria",
-    "Аквария",
-    "tropical",
-    180,
-    "listoria",
-    "#69c6ba",
-    0x74b7a0,
-    "Пальмы, мелководные лагуны, тропические кусты и каскады воды.",
-  ],
-  [
-    "mycelion",
-    "Мицелион",
-    "fungal",
-    96,
-    "mycelia",
-    "#a484d5",
-    0x766297,
-    "Гигантские грибы, светящиеся заросли, кристальные пещеры.",
-  ],
-  [
-    "granit",
-    "Гранит",
-    "alpine",
-    200,
-    "listoria",
-    "#9ba99e",
-    0x919e8b,
-    "Самая большая сфера: скальные гряды, альпийские луга и высокие водопады.",
-  ],
-];
-for (const [
-  id,
-  name,
-  sphereTheme,
-  size,
-  biome,
-  color,
-  soil,
-  description,
-] of spheres)
-  PLANETS[id] = {
-    ...PLANETS[biome],
-    id,
-    name,
-    tag: "Круглый мир · 360°",
-    description,
-    sphereTheme,
-    size,
-    biome,
-    color,
-    soil,
-    seed: SPHERE_PLANETS.indexOf(id) * 7919,
-    icon: {
-      forest: "🌲",
-      ice: "❄️",
-      desert: "🌵",
-      volcanic: "🌋",
-      tropical: "🌴",
-      fungal: "🍄",
-      alpine: "⛰️",
-      meadow: "🌾",
-    }[sphereTheme],
-  };
+// Round experimental worlds were retired. All playable worlds are cubes.
+export const SPHERE_PLANETS: PlanetId[] = [];
 for (let i = 1; i <= 24; i++) {
   const biome = (["listoria", "mycelia", "pyros"] as const)[(i * 7) % 3],
     base = PLANETS[biome],
@@ -415,6 +293,15 @@ for (let i = 1; i <= 24; i++) {
     biome,
   };
 }
+for (const p of Object.values(PLANETS))
+  p.sphereTheme =
+    p.id === "home"
+      ? "meadow"
+      : (p.biome ?? p.id) === "mycelia"
+        ? "fungal"
+        : (p.biome ?? p.id) === "pyros"
+          ? "volcanic"
+          : "forest";
 export const INITIAL_PLANETS: PlanetId[] = [
   "home",
   "listoria",
@@ -428,7 +315,7 @@ export function biomeOf(p: PlanetId): Biome {
   return PLANETS[p].biome ?? (p === "home" ? "listoria" : (p as Biome));
 }
 export function isSphere(p: PlanetId) {
-  return !!PLANETS[p]?.sphereTheme;
+  return !!PLANETS[p];
 }
 export function planetDepth(p: PlanetId) {
   return isSphere(p) ? planetSize(p) / 2 : planetSize(p);
@@ -675,10 +562,9 @@ export function planetSize(p: PlanetId) {
   return p === "home" ? HOME_SIZE : (PLANETS[p]?.size ?? SIZE);
 }
 export function beds(p: PlanetId) {
-  if (isSphere(p)) return [];
   return BEDS.map((b) => ({
     x: b.x + (p === "home" ? 10 : 0),
-    z: b.z + (p === "home" ? 10 : 0),
+    z: b.z + (p === "home" ? 2 : -2),
   }));
 }
 export function ship(p: PlanetId) {
@@ -689,7 +575,6 @@ export function ship(p: PlanetId) {
   };
 }
 export function allowedBuildings(p: PlanetId) {
-  if (isSphere(p)) return [];
   return (Object.keys(BUILDINGS) as BuildingKind[]).filter(
     (k) =>
       BUILDINGS[k].zone === (p === "home" ? "home" : "outpost") &&
@@ -709,6 +594,8 @@ export function itemInfo(id: string): {
   icon: string;
   group: string;
 } {
+  if (id === "tool:pickaxe")
+    return { name: "Кирка", icon: "⛏", group: "Инструменты" };
   const [prefix, value] = id.split(":");
   if (prefix === "seed" || prefix === "crop") {
     const p = PLANTS[value];
@@ -822,8 +709,12 @@ export function nodes(planet: PlanetId) {
   if (isSphere(planet))
     return Array.from({ length: 50 }, (_, i) => ({
       id: `node-${i}`,
-      x: (((i * 29 + 8) % 120) / 120) * planetSize(planet),
-      z: ((5 + ((i * 13) % 50)) / 60) * planetDepth(planet),
+      x:
+        (((i * 29 + 8 + ((PLANETS[planet].seed ?? 0) % 113)) % 120) / 120) *
+        planetSize(planet),
+      z:
+        ((5 + ((i * 13 + ((PLANETS[planet].seed ?? 0) % 47)) % 50)) / 60) *
+        planetDepth(planet),
       resource: PLANETS[planet].resource[i % 2],
       variant: i,
     }));

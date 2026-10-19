@@ -1,3 +1,4 @@
+import { ship } from "../shared/catalog";
 import { describe, it, expect } from "vitest";
 import { DatabaseSync } from "node:sqlite";
 import { legacySave } from "./fixtures";
@@ -64,13 +65,13 @@ describe("SQLite persistence and authenticated API", () => {
       state = store.action(
         91,
         state.revision,
-        { type: "move", x: 21, z: 23 },
+        { type: "move", ...ship("home") },
         2000,
       );
       state = store.action(
         91,
         state.revision,
-        { type: "travel", planet: "granit" },
+        { type: "travel", planet: "listoria" },
         3000,
       );
       const action = {
@@ -111,7 +112,7 @@ describe("SQLite persistence and authenticated API", () => {
     store = new Store(file);
     try {
       const migrated = store.get(7);
-      expect(migrated.version).toBe(4);
+      expect(migrated.version).toBe(6);
       expect(migrated.revision).toBe(0);
       store.close();
       store = new Store(file);
@@ -121,7 +122,7 @@ describe("SQLite persistence and authenticated API", () => {
         const raw = verify
           .prepare("SELECT state FROM saves WHERE user_id='7'")
           .get() as { state: string };
-        expect(JSON.parse(raw.state).version).toBe(4);
+        expect(JSON.parse(raw.state).version).toBe(6);
       } finally {
         verify.close();
       }

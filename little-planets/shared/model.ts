@@ -1,4 +1,29 @@
 import {
+  advanceAutomation,
+  programSchema,
+  DEVICE_COSTS,
+  deviceKinds,
+  defaultProgram,
+  RECIPES,
+  localWarehouse,
+  type Automation,
+} from "./automation";
+import {
+  cubeNormal,
+  voxelResolution,
+  blockSolid,
+  blockMaterial,
+  setTerrainEdits,
+  cellKey,
+  voxelCell,
+  voxelLevel,
+  naturalVoxelLevel,
+  VOXEL_STEP,
+  offsetPoint,
+  type TerrainEdits,
+} from "./voxel";
+import { sphereNormal } from "./sphere";
+import {
   beginFlight,
   redirectFlight,
   stepFlight,
@@ -72,9 +97,13 @@ export interface PlanetState {
   salvaged: number[];
   enemies: Enemy[];
   lastSimAt: number;
+  terrain: TerrainEdits;
+  stock: Record<string, number>;
 }
 export interface Save {
-  version: 4;
+  version: 6;
+  automation: Automation;
+  lastMine: number;
   flight: FlightState | null;
   revision: number;
   planet: PlanetId;
@@ -108,6 +137,56 @@ const pilotInput = z
   })
   .strict();
 export const ActionSchema = z.discriminatedUnion("type", [
+  z
+    .object({
+      type: z.literal("terrain"),
+      mode: z.enum(["dig", "place"]),
+      x: z.number().finite().min(0).max(224),
+      z: z.number().finite().min(0).max(224),
+      material: z.enum(["stone", "wood", "obsidian"]).default("stone"),
+      level: z.number().int().min(-4).max(28).optional(),
+    })
+    .strict(),
+  z.object({ type: z.literal("deploy"), kind: z.enum(deviceKinds) }).strict(),
+  z
+    .object({
+      type: z.literal("program"),
+      id: z.string().max(100),
+      program: programSchema,
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("toggleDevice"),
+      id: z.string().max(100),
+      enabled: z.boolean(),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("refineryRecipe"),
+      id: z.string().max(100),
+      recipe: z.enum(["composite", "alloy"]),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("stock"),
+      resource: z.enum([
+        "wood",
+        "stone",
+        "spores",
+        "crystal",
+        "obsidian",
+        "thermal",
+        "composite",
+        "alloy",
+      ]),
+      amount: z.number().int().min(1).max(1000),
+      direction: z.enum(["deposit", "withdraw"]),
+    })
+    .strict(),
+
   z
     .object({
       type: z.literal("pilot"),
@@ -223,8 +302,11 @@ export function newGame(now = Date.now()): Save {
       salvaged: [],
       enemies: spawnEnemies(p),
       lastSimAt: now,
+      terrain: {},
+      stock: {},
     };
   const inventory: Record<string, number> = {
+    "tool:pickaxe": 1,
     wood: 90,
     stone: 75,
     crystal: 20,
@@ -234,11 +316,13 @@ export function newGame(now = Date.now()): Save {
   };
   for (const id of Object.keys(PLANTS)) inventory[`seed:${id}`] = 6;
   return {
-    version: 4,
+    version: 6,
+    automation: { devices: [], lastTick: now, serial: 0 },
+    lastMine: 0,
     flight: null,
     revision: 0,
     planet: "home",
-    position: { x: 18, z: 21 },
+    position: { x: ship("home").x - 1, z: ship("home").z },
     inventory,
     worlds,
     updatedAt: now,
@@ -375,7 +459,7 @@ export function worldEvent(
     );
   const startsAt = world.eventEpoch + 25000 + id * 85000 + (seed % 12000);
   const types = ["meteor", "wind", "rain", "storm", "hurricane"] as const;
-  const type = isSphere(p) ? types[1 + (id % 4)] : types[id % 5],
+  const type = types[id % 5],
     endsAt = startsAt + (type === "meteor" ? 65000 : 40000);
   if (now < startsAt || now > endsAt) return null;
   const size = planetSize(p);
@@ -383,7 +467,9 @@ export function worldEvent(
     z = 3;
   for (let i = 0; i < 160; i++) {
     x = 2 + (hash(seed + i * 17) % (size - 4));
-    z = 2 + (hash(seed + i * 29 + 1) % (size - 4));
+    z =
+      2 +
+      (hash(seed + i * 29 + 1) % Math.max(1, Math.floor(planetDepth(p) - 4)));
     if (
       walkable({ ...save, inside: null }, p, x, z, now) &&
       Math.hypot(x - ship(p).x, z - ship(p).z) > 3
@@ -408,13 +494,7 @@ export function canBuild(
   kind: BuildingKind = "house",
   now = Date.now(),
 ): boolean {
-  if (
-    save.inside ||
-    isSphere(save.planet) ||
-    !Number.isInteger(x) ||
-    !Number.isInteger(z)
-  )
-    return false;
+  if (save.inside || !Number.isInteger(x) || !Number.isInteger(z)) return false;
   const b = BUILDINGS[kind];
   if (!b || b.zone !== (save.planet === "home" ? "home" : "outpost"))
     return false;
@@ -431,7 +511,7 @@ export function canBuild(
         cx < 1 ||
         cz < 1 ||
         cx >= size - 1 ||
-        cz >= size - 1 ||
+        cz >= planetDepth(save.planet) - 1 ||
         waterCell(cx, cz) ||
         buildingAt(save.worlds[save.planet], cx, cz) ||
         beds(save.planet).some((p) => p.x === cx && p.z === cz) ||
@@ -504,7 +584,7 @@ function nearby(save: Save, x: number, z: number, distance = 2.7) {
     surfaceDistance(
       save.position,
       { x, z },
-      isSphere(save.planet) ? save.planet : false,
+      !save.inside && isSphere(save.planet) ? save.planet : false,
     ) > distance
   )
     throw new RuleError("Подойдите поближе к объекту.");
@@ -514,11 +594,14 @@ export function applyAction(
   raw: unknown,
   now = Date.now(),
 ): Save {
+  for (const [p, w] of Object.entries(original.worlds))
+    setTerrainEdits(p as PlanetId, w.terrain);
   const action = ActionSchema.parse(raw),
     save = structuredClone(original),
     world = save.worlds[save.planet];
   if (save.flight && !["pilot", "course", "land"].includes(action.type))
     throw new RuleError("Сначала завершите полёт и посадку.");
+  advanceAutomation(save, now);
   if (advanceEnemies(save, now)) {
     save.revision++;
     save.updatedAt = now;
@@ -538,6 +621,166 @@ export function applyAction(
   )
     throw new RuleError("Сначала выйдите из дома.");
   switch (action.type) {
+    case "terrain": {
+      if (save.flight || save.inside)
+        throw new RuleError("Выйдите на поверхность.");
+      if (!walkable(save, save.planet, action.x, action.z, now))
+        throw new RuleError("Вне поверхности.");
+      nearby(save, action.x, action.z, 3.2);
+      if (now - save.lastMine < 250)
+        throw new RuleError("Дождитесь следующего взмаха.");
+      const n = sphereNormal(action, save.planet),
+        c = voxelCell(n, save.planet),
+        k = cellKey(n, save.planet);
+      const h = voxelLevel(c.normal, save.planet, world.terrain);
+      const natural = Math.round(
+          naturalVoxelLevel(c.normal, save.planet) / VOXEL_STEP,
+        ),
+        level =
+          action.level ??
+          Math.round(h / VOXEL_STEP) + (action.mode === "place" ? 1 : 0),
+        blocks = { ...(world.terrain[k]?.blocks ?? {}) },
+        removed = new Set(world.terrain[k]?.removed ?? []);
+      if (action.mode === "dig") {
+        if (!save.inventory["tool:pickaxe"])
+          throw new RuleError("Нужна кирка.");
+        if (level <= -4) throw new RuleError("Неразрушимое ядро.");
+        if (!blockSolid(c.normal, save.planet, level, world.terrain))
+          throw new RuleError("Блок уже разрушен.");
+        const resource = blockMaterial(
+          c.normal,
+          save.planet,
+          level,
+          world.terrain,
+        );
+        save.inventory[resource] = (save.inventory[resource] ?? 0) + 1;
+        removed.add(level);
+        delete blocks[String(level)];
+      } else {
+        if (level > 28) throw new RuleError("Достигнута предельная высота.");
+        if (blockSolid(c.normal, save.planet, level, world.terrain))
+          throw new RuleError("Здесь уже есть блок.");
+        if (!(save.inventory[action.material] > 0))
+          throw new RuleError("Не хватает материала.");
+        // Placed blocks must touch the terrain/another block; no floating placement.
+        const connected =
+          blockSolid(c.normal, save.planet, level - 1, world.terrain) ||
+          blockSolid(c.normal, save.planet, level + 1, world.terrain) ||
+          [
+            [1, 0],
+            [-1, 0],
+            [0, 1],
+            [0, -1],
+          ].some(([di, dj]) => {
+            const near = voxelCell(
+              cubeNormal(
+                c.face,
+                -1 + ((c.i + 0.5 + di) * 2) / voxelResolution(save.planet),
+                -1 + ((c.j + 0.5 + dj) * 2) / voxelResolution(save.planet),
+              ),
+              save.planet,
+            );
+            return blockSolid(near.normal, save.planet, level, world.terrain);
+          });
+        if (!connected)
+          throw new RuleError(
+            "Блок должен примыкать к земле или другому блоку.",
+          );
+        save.inventory[action.material]--;
+        removed.delete(level);
+        blocks[String(level)] = action.material;
+      }
+      let top = 28;
+      while (
+        top > -4 &&
+        !(removed.has(top) ? false : top <= natural || blocks[String(top)])
+      )
+        top--;
+      world.terrain[k] = {
+        height: Math.round(top * VOXEL_STEP * 100) / 100,
+        material: blocks[String(top)] ?? "stone",
+        blocks,
+        removed: [...removed].sort((a, b) => a - b),
+      };
+      save.lastMine = now;
+      break;
+    }
+    case "deploy": {
+      if (save.automation.devices.length >= 80)
+        throw new RuleError("Лимит: 80 устройств.");
+      if (
+        ["warehouse", "refinery"].includes(action.kind) &&
+        save.automation.devices.some(
+          (d) =>
+            d.kind === action.kind &&
+            d.planet === save.planet &&
+            surfaceDistance(d, save.position, save.planet) < 3,
+        )
+      )
+        throw new RuleError("Здесь уже есть станция.");
+      charge(save, DEVICE_COSTS[action.kind]);
+      const program = defaultProgram(action.kind, save.planet);
+      save.automation.devices.push({
+        id: `device-${++save.automation.serial}`,
+        kind: action.kind,
+        planet: save.planet,
+        ...save.position,
+        cargo: {},
+        capacity: 30,
+        program,
+        pc: program.entry,
+        enabled: true,
+        status: "Готов",
+        cooldown: 0,
+        transit: null,
+        recipe: "composite",
+        job: null,
+      });
+      break;
+    }
+    case "program": {
+      const d = save.automation.devices.find((d) => d.id === action.id);
+      if (!d || ["warehouse", "refinery"].includes(d.kind))
+        throw new RuleError("Робот не найден.");
+      if (
+        action.program.nodes.some(
+          (n) => !save.discovered.includes(n.planet as PlanetId),
+        )
+      )
+        throw new RuleError("Неизвестная планета в программе.");
+      d.program = action.program;
+      d.pc = action.program.entry;
+      d.cooldown = 0;
+      break;
+    }
+    case "toggleDevice": {
+      const d = save.automation.devices.find((d) => d.id === action.id);
+      if (!d) throw new RuleError("Устройство не найдено.");
+      d.enabled = action.enabled;
+      break;
+    }
+    case "refineryRecipe": {
+      const d = save.automation.devices.find(
+        (d) => d.id === action.id && d.kind === "refinery",
+      );
+      if (!d) throw new RuleError("Станция не найдена.");
+      d.recipe = action.recipe;
+      break;
+    }
+    case "stock": {
+      const w = localWarehouse(save, save.planet);
+      if (!w) throw new RuleError("Постройте местный склад.");
+      nearby(save, w.x, w.z, 3.5);
+      const from =
+          action.direction === "deposit" ? save.inventory : world.stock,
+        to = action.direction === "deposit" ? world.stock : save.inventory;
+      if ((from[action.resource] ?? 0) < action.amount)
+        throw new RuleError("Не хватает ресурса.");
+      from[action.resource] -= action.amount;
+      to[action.resource] = (to[action.resource] ?? 0) + action.amount;
+      break;
+    }
+
     case "pilot": {
       if (!save.flight) throw new RuleError("Корабль на поверхности.");
       const total = action.commands.reduce((n, c) => n + c.dt, 0);
@@ -569,7 +812,7 @@ export function applyAction(
       save.planet = save.flight.target;
       save.flight = null;
       const pad = ship(save.planet);
-      save.position = { x: pad.x - 2, z: pad.z };
+      save.position = offsetPoint(pad, -1, 0, save.planet);
       save.worlds[save.planet].lastSimAt = now;
       if (save.planet === "home") save.health = 100;
       break;
@@ -897,13 +1140,63 @@ const worldSchema = z.object({
     }),
   ),
   lastSimAt: z.number().finite(),
+  terrain: z.record(
+    z.string(),
+    z.object({
+      height: z.number().min(-1.8).max(12.6),
+      material: z.enum(["stone", "wood", "obsidian"]),
+      blocks: z
+        .record(z.string(), z.enum(["stone", "wood", "obsidian"]))
+        .optional(),
+      removed: z.array(z.number().int().min(-3).max(28)).max(32).optional(),
+    }),
+  ),
+  stock: z.record(z.string(), z.number().int().nonnegative()),
 });
 const positionSchema = z.object({
   x: z.number().finite().nonnegative(),
   z: z.number().finite().nonnegative(),
 });
 const saveSchema = z.object({
-  version: z.literal(4),
+  version: z.literal(6),
+  lastMine: z.number().finite(),
+  automation: z.object({
+    lastTick: z.number().finite(),
+    serial: z.number().int().nonnegative(),
+    devices: z
+      .array(
+        z.object({
+          id: z.string(),
+          kind: z.enum(deviceKinds),
+          planet,
+          x: z.number().finite(),
+          z: z.number().finite(),
+          cargo: z.record(z.string(), z.number().int().nonnegative()),
+          capacity: z.number().positive(),
+          program: programSchema,
+          pc: z.string(),
+          enabled: z.boolean(),
+          status: z.string(),
+          cooldown: z.number().finite(),
+          transit: z
+            .object({
+              from: planet,
+              to: planet,
+              started: z.number().finite(),
+              ends: z.number().finite(),
+            })
+            .nullable(),
+          recipe: z.enum(["composite", "alloy"]),
+          job: z
+            .object({
+              recipe: z.enum(["composite", "alloy"]),
+              ends: z.number().finite(),
+            })
+            .nullable(),
+        }),
+      )
+      .max(80),
+  }),
   flight: z
     .object({
       origin: planet,
@@ -966,7 +1259,7 @@ const saveSchema = z.object({
 export function parseSave(raw: string): Save {
   const data = JSON.parse(raw);
   // Prototype builds deliberately start a new world; no version-to-version migration.
-  if ([1, 2, 3].includes(data?.version)) return newGame();
+  if ([1, 2, 3, 4, 5].includes(data?.version)) return newGame();
   const save = saveSchema.parse(data) as Save;
   for (const p of Object.keys(PLANETS) as PlanetId[])
     if (!save.worlds[p]) throw new Error("Отсутствует планета");
@@ -1050,7 +1343,7 @@ export function spawnEnemies(p: PlanetId): Enemy[] {
     result: Enemy[] = [];
   for (let i = 0; i < 6; i++) {
     let x = 3 + ((i * 7 + 3 + (PLANETS[p].seed ?? 0)) % (size - 6)),
-      z = 3 + ((i * 5 + 4) % (size - 6));
+      z = 2 + ((i * 5 + 4) % Math.max(1, Math.floor(planetDepth(p) - 4)));
     for (let n = 0; n < 100; n++) {
       if (
         !waterCell(x, z) &&
@@ -1060,7 +1353,7 @@ export function spawnEnemies(p: PlanetId): Enemy[] {
       )
         break;
       x = 2 + ((x + 3) % (size - 4));
-      z = 2 + ((z + 7) % (size - 4));
+      z = 2 + ((z + 7) % Math.max(1, Math.floor(planetDepth(p) - 4)));
     }
     const kind = (["beetle", "drone", "stalker"] as const)[i % 3],
       maxHp = kind === "stalker" ? 65 : kind === "drone" ? 42 : 35;
@@ -1082,12 +1375,30 @@ export function spawnEnemies(p: PlanetId): Enemy[] {
 /** Only connected play advances combat; offline time never kills the player. */
 export function advanceEnemies(save: Save, now: number): boolean {
   const world = save.worlds[save.planet];
+  // Respawns run on every world, including those with deployed hunters.
+  for (const w of Object.values(save.worlds))
+    for (const e of w.enemies)
+      if (e.hp <= 0 && e.defeatedAt !== null && now - e.defeatedAt >= 30000) {
+        e.hp = e.maxHp;
+        e.defeatedAt = null;
+        e.x = e.homeX;
+        e.z = e.homeZ;
+        e.lastAttack = now;
+      }
   if (save.flight || save.inside || !PLANETS[save.planet].hostile) return false;
   const dt = Math.max(0, Math.min(1.5, (now - world.lastSimAt) / 1000));
   world.lastSimAt = now;
   for (const [i, e] of world.enemies.entries()) {
-    if (e.hp <= 0) continue;
-    const distance = Math.hypot(e.x - save.position.x, e.z - save.position.z),
+    if (e.hp <= 0) {
+      if (e.defeatedAt !== null && now - e.defeatedAt >= 30000) {
+        e.hp = e.maxHp;
+        e.defeatedAt = null;
+        e.x = e.homeX;
+        e.z = e.homeZ;
+        e.lastAttack = now;
+      } else continue;
+    }
+    const distance = surfaceDistance(e, save.position, save.planet),
       chasing = distance < 9;
     const target = chasing
       ? save.position
@@ -1106,7 +1417,7 @@ export function advanceEnemies(save: Save, now: number): boolean {
       if (walkable(save, save.planet, e.x, z, now)) e.z = z;
     }
     if (
-      Math.hypot(e.x - save.position.x, e.z - save.position.z) < 1.8 &&
+      surfaceDistance(e, save.position, save.planet) < 1.8 &&
       now - e.lastAttack >= 1200
     ) {
       const defense = save.equipment.armor

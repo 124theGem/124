@@ -1,5 +1,6 @@
 import * as T from "three";
 import { Models } from "./Models";
+import { spherePoint, sphereUp } from "./SphereWorld";
 import { terrainHeight } from "../../shared/catalog";
 import type { Save } from "../../shared/model";
 export class Enemies {
@@ -61,22 +62,15 @@ export class Enemies {
       if (!a) continue;
       a.body.visible = e.hp > 0;
       if (!a.body.visible) continue;
-      const h = terrainHeight(e.x, e.z);
-      a.body.position.lerp(
-        new T.Vector3(
-          e.x,
-          h +
-            0.05 +
-            (e.kind === "drone"
-              ? 0.6 + Math.sin(time * 3) * 0.12
-              : Math.abs(Math.sin(time * 5)) * 0.035),
-          e.z,
-        ),
-        Math.min(1, dt * 10),
+      const target = spherePoint(
+        e,
+        e.kind === "drone" ? 0.8 : 0.05,
+        save.planet,
       );
-      a.body.rotation.y = Math.atan2(
-        save.position.x - e.x,
-        save.position.z - e.z,
+      a.body.position.lerp(target, Math.min(1, dt * 10));
+      a.body.quaternion.setFromUnitVectors(
+        T.Object3D.DEFAULT_UP,
+        sphereUp(e, save.planet),
       );
       a.bar.scale.x = e.hp / e.maxHp;
       a.bar.position.x = -(1 - e.hp / e.maxHp) * 0.5;

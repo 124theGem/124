@@ -1,3 +1,6 @@
+import { Occlusion } from "../world/Occlusion";
+import { AutomationActors } from "../world/AutomationActors";
+import { AutomationPanel } from "../ui/AutomationPanel";
 import { ArtRenderer } from "../world/ArtRenderer";
 import { surfaceHeight } from "../../shared/voxel";
 import { SpaceScene } from "../world/SpaceScene";
@@ -86,9 +89,16 @@ type Selection = {
     | "meteor"
     | "enemy";
   id?: string;
+  level?: number;
 };
 const wait = (ms: number) => new Promise<void>((done) => setTimeout(done, ms));
 export class Game {
+  private automationPanel?: AutomationPanel;
+  private occlusion = new Occlusion();
+  private machines = new AutomationActors(new Models());
+  private terrainMode: "dig" | "place" = "dig";
+  private terrainMaterial: "stone" | "wood" | "obsidian" = "stone";
+  private buildOnCube?: BuildingKind;
   private scene = new T.Scene();
   private sky = new StarSky();
   private space?: SpaceScene;
@@ -191,6 +201,7 @@ export class Game {
     const fill = new T.DirectionalLight(0xb6c6a4, 0.3);
     fill.position.set(25, 8, -15);
     this.scene.add(fill);
+    this.scene.add(this.machines.root);
     this.scene.add(
       this.avatar.root,
       this.marker,
@@ -210,6 +221,16 @@ export class Game {
       this.input.clear();
       fn();
     };
+    const automation = (this.automationPanel = new AutomationPanel(
+      this.ui,
+      () => store.state,
+      async (action) => {
+        await this.flushMove();
+        await store.action(action);
+        this.machines.update(store.state, this.previousTime / 1000);
+      },
+    ));
+    this.ui.onAutomation = () => menu(() => automation.open());
     this.ui.onInventory = () => menu(() => this.ui.inventory(store.state));
     this.ui.onCraftMenu = () => menu(() => this.ui.craft(store.state));
     this.ui.onOpenRecipe = (id) =>
@@ -388,7 +409,7 @@ export class Game {
         value: {
           project: (x: number, z: number, y = 0) => {
             const p = (
-              isSphere(store.state.planet)
+              !store.state.inside && isSphere(store.state.planet)
                 ? this.spherePoint({ x, z }, y)
                 : new T.Vector3(x, this.height(x, z) + y, z)
             ).project(this.camera);
@@ -431,7 +452,13 @@ export class Game {
               .applyQuaternion(this.avatar.root.quaternion)
               .toArray(),
             sphereForward: this.sphereForward.toArray(),
-            sky: this.sky.stats,
+            sky: {
+              ...this.sky.stats,
+              origin: this.sky.root.position.toArray(),
+            },
+            weatherOrigin: this.weather.root.position.toArray(),
+            cameraUp: this.camera.up.toArray(),
+            cameraQuaternion: this.camera.quaternion.toArray(),
             sphere:
               this.view instanceof SphereWorld
                 ? {
@@ -565,7 +592,7 @@ export class Game {
       this.scene.fog.near = overview ? 85 : 28;
       this.scene.fog.far = overview ? 180 : 100;
     }
-    this.camera.up.copy(n);
+    this.camera.up.lerp(n, blend).normalize();
     this.camera.position.lerp(position, blend);
     const half =
       (overview ? (sphereRadius(this.store.state.planet) + 11) * 1.08 : 8.2) *
@@ -577,7 +604,9 @@ export class Game {
     this.camera.top = this.cameraHalf;
     this.camera.bottom = -this.cameraHalf;
     this.camera.updateProjectionMatrix();
-    this.camera.lookAt(target);
+    const desired = this.camera.clone();
+    desired.lookAt(target);
+    this.camera.quaternion.slerp(desired.quaternion, blend);
     this.camera.updateMatrixWorld();
   }
   private moveSphere(dt: number) {
@@ -595,7 +624,8 @@ export class Game {
         .addScaledVector(this.sphereForward, input.z);
       this.mode = "explore";
     } else if (this.sphereDestination) {
-      const goal = this.sphereUp(this.sphereDestination);
+      const raw = sphereNormal(this.sphereDestination, this.store.state.planet);
+      const goal = new T.Vector3(raw.x, raw.y, raw.z);
       if (
         surfaceDistance(
           this.position,
@@ -609,7 +639,22 @@ export class Game {
         done?.();
         return false;
       }
-      direction.copy(goal).addScaledVector(up, -goal.dot(up));
+      const current = sphereNormal(this.position, this.store.state.planet),
+        r = sphereRadius(this.store.state.planet);
+      const a = r / Math.max(Math.abs(raw.x), Math.abs(raw.y), Math.abs(raw.z)),
+        b =
+          r /
+          Math.max(
+            Math.abs(current.x),
+            Math.abs(current.y),
+            Math.abs(current.z),
+          );
+      direction.set(
+        raw.x * a - current.x * b,
+        raw.y * a - current.y * b,
+        raw.z * a - current.z * b,
+      );
+      direction.addScaledVector(up, -direction.dot(up));
     }
     if (direction.lengthSq() < 1e-8) return false;
     direction.normalize();
@@ -637,7 +682,7 @@ export class Game {
   };
   private updateCamera(dt: number, instant = false) {
     if (this.flying) return;
-    if (isSphere(this.store.state.planet)) {
+    if (!this.store.state.inside && isSphere(this.store.state.planet)) {
       this.updateSphereCamera(dt, instant);
       return;
     }
@@ -726,7 +771,7 @@ export class Game {
           distance = next;
         } else if (moved && !this.flying) {
           this.theta -= delta * 0.007;
-          if (isSphere(this.store.state.planet))
+          if (!this.store.state.inside && isSphere(this.store.state.planet))
             this.sphereForward
               .applyAxisAngle(this.sphereUp(this.position), -delta * 0.007)
               .normalize();
@@ -763,16 +808,68 @@ export class Game {
       this.camera,
     );
     if (this.view instanceof SphereWorld) {
-      const point = this.view.pick(this.raycaster.ray);
+      const enemyId = this.enemies?.pick(this.raycaster.ray);
+      const enemy = this.store.state.worlds[
+        this.store.state.planet
+      ].enemies.find((e) => e.id === enemyId && e.hp > 0);
+      if (enemy) {
+        this.approach({ ...enemy, type: "enemy" }, () => this.showContext());
+        return;
+      }
+      const point = this.view.pick(
+        this.raycaster.ray,
+        this.terrainMode === "place",
+      );
       if (!point) return;
       let selected: Selection = { ...point, type: "ground" };
       const pad = ship(this.store.state.planet),
         node = nodes(this.store.state.planet).find(
           (n) => surfaceDistance(point, n, this.store.state.planet) < 1.1,
         );
-      if (surfaceDistance(point, pad, this.store.state.planet) < 2.6)
+      const building = this.store.state.worlds[
+        this.store.state.planet
+      ].buildings.find(
+        (b) => surfaceDistance(point, b, this.store.state.planet) < 1.6,
+      );
+      if (this.terrainMode === "place" || this.buildOnCube) {
+        this.approach(selected, () => this.showContext());
+        return;
+      }
+      const meteor = worldEvent(
+        this.store.state,
+        this.store.state.planet,
+        this.store.now(),
+      );
+      if (
+        meteor?.type === "meteor" &&
+        !meteor.claimed &&
+        this.store.now() >= meteor.impactAt &&
+        surfaceDistance(point, meteor, this.store.state.planet) < 1.2
+      )
+        selected = {
+          x: meteor.x,
+          z: meteor.z,
+          type: "meteor",
+          id: String(meteor.id),
+        };
+      else if (building)
+        selected = {
+          ...buildingCenter(building),
+          type: "building",
+          id: building.id,
+        };
+      else if (surfaceDistance(point, pad, this.store.state.planet) < 1.5)
         selected = { ...pad, type: "ship" };
-      else if (node)
+      else if (
+        beds(this.store.state.planet).find(
+          (b) => surfaceDistance(point, b, this.store.state.planet) < 0.7,
+        )
+      ) {
+        const b = beds(this.store.state.planet).find(
+          (b) => surfaceDistance(point, b, this.store.state.planet) < 0.7,
+        )!;
+        selected = { ...b, type: "bed" };
+      } else if (node)
         selected = { x: node.x, z: node.z, type: "node", id: node.id };
       this.approach(selected, () => this.showContext());
       return;
@@ -857,7 +954,7 @@ export class Game {
     this.clearSelection();
     this.selected = s;
     this.sphereDestination = undefined;
-    if (isSphere(this.store.state.planet)) {
+    if (!this.store.state.inside && isSphere(this.store.state.planet)) {
       this.sphereDestination = { x: s.x, z: s.z };
       this.arrived = done;
       this.path = [];
@@ -883,7 +980,7 @@ export class Game {
     }
   }
   private selectNearestBed() {
-    if (this.store.state.inside || isSphere(this.store.state.planet)) return;
+    if (this.store.state.inside) return;
     const b = [...beds(this.store.state.planet)].sort(
       (a, b) =>
         Math.hypot(a.x - this.position.x, a.z - this.position.z) -
@@ -973,12 +1070,58 @@ export class Game {
             : undefined,
         !!b.resource && !moduleAmount(state, b, now),
       );
-    } else this.ui.hideContext();
+    } else if (s.type === "ground")
+      this.ui.context(
+        this.buildOnCube
+          ? BUILDINGS[this.buildOnCube].name
+          : this.terrainMode === "dig"
+            ? "Кирка · блок земли"
+            : "Строительство блока",
+        this.buildOnCube
+          ? "Разместить постройку здесь."
+          : this.terrainMode === "dig"
+            ? "Разрушить один блок. Материал попадёт в рюкзак. Неразрушимое ядро на глубине 1.8 м."
+            : `Материал: ${RESOURCE_LABELS[this.terrainMaterial]} · в рюкзаке ${state.inventory[this.terrainMaterial] ?? 0}`,
+        this.buildOnCube
+          ? "Построить"
+          : this.terrainMode === "dig"
+            ? "⛏ Разрушить блок"
+            : "▣ Поставить блок",
+      );
+    else this.ui.hideContext();
   }
   private interact() {
     const s = this.selected;
     if (!s || this.busy) return;
     const state = this.store.state;
+    if (s.type === "ground") {
+      if (this.buildOnCube)
+        void this.perform(
+          {
+            type: "build",
+            kind: this.buildOnCube,
+            x: Math.round(s.x),
+            z: Math.round(s.z),
+            rotation: 0,
+          },
+          "tool",
+          "Постройка установлена.",
+        );
+      else
+        void this.perform(
+          {
+            type: "terrain",
+            mode: this.terrainMode,
+            material: this.terrainMaterial,
+            x: s.x,
+            z: s.z,
+            level: s.level,
+          },
+          "tool",
+          this.terrainMode === "dig" ? "Блок добыт." : "Блок установлен.",
+        );
+      return;
+    }
     if (s.type === "enemy") {
       void this.attack(s.id);
       return;
@@ -1119,7 +1262,50 @@ export class Game {
     }
   }
   private startBuild(kind?: BuildingKind | FurnitureKind) {
-    if (this.busy || this.flying || isSphere(this.store.state.planet)) return;
+    if (!this.store.state.inside && !this.flying && !this.busy) {
+      this.ui.panel(
+        `<span class="eyebrow">ЗЕМЛЯ И ПОСТРОЙКИ</span><h2>Кирка и строительство</h2><p>Выберите действие, закройте окно и нажмите участок рядом с персонажем. На выбранном участке появится кнопка действия.</p><button id="tool-dig">⛏ Кирка: разрушать блоки</button><h3>Установка блоков</h3><div class="device-palette">${(["stone", "wood", "obsidian"] as const).map((r) => `<button data-terrain="${r}">${RESOURCE_LABELS[r]} · ${this.store.state.inventory[r] ?? 0}</button>`).join("")}</div><h3>Постройки</h3><div class="device-palette">${allowedBuildings(
+          this.store.state.planet,
+        )
+          .map(
+            (k) =>
+              `<button data-cube-building="${k}">${BUILDINGS[k].name}</button>`,
+          )
+          .join("")}</div>`,
+      );
+      this.ui.button("tool-dig", () => {
+        this.terrainMode = "dig";
+        this.buildOnCube = undefined;
+        this.ui.close();
+        this.ui.toast("Выберите блок рядом с собой.");
+      });
+      this.ui
+        .el("modal-content")
+        .querySelectorAll<HTMLButtonElement>("[data-terrain]")
+        .forEach(
+          (b) =>
+            (b.onclick = () => {
+              this.terrainMode = "place";
+              this.terrainMaterial = b.dataset.terrain as "stone";
+              this.buildOnCube = undefined;
+              this.ui.close();
+              this.ui.toast("Выберите участок для блока.");
+            }),
+        );
+      this.ui
+        .el("modal-content")
+        .querySelectorAll<HTMLButtonElement>("[data-cube-building]")
+        .forEach(
+          (b) =>
+            (b.onclick = () => {
+              this.buildOnCube = b.dataset.cubeBuilding as BuildingKind;
+              this.ui.close();
+              this.ui.toast("Выберите участок для постройки.");
+            }),
+        );
+      return;
+    }
+    if (this.busy || this.flying) return;
     this.ui.close();
     this.clearSelection();
     this.path = [];
@@ -1262,7 +1448,7 @@ export class Game {
       (this.grid.material as T.Material).dispose();
       this.grid.removeFromParent();
     }
-    if (isSphere(this.store.state.planet)) {
+    if (!this.store.state.inside && isSphere(this.store.state.planet)) {
       this.grid = undefined;
       return;
     }
@@ -1331,11 +1517,14 @@ export class Game {
             Math.sin(longitude) * n.y,
           )
           .normalize();
+        this.sphereForward.addScaledVector(n, -this.sphereForward.dot(n));
+        if (this.sphereForward.lengthSq() < 0.01)
+          this.sphereForward.set(n.y === 0 ? 0 : 1, n.y === 0 ? 1 : 0, 0);
+        this.sphereForward.normalize();
         this.sphereHeading.copy(this.sphereForward);
       } else
         this.view = new Planet(state.planet, this.kit, state, this.store.now());
-      if (!isSphere(state.planet))
-        this.life = new Life(this.kit, state.planet, state);
+      this.life = new Life(this.kit, state.planet, state);
       this.atmosphere = new Atmosphere(this.kit);
       if (this.life) this.scene.add(this.life.root);
       this.scene.add(this.atmosphere.root);
@@ -1353,7 +1542,8 @@ export class Game {
     this.scene.add(this.view.root);
     this.sky.root.visible = !state.inside;
     if (!state.inside) this.sky.setPlanet(state.planet);
-    if (!isSphere(state.planet)) this.avatar.root.quaternion.identity();
+    if (state.inside || !isSphere(state.planet))
+      this.avatar.root.quaternion.identity();
     this.position = { ...state.position };
     this.sphereDestination = undefined;
     this.avatar.equip(state.equipment.weapon, state.equipment.armor);
@@ -1421,9 +1611,10 @@ export class Game {
       this.flightSamples = [];
       const source = this.view as Planet | SphereWorld,
         base = source.ship.position.clone(),
-        up = isSphere(this.store.state.planet)
-          ? this.sphereUp(ship(this.store.state.planet))
-          : new T.Vector3(0, 1, 0);
+        up =
+          !this.store.state.inside && isSphere(this.store.state.planet)
+            ? this.sphereUp(ship(this.store.state.planet))
+            : new T.Vector3(0, 1, 0);
       this.atmosphere?.startLaunch(base.x, base.y, base.z, up);
       this.audio.play("launch");
       await this.animateFlight(1600, (t) => {
@@ -1607,7 +1798,7 @@ export class Game {
   private saveLocalOnExit() {
     try {
       localStorage.setItem(
-        "little-planets-v4",
+        "little-planets-v6",
         JSON.stringify({ ...this.store.state, position: { ...this.position } }),
       );
     } catch {}
@@ -1628,7 +1819,8 @@ export class Game {
       this.slowTime = 0;
     }
     let moving = false;
-    if (isSphere(this.store.state.planet)) moving = this.moveSphere(dt);
+    if (!this.store.state.inside && isSphere(this.store.state.planet))
+      moving = this.moveSphere(dt);
     else if (!this.busy && !this.ui.modalOpen && this.mode !== "build") {
       let input = this.input.read();
       if (Math.hypot(input.x, input.z) > 0.08) {
@@ -1681,7 +1873,7 @@ export class Game {
       moving = Math.hypot(input.x, input.z) > 0.08;
       if (moving) this.avatar.root.rotation.y = Math.atan2(input.x, input.z);
     }
-    if (isSphere(this.store.state.planet)) {
+    if (!this.store.state.inside && isSphere(this.store.state.planet)) {
       const up = this.sphereUp(this.position),
         heading = this.sphereHeading
           .clone()
@@ -1689,9 +1881,10 @@ export class Game {
           .normalize(),
         right = new T.Vector3().crossVectors(up, heading).normalize();
       this.avatar.root.position.copy(this.spherePoint(this.position, 0.06));
-      this.avatar.root.quaternion.setFromRotationMatrix(
+      const rotation = new T.Quaternion().setFromRotationMatrix(
         new T.Matrix4().makeBasis(right, up, heading),
       );
+      this.avatar.root.quaternion.slerp(rotation, 1 - Math.exp(-10 * dt));
     } else {
       this.avatar.root.position.set(
         this.position.x,
@@ -1713,7 +1906,7 @@ export class Game {
       this.target.y + 26,
       this.target.z + 16,
     );
-    if (isSphere(this.store.state.planet))
+    if (!this.store.state.inside && isSphere(this.store.state.planet))
       this.sun.position
         .copy(this.avatar.root.position)
         .addScaledVector(this.sphereUp(this.position), 30)
@@ -1745,6 +1938,7 @@ export class Game {
       if (this.view instanceof Planet || this.view instanceof SphereWorld)
         this.view.updateCrops(this.store.state, this.store.now());
       this.ui.update(this.store.state, this.store.now());
+      this.automationPanel?.refresh();
       this.ui.el("audio-toggle").textContent = this.audio.muted ? "🔇" : "♫";
       this.ui.minimap(
         this.store.state,
@@ -1766,11 +1960,23 @@ export class Game {
       !this.pulsePending &&
       !this.busy &&
       !this.flying &&
-      PLANETS[this.store.state.planet].hostile
+      (PLANETS[this.store.state.planet].hostile ||
+        this.store.state.automation.devices.length > 0)
     ) {
       this.lastCombatPoll = time;
       void this.combatPulse();
     }
+    this.machines.root.visible = !this.store.state.inside;
+    this.machines.update(this.store.state, time / 1000);
+    this.occlusion.update(
+      this.view.root,
+      this.avatar.root.position
+        .clone()
+        .addScaledVector(this.sphereUp(this.position), 0.8),
+      this.camera,
+    );
+    this.occlusion.patch(this.machines.root);
+    if (this.life) this.occlusion.patch(this.life.root);
     this.sky.update(this.camera);
     if (this.art) this.art.render(!this.lowQuality);
     else this.renderer.render(this.scene, this.camera);
@@ -1782,6 +1988,8 @@ export class Game {
     this.audio.dispose();
     this.enemies?.dispose();
     this.weather.dispose();
+    this.machines.dispose();
+    this.occlusion.dispose();
     this.art?.dispose();
     this.sky.dispose();
     this.space?.dispose();
