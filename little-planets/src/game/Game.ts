@@ -1,3 +1,5 @@
+import { ArtRenderer } from "../world/ArtRenderer";
+import { surfaceHeight } from "../../shared/voxel";
 import { SpaceScene } from "../world/SpaceScene";
 import { StarSky } from "../world/StarSky";
 import {
@@ -117,7 +119,7 @@ export class Game {
   private input: Input;
   private abort = new AbortController();
   private raycaster = new T.Raycaster();
-  private sun = new T.DirectionalLight(0xffedcb, 2.6);
+  private sun = new T.DirectionalLight(0xfff2db, 2.9);
   private target = new T.Vector3();
   private position: { x: number; z: number };
   private theta = 0.73;
@@ -142,6 +144,7 @@ export class Game {
     new T.EdgesGeometry(new T.BoxGeometry(0.98, 0.08, 0.98)),
     new T.LineBasicMaterial({ color: 0xffdc8c }),
   );
+  private art?: ArtRenderer;
   private lowQuality = false;
   private adaptiveRatio = Math.min(devicePixelRatio, 1.5);
   private slowTime = 0;
@@ -165,13 +168,16 @@ export class Game {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = T.PCFSoftShadowMap;
     this.renderer.toneMapping = T.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.toneMappingExposure = 1.0;
     document.querySelector("#app")!.append(this.renderer.domElement);
     this.ui = new UI(store.local);
     this.input = new Input();
-    this.scene.add(new T.HemisphereLight(0xc8e4ff, 0x53614f, 1.6));
+    this.scene.add(new T.HemisphereLight(0xdce8df, 0x374335, 1.05));
     this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(1024, 1024);
+    this.sun.shadow.mapSize.set(
+      devicePixelRatio < 1 ? 1024 : 2048,
+      devicePixelRatio < 1 ? 1024 : 2048,
+    );
     Object.assign(this.sun.shadow.camera, {
       left: -16,
       right: 16,
@@ -180,9 +186,9 @@ export class Game {
       near: 1,
       far: 80,
     });
-    this.sun.shadow.normalBias = 0.04;
+    this.sun.shadow.normalBias = 0.025;
     this.scene.add(this.sun, this.sun.target);
-    const fill = new T.DirectionalLight(0x9ebcff, 0.7);
+    const fill = new T.DirectionalLight(0xb6c6a4, 0.3);
     fill.position.set(25, 8, -15);
     this.scene.add(fill);
     this.scene.add(
@@ -193,6 +199,7 @@ export class Game {
     );
     this.marker.visible = false;
     this.loadScene();
+    this.art = new ArtRenderer(this.renderer, this.scene, this.camera);
     const menu = (fn: () => void) => {
       if (this.busy || this.flying) return;
       this.stopBuild();
@@ -397,8 +404,15 @@ export class Game {
             flying: this.flying,
             mode: this.mode,
             selected: this.selected,
-            drawCalls: this.renderer.info.render.calls,
-            triangles: this.renderer.info.render.triangles,
+            drawCalls: this.space
+              ? this.renderer.info.render.calls
+              : (this.art?.metrics.drawCalls ??
+                this.renderer.info.render.calls),
+            triangles: this.space
+              ? this.renderer.info.render.triangles
+              : (this.art?.metrics.triangles ??
+                this.renderer.info.render.triangles),
+            art: this.art?.metrics,
             crops: Object.entries(
               store.state.worlds[store.state.planet].crops,
             ).map(([cell, c]) => ({
@@ -426,6 +440,8 @@ export class Game {
                     tiles: this.view.tiles,
                     features: this.view.nature.features,
                     vegetation: this.view.nature.stats,
+                    terrain: this.view.terrainStats,
+                    groundHeight: surfaceHeight(this.position, this.view.id),
                   }
                 : null,
             space: this.space
@@ -536,19 +552,23 @@ export class Game {
     const overview = this.mode === "planet",
       target = overview
         ? new T.Vector3()
-        : this.spherePoint(this.position, 0.5),
+        : this.spherePoint(this.position, 2.3).addScaledVector(forward, -2.5),
       position = overview
         ? n
             .clone()
-            .multiplyScalar(sphereRadius(this.store.state.planet) + 32)
+            .multiplyScalar(sphereRadius(this.store.state.planet) + 44)
             .addScaledVector(forward, 22)
-        : this.spherePoint(this.position, 5.2).addScaledVector(forward, 11),
+        : this.spherePoint(this.position, 13.5).addScaledVector(forward, 14),
       blend = instant ? 1 : 1 - Math.exp(-7 * dt);
     this.target.copy(target);
+    if (this.scene.fog instanceof T.Fog) {
+      this.scene.fog.near = overview ? 85 : 28;
+      this.scene.fog.far = overview ? 180 : 100;
+    }
     this.camera.up.copy(n);
     this.camera.position.lerp(position, blend);
     const half =
-      (overview ? sphereRadius(this.store.state.planet) * 1.16 : 6.5) *
+      (overview ? (sphereRadius(this.store.state.planet) + 11) * 1.08 : 8.2) *
       this.zoom *
       Math.max(1, 1.05 / aspect);
     this.cameraHalf += (half - this.cameraHalf) * blend;
@@ -612,6 +632,7 @@ export class Game {
   private resize = () => {
     this.renderer.setSize(innerWidth, innerHeight);
     this.space?.resize();
+    this.art?.resize();
     if (!this.flying) this.updateCamera(1, true);
   };
   private updateCamera(dt: number, instant = false) {
@@ -638,7 +659,7 @@ export class Game {
     const blend = instant ? 1 : 1 - Math.exp(-5 * dt);
     this.target.lerp(desired, blend);
     const half =
-      (overview ? (inside ? 7 : size * 0.66) : inside ? 4.5 : 6.5) *
+      (overview ? (inside ? 7 : size * 0.66) : inside ? 4.5 : 7.4) *
       this.zoom *
       Math.max(1, 1.05 / aspect);
     this.cameraHalf += (half - this.cameraHalf) * blend;
@@ -1323,8 +1344,11 @@ export class Game {
         this.scene.add(this.enemies.root);
       }
       this.scene.background = new T.Color(PLANETS[state.planet].sky);
-      this.scene.fog =
-        state.planet === "mycelia" ? new T.FogExp2(0x20173d, 0.009) : null;
+      this.scene.fog = isSphere(state.planet)
+        ? new T.Fog(0x879a80, 28, 100)
+        : state.planet === "mycelia"
+          ? new T.FogExp2(0x20173d, 0.009)
+          : null;
     }
     this.scene.add(this.view.root);
     this.sky.root.visible = !state.inside;
@@ -1693,7 +1717,14 @@ export class Game {
       this.sun.position
         .copy(this.avatar.root.position)
         .addScaledVector(this.sphereUp(this.position), 30)
-        .addScaledVector(this.sphereForward, 16);
+        .addScaledVector(this.sphereForward, 10)
+        .addScaledVector(
+          new T.Vector3().crossVectors(
+            this.sphereUp(this.position),
+            this.sphereForward,
+          ),
+          -17,
+        );
     this.sun.target.position.copy(this.target);
     this.view.animate(time / 1000);
     this.life?.update(this.store.state, time / 1000, dt);
@@ -1741,7 +1772,8 @@ export class Game {
       void this.combatPulse();
     }
     this.sky.update(this.camera);
-    this.renderer.render(this.scene, this.camera);
+    if (this.art) this.art.render(!this.lowQuality);
+    else this.renderer.render(this.scene, this.camera);
   };
   dispose() {
     this.renderer.setAnimationLoop(null);
@@ -1750,6 +1782,7 @@ export class Game {
     this.audio.dispose();
     this.enemies?.dispose();
     this.weather.dispose();
+    this.art?.dispose();
     this.sky.dispose();
     this.space?.dispose();
     this.telegram.dispose();

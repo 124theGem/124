@@ -10,9 +10,12 @@ import {
 } from "../../shared/sphere";
 import { tiledSphere } from "./TiledSphere";
 import { SphereNature } from "./SphereNature";
+import { surfaceRadius, MAX_TERRAIN_HEIGHT } from "../../shared/voxel";
 export function spherePoint(p: Point, height = 0, id: PlanetId = "orbis") {
   const n = sphereNormal(p, id);
-  return new T.Vector3(n.x, n.y, n.z).multiplyScalar(sphereRadius(id) + height);
+  return new T.Vector3(n.x, n.y, n.z).multiplyScalar(
+    surfaceRadius(p, id) + height,
+  );
 }
 export function sphereUp(p: Point, id: PlanetId = "orbis") {
   const n = sphereNormal(p, id);
@@ -32,11 +35,16 @@ export class SphereWorld {
     flatShading: true,
   });
   private baseMaterial = new T.MeshStandardMaterial({
-    color: 0x42524b,
+    color: 0x77775a,
     roughness: 1,
   });
   private resources = new T.Group();
   private nodeKey = "";
+  readonly terrainStats: {
+    walls: number;
+    minHeight: number;
+    maxHeight: number;
+  };
   constructor(
     private kit: Models,
     save: Save,
@@ -46,8 +54,14 @@ export class SphereWorld {
     const tile = tiledSphere(this.id);
     this.geometry = tile.geometry;
     this.tiles = tile.tiles;
+    this.terrainStats = {
+      walls: tile.walls,
+      minHeight: tile.minHeight,
+      maxHeight: tile.maxHeight,
+    };
     const ground = new T.Mesh(this.geometry, this.material);
     ground.receiveShadow = true;
+    ground.castShadow = true;
     this.baseGeometry = new T.SphereGeometry(
       sphereRadius(this.id) - 0.035,
       32,
@@ -80,10 +94,39 @@ export class SphereWorld {
   }
   pick(ray: T.Ray) {
     const hit = ray.intersectSphere(
-      new T.Sphere(new T.Vector3(), sphereRadius(this.id) + 0.018),
+      new T.Sphere(
+        new T.Vector3(),
+        sphereRadius(this.id) + MAX_TERRAIN_HEIGHT + 0.1,
+      ),
       new T.Vector3(),
     );
-    return hit ? sphereCoordinates(hit, this.id) : null;
+    if (!hit) return null;
+    const start = hit.distanceTo(ray.origin);
+    let previous = start;
+    for (
+      let distance = start;
+      distance < start + 2 * (sphereRadius(this.id) + MAX_TERRAIN_HEIGHT + 0.1);
+      distance += 0.12
+    ) {
+      const p = ray.at(distance, new T.Vector3()),
+        coords = sphereCoordinates(p, this.id);
+      if (p.length() <= surfaceRadius(coords, this.id)) {
+        let lo = previous,
+          hi = distance;
+        for (let i = 0; i < 9; i++) {
+          const mid = (lo + hi) / 2,
+            q = ray.at(mid, new T.Vector3());
+          if (
+            q.length() <= surfaceRadius(sphereCoordinates(q, this.id), this.id)
+          )
+            hi = mid;
+          else lo = mid;
+        }
+        return sphereCoordinates(ray.at(hi, new T.Vector3()), this.id);
+      }
+      previous = distance;
+    }
+    return null;
   }
   rebuild(save: Save, now: number) {
     const ns = nodes(this.id),

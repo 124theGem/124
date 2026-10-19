@@ -1,3 +1,4 @@
+import { surfaceRadius, MAX_TERRAIN_HEIGHT } from "./voxel";
 import {
   isSphere,
   planetSize,
@@ -72,7 +73,9 @@ export function bodyCenter(id: PlanetId): Vec {
   };
 }
 export function bodyRadius(id: PlanetId) {
-  return isSphere(id) ? sphereRadius(id) : planetSize(id) * 0.52;
+  return isSphere(id)
+    ? sphereRadius(id) + MAX_TERRAIN_HEIGHT
+    : planetSize(id) * 0.52;
 }
 export function padNormal(id: PlanetId): Vec {
   return isSphere(id) ? sphereNormal(ship(id), id) : { x: 0, y: 1, z: 0 };
@@ -81,7 +84,7 @@ export function padPoint(id: PlanetId, height = 0): Vec {
   const c = bodyCenter(id),
     p = ship(id);
   if (isSphere(id))
-    return add(c, mul(padNormal(id), bodyRadius(id) + 0.14 + height));
+    return add(c, mul(padNormal(id), surfaceRadius(p, id) + 0.14 + height));
   const offset = (planetSize(id) - 1) / 2;
   return add(c, {
     x: p.x - offset,

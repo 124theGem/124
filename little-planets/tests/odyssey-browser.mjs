@@ -49,7 +49,7 @@ try {
     assert.equal(s.sky.stars, 2400);
     assert.equal(s.sky.planets, 7);
     assert(s.drawCalls < 180, `${id}: ${s.drawCalls} draw calls`);
-    assert(s.sphere.vegetation.bushes === 72);
+    assert(s.sphere.vegetation.bushes > 250);
     assert.equal(s.state.planet, id);
     await page.screenshot({ path: `test-results/odyssey-${id}-surface.png` });
     await page.locator("#view").click();

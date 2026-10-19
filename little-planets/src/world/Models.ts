@@ -1,3 +1,4 @@
+import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import * as T from "three";
 import {
   GEAR,
@@ -11,15 +12,34 @@ import {
 /** Small procedural factories; their roots can later be replaced by GLTF models. */
 export class Models {
   private boxGeo = new T.BoxGeometry(1, 1, 1);
+  private stoneGeo = new RoundedBoxGeometry(1, 1, 1, 1, 0.025);
   private crystalGeo = new T.ConeGeometry(0.32, 1.4, 4);
+  private crownGeo = new T.IcosahedronGeometry(1, 0);
+  private stemGeo = new T.CylinderGeometry(0.055, 0.09, 1, 5, 1);
+  private leafGeo = (() => {
+    const geometry = new T.BufferGeometry().setAttribute(
+      "position",
+      new T.Float32BufferAttribute(
+        [
+          0, 0, 0, -0.38, 0.1, 0.38, 0, 0.15, 1, 0, 0, 0, 0, 0.15, 1, 0.38, 0.1,
+          0.38, 0, 0, 0, 0, -0.03, 0.5, -0.38, 0.1, 0.38, 0, 0, 0, 0.38, 0.1,
+          0.38, 0, -0.03, 0.5,
+        ],
+        3,
+      ),
+    );
+    geometry.computeVertexNormals();
+    return geometry;
+  })();
   private materials = new Map<string, T.MeshStandardMaterial>();
-  material(color: number, glow = false, alpha = 1) {
-    const key = `${color}:${glow}:${alpha}`;
+  material(color: number, glow = false, alpha = 1, doubleSide = false) {
+    const key = `${color}:${glow}:${alpha}:${doubleSide}`;
     let material = this.materials.get(key);
     if (!material) {
       material = new T.MeshStandardMaterial({
         color,
-        roughness: 0.82,
+        roughness: 0.96,
+        side: doubleSide ? T.DoubleSide : T.FrontSide,
         emissive: glow ? color : 0,
         emissiveIntensity: glow ? 0.65 : 0,
         transparent: alpha < 1,
@@ -28,6 +48,63 @@ export class Models {
       this.materials.set(key, material);
     }
     return material;
+  }
+  facet(
+    parent: T.Object3D,
+    x: number,
+    y: number,
+    z: number,
+    sx: number,
+    sy: number,
+    sz: number,
+    color: number,
+  ) {
+    const mesh = new T.Mesh(this.crownGeo, this.material(color));
+    mesh.position.set(x, y, z);
+    mesh.scale.set(sx, sy, sz);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    parent.add(mesh);
+    return mesh;
+  }
+  leaf(
+    parent: T.Object3D,
+    x: number,
+    y: number,
+    z: number,
+    size: number,
+    angle: number,
+    color: number,
+    tilt = 0,
+  ) {
+    const mesh = new T.Mesh(this.leafGeo, this.material(color, false, 1, true));
+    mesh.position.set(x, y, z);
+    mesh.scale.setScalar(size);
+    mesh.rotation.set(tilt, angle, 0);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    parent.add(mesh);
+    return mesh;
+  }
+  stem(
+    parent: T.Object3D,
+    a: T.Vector3,
+    b: T.Vector3,
+    width: number,
+    color: number,
+  ) {
+    const mesh = new T.Mesh(this.stemGeo, this.material(color)),
+      d = b.clone().sub(a);
+    mesh.position.copy(a).add(b).multiplyScalar(0.5);
+    mesh.quaternion.setFromUnitVectors(
+      T.Object3D.DEFAULT_UP,
+      d.clone().normalize(),
+    );
+    mesh.scale.set(width, d.length(), width);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    parent.add(mesh);
+    return mesh;
   }
   box(
     parent: T.Object3D,
@@ -47,6 +124,20 @@ export class Models {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     parent.add(mesh);
+    return mesh;
+  }
+  stone(
+    parent: T.Object3D,
+    x: number,
+    y: number,
+    z: number,
+    w: number,
+    h: number,
+    d: number,
+    color: number,
+  ) {
+    const mesh = this.box(parent, x, y, z, w, h, d, color);
+    mesh.geometry = this.stoneGeo;
     return mesh;
   }
   plant(id: string, growth = 2) {
@@ -122,24 +213,43 @@ export class Models {
   resource(planet: PlanetId, variant: number) {
     const root = new T.Group();
     if (variant % 2 === 0 && (planet === "listoria" || planet === "home")) {
-      this.box(root, 0, 0.7, 0, 0.28, 1.4, 0.3, 0x8b6043);
-      for (const [x, y, z, s] of [
-        [0, 1.8, 0, 1.05],
-        [-0.4, 1.35, 0.1, 0.8],
-        [0.38, 1.5, -0.15, 0.9],
-        [0, 2.35, 0.05, 0.65],
-      ])
-        this.box(
+      this.stem(
+        root,
+        new T.Vector3(0, 0, 0),
+        new T.Vector3(0.08, 2.1, 0),
+        2.1,
+        0x6e6b50,
+      );
+      for (let i = 0; i < 4; i++) {
+        const a = i * 2.4,
+          p = new T.Vector3(
+            Math.sin(a) * 0.55,
+            1.65 + i * 0.18,
+            Math.cos(a) * 0.55,
+          );
+        this.facet(
           root,
-          x,
-          y,
-          z,
-          s,
-          s * 0.85,
-          s,
-          variant % 4 === 0 ? 0x71a84c : 0x92bb55,
+          p.x,
+          p.y,
+          p.z,
+          0.85,
+          0.65,
+          0.8,
+          [0x3d5c39, 0x597646, 0x81934e, 0x6b874a][i],
         );
-      this.box(root, 0, 0.12, 0, 0.48, 0.18, 0.46, 0x9e7750);
+        for (let j = 0; j < 4; j++)
+          this.leaf(
+            root,
+            p.x,
+            p.y + 0.35,
+            p.z,
+            0.7,
+            a + j * 1.57,
+            [0x597646, 0x81934e][j % 2],
+            -0.25,
+          );
+      }
+      this.box(root, 0, 0.12, 0, 0.48, 0.18, 0.46, 0x9a926d);
     } else if (variant % 2 === 0 && planet === "mycelia") {
       const mushroom = this.plant("moonshroom");
       mushroom.scale.setScalar(2.2);
@@ -190,7 +300,7 @@ export class Models {
           s,
           s * 0.8,
           s,
-          planet === "pyros" ? 0x46424f : 0xa6b3ac,
+          planet === "pyros" ? 0x686253 : 0xc3bca2,
         );
         rock.rotation.y = x + variant;
       }
@@ -329,13 +439,13 @@ export class Models {
           ? 0x797076
           : planet === "mycelia"
             ? 0x8b74a0
-            : 0xc19260,
+            : 0xd4c8a6,
       roof =
         planet === "pyros"
           ? 0x66616c
           : planet === "mycelia"
             ? 0x7762a1
-            : 0xc87746;
+            : 0xa28e69;
     this.box(root, 0, 0.12, 0, 2.1, 0.24, 2.1, 0x8c8c82);
     if (kind === "greenhouse") {
       this.box(root, 0, 0.95, 0, 1.9, 1.6, 1.9, 0x8cdcd1, false, 0.28);
@@ -510,7 +620,11 @@ export class Models {
   }
   dispose() {
     this.boxGeo.dispose();
+    this.stoneGeo.dispose();
     this.crystalGeo.dispose();
+    this.crownGeo.dispose();
+    this.stemGeo.dispose();
+    this.leafGeo.dispose();
     for (const material of this.materials.values()) material.dispose();
   }
 }

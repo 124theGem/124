@@ -53,8 +53,8 @@ export class Planet {
           1,
           0.3,
           1,
-          waterCell(x, z) ? (biome === "pyros" ? 0xf07d40 : 0x49a6bf) : tint,
-          waterCell(x, z),
+          waterCell(x, z) ? (biome === "pyros" ? 0xf07d40 : 0xa3a777) : tint,
+          waterCell(x, z) && biome !== "listoria",
         );
         if (edge) {
           kit.box(

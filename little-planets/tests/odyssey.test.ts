@@ -73,15 +73,17 @@ describe("eight tiled spherical biomes", () => {
       ).toBe(true);
     }
   });
-  it("uses independent square quads with constant colors and outward triangles across poles", () => {
+  it("builds planar voxel tops, shaded cliff walls and correctly wound triangles across poles", () => {
     for (const id of SPHERE_PLANETS) {
       const { geometry, tiles } = tiledSphere(id);
       expect(tiles).toBeGreaterThan(4000);
       const p = geometry.getAttribute("position"),
         c = geometry.getAttribute("color"),
+        kinds = geometry.getAttribute("terrainFace"),
+        normals = geometry.getAttribute("normal"),
         index = geometry.index!;
       for (let i = 0; i < p.count; i += 4) {
-        for (let j = 1; j < 4; j++)
+        for (let j = 1; j < (kinds.getX(i) === 0 ? 4 : 2); j++)
           assert.deepEqual(
             [c.getX(i + j), c.getY(i + j), c.getZ(i + j)],
             [c.getX(i), c.getY(i), c.getZ(i)],
@@ -91,7 +93,12 @@ describe("eight tiled spherical biomes", () => {
         const a = new T.Vector3().fromBufferAttribute(p, index.getX(i)),
           b = new T.Vector3().fromBufferAttribute(p, index.getX(i + 1)),
           d = new T.Vector3().fromBufferAttribute(p, index.getX(i + 2));
-        assert(new T.Vector3().crossVectors(b.sub(a), d.sub(a)).dot(a) > 0);
+        assert(
+          new T.Vector3()
+            .crossVectors(b.sub(a), d.sub(a))
+            .dot(new T.Vector3().fromBufferAttribute(normals, index.getX(i))) >
+            0,
+        );
       }
       geometry.dispose();
     }
@@ -100,9 +107,12 @@ describe("eight tiled spherical biomes", () => {
     const kit = new Models();
     for (const id of SPHERE_PLANETS) {
       const n = new SphereNature(kit, id);
-      expect(n.stats.bushes).toBe(72);
+      expect(n.stats.bushes).toBeGreaterThan(250);
       expect(n.stats.caves).toBeGreaterThan(0);
-      if (id === "orbis") expect(n.stats.stalks).toBe(900);
+      if (id === "orbis") {
+        expect(n.stats.stalks).toBeGreaterThan(650);
+        expect(n.stats.trees).toBeGreaterThan(80);
+      }
       if (id === "vulcanis") expect(n.stats.volcanoes).toBeGreaterThan(2);
       else expect(n.stats.waterfalls).toBeGreaterThan(0);
       n.animate(1);

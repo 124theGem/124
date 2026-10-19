@@ -2297,3 +2297,39 @@ small {
     left: calc(var(--left) + 20px);
   }
 }
+/* Sanctuary: quiet ink-green controls and warm ivory accents around the natural diorama. */
+:root {
+  --line: #d9cfab32;
+  --muted: #b4bda7;
+  --green: #c7d5a2;
+  background: #101b19;
+  color: #f0eddf;
+}
+button {
+  background: #303d33;
+}
+button:hover {
+  background: #48563f;
+}
+.panel {
+  background: linear-gradient(140deg, #2c392ff5, #19271ff2);
+  box-shadow: 0 12px 36px #0c160f55;
+}
+.sheet {
+  background: linear-gradient(145deg, #2a382f, #18271f);
+}
+.identity {
+  text-shadow:
+    0 1px 7px #102017,
+    0 1px 2px #102017;
+}
+.top-buttons button,
+#menu-toggle,
+#menu-items button {
+  background: #263b30de;
+}
+.top-buttons button:hover,
+#menu-toggle:hover,
+#menu-items button:hover {
+  background: #475c40;
+}

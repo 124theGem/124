@@ -161,7 +161,9 @@ try {
     maxY = -1,
     minY = 1;
   await page.keyboard.down("w");
-  const deadline = Date.now() + 240000;
+  // Full-quality contact/shadow passes are slow under CPU-only SwiftShader.
+  // Keep the complete 120 m route and grounding assertions; allow rendering time.
+  const deadline = Date.now() + 360000;
   while (distance < 120 && Date.now() < deadline) {
     await page.waitForTimeout(250);
     const s = await snap(),
@@ -178,8 +180,10 @@ try {
     maxY = Math.max(maxY, n[1]);
     minY = Math.min(minY, n[1]);
     assert(
-      Math.abs(Math.hypot(...s.playerWorld) - (120 / (2 * Math.PI) + 0.06)) <
-        0.001,
+      Math.abs(
+        Math.hypot(...s.playerWorld) -
+          (120 / (2 * Math.PI) + s.sphere.groundHeight + 0.06),
+      ) < 0.001,
     );
   }
   await page.keyboard.up("w");

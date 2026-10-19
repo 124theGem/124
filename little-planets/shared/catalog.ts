@@ -244,6 +244,11 @@ PLANETS.nox = {
   icon: "👾",
   biome: "mycelia",
 };
+for (const id of ["home", "listoria"] as const) {
+  PLANETS[id].soil = 0x7c8c54;
+  PLANETS[id].rock = 0xc4b99c;
+  PLANETS[id].side = 0x92956c;
+}
 PLANETS.orbis = {
   ...PLANETS.listoria,
   id: "orbis",

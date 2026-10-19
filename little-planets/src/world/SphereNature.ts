@@ -8,7 +8,20 @@ import {
   type SphereTheme,
 } from "../../shared/catalog";
 import { landmarks, terrainSeed, type Landmark } from "../../shared/surface";
-import { sphereNormal, sphereRadius } from "../../shared/sphere";
+import {
+  sphereNormal,
+  sphereRadius,
+  surfaceDistance,
+} from "../../shared/sphere";
+import {
+  surfaceHeight,
+  terrainSurfaceHeight,
+  sanctuaryPoint,
+  offsetPoint,
+  clearingCoordinates,
+  noise3,
+} from "../../shared/voxel";
+import { sanctuary } from "./Sanctuary";
 export class SphereNature {
   readonly root = new T.Group();
   private staticRoot = new T.Group();
@@ -51,135 +64,148 @@ export class SphereNature {
       size = planetSize(id),
       pad = ship(id),
       seed = PLANETS[id].seed ?? 71;
-    for (let i = 0; i < 30; i++) {
-      const x = i < 5 ? pad.x - 7 + (i % 3) * 4 : (i * 31 + 17) % size,
-        z =
-          i < 5
-            ? pad.z - 6 - Math.floor(i / 3) * 4
-            : 3 + (terrainSeed(i * 317 + seed) % (Math.floor(size / 2) - 6)),
-        patch = new T.Group();
+    const moist = theme !== "volcanic" && theme !== "desert" && theme !== "ice";
+    // Wide patches form actual forests and meadows rather than evenly spaced decoration.
+    for (let i = 0; i < 170; i++) {
+      const p =
+          i < 22
+            ? offsetPoint(
+                pad,
+                -13 + (i % 6) * 4,
+                -15 + Math.floor(i / 6) * 3.5,
+                id,
+              )
+            : {
+                x: (i * 43.7 + seed) % size,
+                z: 2 + (terrainSeed(seed + i * 277) % (size / 2 - 4)),
+              },
+        n = sphereNormal(p, id),
+        d = surfaceDistance(p, pad, id),
+        uv = clearingCoordinates(n, id);
       if (
-        theme === "meadow" ||
-        (theme === "alpine" && i % 3 === 0) ||
-        (theme === "tropical" && i % 2 === 0)
-      ) {
-        for (let row = 0; row < 5; row++)
-          for (let col = 0; col < 6; col++) {
-            const px = (col - 2.5) * 0.34,
-              pz = (row - 2) * 0.4,
-              h = 0.42 + (terrainSeed(i * 131 + row * 7 + col) % 9) * 0.035;
-            kit.box(
-              patch,
-              px,
-              h / 2,
-              pz,
-              0.035,
-              h,
-              0.035,
-              theme === "tropical" ? 0x709e5a : 0x8d9a4e,
-            );
-            kit.box(
-              patch,
-              px,
-              h + 0.09,
-              pz,
-              0.1,
-              0.25,
-              0.095,
-              theme === "alpine" ? 0xc8bd7e : 0xdfc57c,
-            );
-            this.stats.stalks++;
-          }
-      } else if (theme === "tropical") {
-        for (let n = 0; n < 2; n++) {
-          const palm = new T.Group();
-          kit.box(palm, 0, 1.1, 0, 0.25, 2.2, 0.25, 0xa48f66);
-          for (let j = 0; j < 5; j++) {
-            const a = (j / 5) * Math.PI * 2,
-              leaf = kit.box(
-                palm,
-                Math.cos(a) * 0.65,
-                2.3,
-                Math.sin(a) * 0.65,
-                1.7,
-                0.16,
-                0.45,
-                0x578858,
-              );
-            leaf.rotation.y = -a;
-          }
-          palm.position.set(n * 2, 0, n);
-          patch.add(palm);
-          this.stats.trees++;
-        }
-      } else if (theme === "forest" || theme === "fungal" || theme === "ice") {
-        for (let n = 0; n < 3; n++) {
-          let tree: T.Group;
-          if (theme === "fungal") {
-            tree = kit.plant("moonshroom");
-            tree.scale.setScalar(1.9 + n * 0.35);
-          } else tree = this.fir(theme);
-          tree.position.set((n - 1) * 1.35, 0, (n % 2) * 1.5);
-          patch.add(tree);
-          this.stats.trees++;
-        }
+        d < 4.8 ||
+        (uv.front > 0.55 && uv.x > -11 && uv.x < -1 && uv.z > -14 && uv.z < 0)
+      )
+        continue;
+      const density = noise3(n.x * 7, n.y * 7, n.z * 7, seed + 99);
+      if (density < 0.38 && i >= 22) continue;
+      let tree: T.Group;
+      if (theme === "fungal") {
+        tree = kit.plant("moonshroom");
+        tree.scale.setScalar(2.3 + (i % 4) * 0.4);
       } else if (theme === "desert") {
-        const cactus = kit.plant("ashcactus");
-        cactus.scale.setScalar(2.3);
-        patch.add(cactus);
-        this.stats.trees++;
-      } else {
-        for (let n = 0; n < 4; n++)
-          kit.box(patch, n * 0.4 - 0.5, 0.15, 0, 0.45, 0.3, 0.4, 0x544952);
-      }
-      this.place(patch, x, z);
-      this.staticRoot.add(patch);
+        if (i % 4) continue;
+        tree = kit.plant("ashcactus");
+        tree.scale.setScalar(2.2);
+      } else if (theme === "volcanic") {
+        if (i % 5) continue;
+        tree = this.broadleaf(i, true);
+      } else
+        tree =
+          theme === "ice" || theme === "alpine"
+            ? this.fir(theme)
+            : this.broadleaf(i);
+      this.place(tree, p.x, p.z);
+      this.staticRoot.add(tree);
+      this.stats.trees++;
     }
-    for (let i = 0; i < 72; i++) {
-      const patch = new T.Group(),
-        x = i < 8 ? pad.x - 6 + (i % 4) * 4 : (i * 43 + seed) % size,
-        z =
-          i < 8
-            ? pad.z + 4 + Math.floor(i / 4) * 3
-            : 2 + (terrainSeed(seed + i * 991) % (Math.floor(size / 2) - 4)),
-        green =
-          theme === "ice"
-            ? 0xb4d7cf
-            : theme === "fungal"
-              ? 0x9b8fc1
-              : theme === "desert"
-                ? 0x9e9a62
-                : theme === "volcanic"
-                  ? 0x87585c
-                  : 0x659453;
-      for (let j = 0; j < 3; j++) {
-        kit.box(
-          patch,
-          (j - 1) * 0.25,
-          0.24 + j * 0.1,
-          (j % 2) * 0.22,
-          0.6,
-          0.5,
-          0.55,
-          green,
-          theme === "fungal",
-        );
-        if ((i + j) % 3 === 0)
-          kit.box(
-            patch,
-            (j - 1) * 0.25,
-            0.55 + j * 0.1,
-            0.27,
-            0.1,
-            0.1,
-            0.1,
-            theme === "fungal" ? 0x9cebd9 : 0xe4bb7c,
-            theme === "fungal",
-          );
-      }
-      this.place(patch, x, z);
-      this.staticRoot.add(patch);
+    for (let i = 0; i < 30; i++) {
+      if (!moist) break;
+      const center =
+        i < 6
+          ? offsetPoint(
+              pad,
+              -1 + (i % 3) * 3.2,
+              7 + Math.floor(i / 3) * 3.5,
+              id,
+            )
+          : {
+              x: (i * 31 + 17) % size,
+              z: 3 + (terrainSeed(i * 317 + seed) % (size / 2 - 6)),
+            };
+      for (let row = 0; row < 5; row++)
+        for (let col = 0; col < 6; col++) {
+          const p = offsetPoint(
+              center,
+              (col - 2.5) * 0.35,
+              (row - 2) * 0.39,
+              id,
+            ),
+            uv = clearingCoordinates(sphereNormal(p, id), id);
+          if (
+            surfaceDistance(p, pad, id) < 4 ||
+            (uv.front > 0.55 &&
+              uv.x > -11 &&
+              uv.x < -1 &&
+              uv.z > -14 &&
+              uv.z < 0)
+          )
+            continue;
+          const stalk = new T.Group(),
+            h = 0.55 + (terrainSeed(i * 131 + row * 7 + col) % 9) * 0.045;
+          const stem = kit.box(stalk, 0, h / 2, 0, 0.027, h, 0.027, 0x8b9050);
+          stem.rotation.z = Math.sin(i + row) * 0.08;
+          kit.box(stalk, 0, h + 0.06, 0, 0.095, 0.24, 0.085, 0xc4ac63);
+          kit.leaf(stalk, 0, h * 0.45, 0, 0.32, i + col, 0x7b8b47, -0.8);
+          this.place(stalk, p.x, p.z);
+          this.staticRoot.add(stalk);
+          this.stats.stalks++;
+        }
+    }
+    for (let i = 0; i < 340; i++) {
+      const p =
+          i < 44
+            ? offsetPoint(
+                pad,
+                -14 + (i % 9) * 3.3,
+                -13 + Math.floor(i / 9) * 4.2,
+                id,
+              )
+            : {
+                x: (i * 43.71 + seed) % size,
+                z: 1 + (terrainSeed(seed + i * 991) % (size / 2 - 2)),
+              },
+        uv = clearingCoordinates(sphereNormal(p, id), id);
+      if (
+        surfaceDistance(p, pad, id) < 3.5 ||
+        (uv.front > 0.55 &&
+          uv.x > -9.2 &&
+          uv.x < -2.4 &&
+          uv.z > -12 &&
+          uv.z < -5)
+      )
+        continue;
+      const plant =
+        i % 3 === 0 && moist ? this.fern(i) : this.undergrowth(i, theme);
+      this.place(plant, p.x, p.z);
+      this.staticRoot.add(plant);
       this.stats.bushes++;
+    }
+    const ruin = sanctuary(kit, seed),
+      anchor = sanctuaryPoint(id);
+    this.place(ruin, anchor.x, anchor.z);
+    ruin.position.setLength(
+      sphereRadius(id) + terrainSurfaceHeight(anchor, id),
+    );
+    this.staticRoot.add(ruin);
+    // Water collecting at the foot of the ivory escarpment, with reeds and lily pads.
+    if (moist) {
+      for (let i = 0; i < 18; i++) {
+        const p = offsetPoint(
+            pad,
+            6.2 + (i % 3) * 1.35,
+            -7 + Math.floor(i / 3) * 1.6,
+            id,
+          ),
+          pool = new T.Group();
+        kit.box(pool, 0, 0.04, 0, 1.6, 0.08, 1.65, 0xb8a164, false, 0.78);
+        if (i % 2 === 0) {
+          kit.leaf(pool, 0.15, 0.13, 0.1, 0.65, i, 0x587844);
+          kit.facet(pool, 0.15, 0.12, 0.1, 0.38, 0.025, 0.3, 0x719246);
+        }
+        this.place(pool, p.x, p.z);
+        this.staticRoot.add(pool);
+      }
     }
     for (const feature of this.features) {
       const object = new T.Group(),
@@ -187,10 +213,10 @@ export class SphereNature {
           theme === "ice"
             ? 0xb2cfd1
             : theme === "volcanic"
-              ? 0x62545b
+              ? 0x777060
               : theme === "desert"
-                ? 0xb49678
-                : 0x8b9390;
+                ? 0xc5b48d
+                : 0xc7bfa2;
       if (feature.kind === "cave") {
         this.cave(object, rock, theme);
         this.stats.caves++;
@@ -235,7 +261,13 @@ export class SphereNature {
   private place(object: T.Group, x: number, z: number) {
     const n = sphereNormal({ x, z }, this.id),
       up = new T.Vector3(n.x, n.y, n.z);
-    object.position.copy(up.clone().multiplyScalar(sphereRadius(this.id)));
+    object.position.copy(
+      up
+        .clone()
+        .multiplyScalar(
+          sphereRadius(this.id) + surfaceHeight({ x, z }, this.id),
+        ),
+    );
     object.quaternion.setFromUnitVectors(T.Object3D.DEFAULT_UP, up);
   }
   private fir(theme: SphereTheme) {
@@ -254,6 +286,132 @@ export class SphereNature {
         theme === "ice" ? 0xb5d0c5 : 0x4b7e59,
       );
     }
+    return root;
+  }
+  private broadleaf(seed: number, bare = false) {
+    const tree = new T.Group(),
+      height = 3.5 + (seed % 5) * 0.48;
+    this.kit.stem(
+      tree,
+      new T.Vector3(0, 0, 0),
+      new T.Vector3(0.12, height, 0),
+      2.6,
+      0x6c674c,
+    );
+    for (let i = 0; i < 5; i++) {
+      const a = i * 2.4,
+        r = 0.9 + (i % 2) * 0.55,
+        tip = new T.Vector3(
+          Math.cos(a) * r,
+          height - 0.4 + (i % 3) * 0.4,
+          Math.sin(a) * r,
+        );
+      this.kit.stem(
+        tree,
+        new T.Vector3(0, height * 0.55, 0),
+        tip,
+        1.3,
+        0x777153,
+      );
+      if (bare) continue;
+      const colors = [0x304d36, 0x446344, 0x5d8051, 0x8a9f55];
+      this.kit.facet(
+        tree,
+        tip.x,
+        tip.y + 0.3,
+        tip.z,
+        1.35,
+        1,
+        1.15,
+        colors[(seed + i) % 4],
+      );
+      for (let j = 0; j < 7; j++) {
+        const angle = j * 2.4 + i;
+        this.kit.leaf(
+          tree,
+          tip.x + Math.cos(angle) * 0.8,
+          tip.y + 0.4 + (j % 3) * 0.22,
+          tip.z + Math.sin(angle) * 0.8,
+          0.95,
+          angle,
+          colors[(j + i) % 4],
+          -0.22,
+        );
+      }
+    }
+    for (let j = 0; j < 4; j++)
+      this.kit.stem(
+        tree,
+        new T.Vector3(0, 0.35, 0),
+        new T.Vector3(
+          Math.sin(j * 1.57) * 0.65,
+          0.05,
+          Math.cos(j * 1.57) * 0.65,
+        ),
+        1.4,
+        0x777153,
+      );
+    return tree;
+  }
+  private fern(seed: number) {
+    const root = new T.Group();
+    for (let frond = 0; frond < 5; frond++) {
+      const a = frond * 1.256 + seed;
+      for (let i = 0; i < 4; i++) {
+        const t = (i + 1) / 4,
+          x = Math.sin(a) * t * 0.7,
+          z = Math.cos(a) * t * 0.7,
+          y = Math.sin(t * 2) * 0.55;
+        for (const side of [-1, 1])
+          this.kit.leaf(
+            root,
+            x,
+            y,
+            z,
+            0.28 + (1 - t) * 0.17,
+            a + side * 0.8,
+            [0x435f34, 0x67803b, 0x8c9c49][(frond + i) % 3],
+            -0.45,
+          );
+      }
+    }
+    return root;
+  }
+  private undergrowth(seed: number, theme: SphereTheme) {
+    const root = new T.Group(),
+      palette =
+        theme === "ice"
+          ? [0xaab5a1, 0xc3ccba, 0x8eac99]
+          : theme === "fungal"
+            ? [0x6c655f, 0x8e8198, 0x739171]
+            : theme === "desert"
+              ? [0x8e8753, 0xb3a76a, 0x78814a]
+              : [0x344f34, 0x52743c, 0x7d9848];
+    for (let j = 0; j < 4; j++) {
+      const a = j * 2.4 + seed;
+      this.kit.facet(
+        root,
+        Math.sin(a) * 0.32,
+        0.2 + (j % 2) * 0.15,
+        Math.cos(a) * 0.32,
+        0.4,
+        0.32,
+        0.4,
+        palette[j % 3],
+      );
+      this.kit.leaf(
+        root,
+        Math.sin(a) * 0.2,
+        0.35,
+        Math.cos(a) * 0.2,
+        0.55,
+        a,
+        palette[(j + 1) % 3],
+        -0.6,
+      );
+    }
+    if (seed % 11 === 0)
+      this.kit.facet(root, 0.13, 0.57, 0, 0.08, 0.1, 0.07, 0xc7ad61);
     return root;
   }
   private cliff(root: T.Group, color: number, scale: number) {
@@ -278,7 +436,7 @@ export class SphereNature {
           1,
           0.2,
           1.06,
-          PLANETS[this.id].soil,
+          0x8c9860,
         );
       }
   }
@@ -354,7 +512,7 @@ export class SphereNature {
       1.8,
       0.14,
       1.9,
-      theme === "ice" ? 0xa2dfe8 : 0x76cfd0,
+      theme === "ice" ? 0xbfd6cd : 0xc6b485,
       true,
     );
     for (let i = 0; i < 12; i++) {
@@ -366,13 +524,13 @@ export class SphereNature {
         0.42,
         height / 4 + 0.08,
         0.13,
-        theme === "ice" ? 0xc1e9ed : 0x87e4e1,
+        theme === "ice" ? 0xd1dfd6 : 0xe0d5ad,
         true,
         0.8,
       );
       drop.userData.base = drop.position.y;
     }
-    this.kit.box(flow, 0, 0.09, 1.45, 2.5, 0.16, 2, 0x74cbd0, true, 0.75);
+    this.kit.box(flow, 0, 0.09, 1.45, 2.5, 0.16, 2, 0xb7a066, false, 0.75);
     parent.add(flow);
     return flow;
   }
