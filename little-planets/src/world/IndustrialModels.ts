@@ -25,7 +25,26 @@ export function industrialBuilding(
     glow = false,
     alpha = 1,
   ) => k.box(g, x, y, z, w, h, d, c, glow, alpha);
-  if (kind === "planetdrill") {
+  if (kind === "telescope") {
+    box(0, 0.15, 0, 3, 0.3, 3, dark);
+    box(0, 0.75, 0, 2.3, 1, 2.1);
+    for (const side of [-1, 1]) {
+      box(side * 1.1, 1.45, 0, 0.22, 1.3, 0.4, metal);
+      box(side * 1.45, 0.6, 0, 0.35, 0.12, 2.5, 0x374e60);
+      for (let i = -2; i <= 2; i++)
+        box(side * 1.45, 0.68, i * 0.45, 0.3, 0.03, 0.3, 0x73c7de, true);
+    }
+    const tube = new T.Group();
+    tube.position.set(0, 1.9, 0);
+    tube.rotation.x = -0.55;
+    k.box(tube, 0, 0, 0, 1.05, 1.05, 2.6, ivory);
+    k.box(tube, 0, 0, 1.34, 1.12, 1.12, 0.14, dark);
+    k.box(tube, 0, 0, 1.43, 0.84, 0.84, 0.04, light, true);
+    for (const z of [-0.9, 0.7]) k.box(tube, 0, 0, z, 1.18, 1.18, 0.1, metal);
+    g.add(tube);
+    box(0.5, 0.8, -1.1, 0.7, 0.45, 0.15, dark);
+    box(0.5, 0.84, -1.2, 0.5, 0.24, 0.04, light, true);
+  } else if (kind === "planetdrill") {
     const width = drillSize(level, planetSize(planet)),
       height = [0, 5.8, 8, 12, 17, 23][level],
       half = width / 2;

@@ -409,7 +409,7 @@ export class Models {
     return root;
   }
   building(kind: BuildingKind, planet: PlanetId = "home", level = 1): T.Group {
-    if (["scanner", "planetdrill", "shipyard"].includes(kind))
+    if (["scanner", "planetdrill", "shipyard", "telescope"].includes(kind))
       return industrialBuilding(this, kind, planet, level);
     return habitat(this, kind, planet);
   }

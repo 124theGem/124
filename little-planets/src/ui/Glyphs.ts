@@ -1,4 +1,6 @@
 const paths: Record<string, string> = {
+  cultivator: "M12 3v13m-6-4v5h12v-5M8 17v4m4-4v4m4-4v4",
+  telescope: "m4 9 13-5 3 7-13 5Zm7 6-5 7m5-7 5 7M18 6l3-1",
   inventory: "M4 7h16v13H4zM8 7V4h8v3M4 12h16M9 15h6",
   craft: "m4 19 9-9m-1-6 4 4 4-1-3 6-5-5-6 3 1-4ZM3 20l2 1 2-2-2-2Z",
   garden:

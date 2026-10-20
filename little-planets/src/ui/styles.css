@@ -636,15 +636,7 @@ progress::-webkit-progress-value {
   background: #251e17e8;
   color: #f4d6ad;
 }
-.crosshair {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  color: #e8ffff99;
-  font: 20px var(--mono);
-  text-shadow: 0 1px 3px black;
-}
+
 .panel {
   border: 1px solid var(--line-bright);
   background: #0d1822f2;
@@ -3539,5 +3531,169 @@ progress::-webkit-progress-value {
     width: 56px;
     height: 56px;
     padding: 12px;
+  }
+}
+
+/* First Light: mission radio, optical observation and garden architecture. */
+.story-panel {
+  position: absolute;
+  left: calc(var(--left) + 20px);
+  top: calc(var(--top) + 120px);
+  width: min(330px, calc(100vw - 40px));
+  padding: 18px;
+  background: linear-gradient(135deg, #0b202aef, #101a26ed);
+  border: 1px solid #80dece70;
+  border-left: 3px solid var(--cyan);
+  pointer-events: auto;
+  border-radius: 4px;
+  box-shadow: 0 16px 50px #0005;
+}
+.story-panel .eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 8px;
+}
+.story-panel .ui-icon {
+  width: 22px;
+  height: 22px;
+}
+.story-panel h3 {
+  font-size: 18px;
+  margin: 12px 0 8px;
+}
+.story-panel p {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #bdd2d9;
+}
+.story-panel button {
+  width: 100%;
+  margin-top: 8px;
+}
+.in-prologue .bottom,
+.in-prologue #underfoot {
+  display: none;
+}
+.in-optics .topbar,
+.in-optics .bottom,
+.in-optics #handbar,
+.in-optics #joystick,
+.in-optics #mine-strike,
+.in-optics #progress-hud,
+.in-optics #underfoot,
+.in-optics .keyboard,
+.in-optics .story-panel,
+.in-optics #event-banner,
+.in-optics #combat-hud,
+.in-optics #attack {
+  display: none !important;
+}
+.optics {
+  position: absolute;
+  bottom: calc(var(--bottom) + 20px);
+  left: calc(var(--left) + 20px);
+  max-width: min(560px, calc(100vw - 40px));
+  background: #071521e8;
+  border: 1px solid #7adacb70;
+  padding: 20px;
+  pointer-events: auto;
+}
+.optics h2 {
+  font-size: clamp(19px, 3vw, 30px);
+  margin: 8px 0;
+}
+.optics p {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #b6cbd4;
+}
+.optics > div,
+.fence-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.optics button {
+  min-width: 44px;
+}
+.telescope-targets {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin: 18px 0;
+}
+.fence-tools {
+  margin-bottom: 20px;
+}
+@media (max-width: 700px) {
+  .story-panel {
+    top: calc(var(--top) + 80px);
+    left: calc(var(--left) + 12px);
+    padding: 12px;
+    width: min(290px, calc(100vw - 24px));
+  }
+  .story-panel h3 {
+    font-size: 15px;
+    margin: 8px 0;
+  }
+  .story-panel p {
+    font-size: 11px;
+  }
+  .optics {
+    padding: 14px;
+    bottom: calc(var(--bottom) + 12px);
+    left: 12px;
+    max-width: calc(100vw - 24px);
+  }
+  .handbar {
+    max-width: calc(100vw - 100px);
+  }
+}
+@media (max-height: 520px) {
+  .story-panel {
+    top: calc(var(--top) + 65px);
+    width: 260px;
+    padding: 10px;
+  }
+  .story-panel .eyebrow {
+    font-size: 7px;
+  }
+  .story-panel h3 {
+    font-size: 14px;
+    margin: 6px 0;
+  }
+  .story-panel p {
+    font-size: 10px;
+    margin: 5px 0;
+  }
+  .story-panel button {
+    min-height: 30px;
+    padding: 6px 10px;
+  }
+  .optics {
+    padding: 12px;
+    max-width: 440px;
+  }
+  .optics p {
+    margin: 6px 0;
+  }
+}
+
+@media (max-width: 700px) {
+  .handbar button {
+    width: 30px;
+    padding: 7px;
+    flex-shrink: 0;
+  }
+  .handbar {
+    gap: 2px;
+  }
+}
+
+@media (max-height: 520px) {
+  .story-panel {
+    left: auto;
+    right: calc(var(--right) + 12px);
   }
 }

@@ -167,8 +167,7 @@ try {
     await page.waitForFunction(() => !window.__planets.snapshot().busy);
     const mined = (await gameState(page)).inventory.stone;
     assert(mined > 76, "Holding the strike button repeats actual mining");
-    await page.locator("#first-person").click();
-    await page.waitForFunction(() => window.__planets.snapshot().firstPerson);
+    assert.equal(await page.locator("#first-person").count(), 0);
     await page.screenshot({ path: "test-results/outfit-mining.png" });
     await page.reload();
     await page.waitForFunction(

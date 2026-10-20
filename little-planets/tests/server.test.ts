@@ -2,7 +2,7 @@ import { newGame } from "../shared/model";
 import { ship } from "../shared/catalog";
 import { describe, it, expect } from "vitest";
 import { DatabaseSync } from "node:sqlite";
-import { legacySave } from "./fixtures";
+import { legacySave, prologueActions } from "./fixtures";
 import { createHmac } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -63,6 +63,8 @@ describe("SQLite persistence and authenticated API", () => {
     let store = new Store(file);
     try {
       let state = store.get(91, 1000);
+      for (const action of prologueActions())
+        state = store.action(91, state.revision, action, 1000);
       state = store.action(
         91,
         state.revision,
@@ -215,13 +217,24 @@ describe("SQLite persistence and authenticated API", () => {
         },
       });
       expect(forged.statusCode).toBe(400);
+      const headquarters = built
+        .json()
+        .state.worlds.home.buildings.find(
+          (b: any) => b.kind === "headquarters",
+        );
       const invalid = await app.inject({
         method: "POST",
         url: "/api/action",
         headers,
         payload: {
           revision: 1,
-          action: { type: "build", kind: "house", x: 15, z: 18, rotation: 0 },
+          action: {
+            type: "build",
+            kind: "house",
+            x: headquarters.x,
+            z: headquarters.z,
+            rotation: 0,
+          },
         },
       });
       expect(invalid.statusCode).toBe(400);

@@ -1,3 +1,10 @@
+import {
+  STORY_PLANTS,
+  STORY_METEOR,
+  STORY_ROBOT,
+  SYSTEM_PLANETS,
+  type Prologue,
+} from "./prologue";
 import { expandSavedWorlds } from "./expansion";
 import { resourceValid, INDUSTRIAL_RECIPES, RAW_RESOURCES } from "./resources";
 import {
@@ -122,6 +129,13 @@ export interface Enemy {
 }
 export interface PlanetState {
   crops: Record<string, Crop>;
+  gardens: { x: number; z: number }[];
+  fences: {
+    x: number;
+    z: number;
+    kind: "wood" | "stone" | "energy";
+    rotation: number;
+  }[];
   buildings: Building[];
   depleted: Record<string, number>;
   eventEpoch: number;
@@ -175,6 +189,7 @@ function validatePlacement(
 export interface Save {
   version: 6;
   planetScale: number;
+  prologue: Prologue;
   freeConstruction: boolean;
   scans: PlanetId[];
   profile: {
@@ -183,7 +198,14 @@ export interface Save {
   };
   fleet: Starship[];
   activeShip: string;
-  hand: "pickaxe" | "grapple" | "sword" | "spear" | "blaster" | "none";
+  hand:
+    | "cultivator"
+    | "pickaxe"
+    | "grapple"
+    | "sword"
+    | "spear"
+    | "blaster"
+    | "none";
   progression: Progression;
   grapple: GrappleState | null;
   cycleEpoch: number;
@@ -236,6 +258,35 @@ const starshipSchema = z.object({
 });
 export const ActionSchema = z.discriminatedUnion("type", [
   z
+    .object({
+      type: z.literal("story"),
+      step: z.enum(["begin", "plant", "meteor", "repair", "launch", "finish"]),
+      index: z.number().int().min(0).max(2).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("removeFence"),
+      index: z.number().int().nonnegative().max(511),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("cultivate"),
+      x: cell,
+      z: cell,
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("fence"),
+      x: z.number().finite().nonnegative(),
+      z: z.number().finite().nonnegative(),
+      kind: z.enum(["wood", "stone", "energy"]),
+      rotation: z.number().int().min(0).max(3),
+    })
+    .strict(),
+  z
     .object({ type: z.literal("upgradeBuilding"), id: z.string().max(100) })
     .strict(),
   z.object({ type: z.literal("scanPlanet"), planet }).strict(),
@@ -259,7 +310,15 @@ export const ActionSchema = z.discriminatedUnion("type", [
   z
     .object({
       type: z.literal("hand"),
-      item: z.enum(["pickaxe", "grapple", "sword", "spear", "blaster", "none"]),
+      item: z.enum([
+        "cultivator",
+        "pickaxe",
+        "grapple",
+        "sword",
+        "spear",
+        "blaster",
+        "none",
+      ]),
     })
     .strict(),
   z
@@ -390,6 +449,7 @@ export const ActionSchema = z.discriminatedUnion("type", [
         "planetdrill",
         "scanner",
         "shipyard",
+        "telescope",
       ]),
       x: z.number().finite().min(0).max(224),
       z: z.number().finite().min(0).max(224),
@@ -439,6 +499,8 @@ export type Action = z.infer<typeof ActionSchema>;
 export function freshWorld(p: PlanetId, now: number): PlanetState {
   return {
     crops: {},
+    gardens: [],
+    fences: [],
     buildings:
       p === "home"
         ? [
@@ -464,13 +526,27 @@ export function freshWorld(p: PlanetId, now: number): PlanetState {
     stock: {},
   };
 }
-export function newGame(now = Date.now(), freeConstruction = false): Save {
+// The plain factory is also used by simulations; real new players opt into the prologue.
+export function newGame(
+  now = Date.now(),
+  freeConstruction = false,
+  introduction = false,
+): Save {
   const worlds = {} as Save["worlds"];
   for (const p of Object.keys(PLANETS).slice(0, 30) as PlanetId[])
     worlds[p] = freshWorld(p, now);
   worlds.home.launchPad = { ...ship("home"), shipId: "starter" };
+  if (introduction) {
+    worlds.home.buildings[0].x = 13;
+    worlds.home.buildings[0].z = 15;
+    prepareFoundation(worlds.home, worlds.home.buildings[0], "home", 3);
+  }
+  if (introduction)
+    for (const p of [...STORY_PLANTS, STORY_METEOR, STORY_ROBOT])
+      prepareFoundation(worlds.home, p, "home", 2);
   const inventory: Record<string, number> = {
     "tool:pickaxe": 1,
+    "tool:cultivator": 1,
     "tool:grapple": 1,
     wood: 90,
     stone: 75,
@@ -484,6 +560,11 @@ export function newGame(now = Date.now(), freeConstruction = false): Save {
   return {
     version: 6,
     planetScale: 1.2,
+    prologue: {
+      phase: introduction ? "arrival" : "complete",
+      plants: [],
+      meteor: false,
+    },
     freeConstruction,
     scans: ["home"],
     profile: { visits: { home: { seconds: 0, arrivals: 1 } }, lastAt: now },
@@ -498,14 +579,14 @@ export function newGame(now = Date.now(), freeConstruction = false): Save {
     flight: null,
     revision: 0,
     planet: "home",
-    position: { x: ship("home").x - 1, z: ship("home").z },
+    position: { x: ship("home").x - 2, z: ship("home").z },
     inventory,
     worlds,
     updatedAt: now,
     inside: null,
     outsidePosition: null,
     interiors: { "home-hq": [] },
-    discovered: [...INITIAL_PLANETS],
+    discovered: introduction ? ["home"] : [...INITIAL_PLANETS],
     lastDiscovery: null,
     equipment: { weapon: null, armor: null },
     health: 100,
@@ -514,6 +595,9 @@ export function newGame(now = Date.now(), freeConstruction = false): Save {
     lastAttack: 0,
     lastDamage: 0,
   };
+}
+export function gardenBeds(save: Pick<Save, "worlds">, p: PlanetId) {
+  return [...beds(p), ...(save.worlds[p]?.gardens ?? [])];
 }
 export function stage(crop: Crop, now: number) {
   return Math.min(
@@ -569,6 +653,9 @@ export function walkable(
 ): boolean {
   if (!save.inside && isSphere(p))
     return (
+      !(save.worlds[p]?.fences ?? []).some(
+        (f) => surfaceDistance(f, { x, z }, p) < 0.45,
+      ) &&
       Number.isFinite(x) &&
       Number.isFinite(z) &&
       x >= 0 &&
@@ -817,7 +904,129 @@ export function applyAction(
     ].includes(action.type)
   )
     throw new RuleError("Сначала выйдите из дома.");
+  if (
+    save.prologue.phase !== "complete" &&
+    ["boardShip", "travel", "grappleStart", "createShip", "placeShip"].includes(
+      action.type,
+    )
+  )
+    throw new RuleError(
+      "Сначала восстановите двигатель и выполните первый запуск.",
+    );
   switch (action.type) {
+    case "story": {
+      const q = save.prologue;
+      if (save.planet !== "home" || save.inside)
+        throw new RuleError("Вернитесь к кораблю на Родной.");
+      if (action.step === "begin" && q.phase === "arrival") q.phase = "plants";
+      else if (
+        action.step === "plant" &&
+        q.phase === "plants" &&
+        action.index !== undefined
+      ) {
+        const plant = STORY_PLANTS[action.index];
+        nearby(save, plant.x, plant.z, 3);
+        if (q.plants.includes(action.index))
+          throw new RuleError("Растение уже собрано.");
+        q.plants.push(action.index);
+        save.inventory["engine:fiber"] =
+          (save.inventory["engine:fiber"] ?? 0) + 1;
+        save.inventory[`crop:${plant.plant}`] =
+          (save.inventory[`crop:${plant.plant}`] ?? 0) + 1;
+        gainExperience(save, 12);
+        if (q.plants.length === 3) q.phase = "meteor";
+      } else if (action.step === "meteor" && q.phase === "meteor") {
+        nearby(save, STORY_METEOR.x, STORY_METEOR.z, 3);
+        if (save.hand !== "pickaxe")
+          throw new RuleError("Возьмите кирку для добычи железа.");
+        save.inventory.iron = (save.inventory.iron ?? 0) + 3;
+        q.meteor = true;
+        q.phase = "repair";
+        gainExperience(save, 8);
+      } else if (action.step === "repair" && q.phase === "repair") {
+        const pad = landingPad(save, "home");
+        nearby(save, pad.x, pad.z, 3);
+        if (
+          !q.meteor ||
+          q.plants.length !== 3 ||
+          save.inventory.iron < 3 ||
+          !(save.inventory["engine:fiber"] >= 3)
+        )
+          throw new RuleError(
+            "Нужны 3 биоволокна растений и 3 железа из метеорита.",
+          );
+        save.inventory.iron -= 3;
+        save.inventory["engine:fiber"] -= 3;
+        q.phase = "launch";
+        gainExperience(save, 25);
+      } else if (action.step === "launch" && q.phase === "launch") {
+        const pad = landingPad(save, "home");
+        nearby(save, pad.x, pad.z, 3);
+        q.phase = "reveal";
+        save.discovered = [...new Set([...save.discovered, ...SYSTEM_PLANETS])];
+      } else if (action.step === "finish" && q.phase === "reveal")
+        q.phase = "complete";
+      else throw new RuleError("Сначала завершите предыдущий этап задания.");
+      break;
+    }
+    case "cultivate": {
+      if (save.hand !== "cultivator" || !save.inventory["tool:cultivator"])
+        throw new RuleError("Возьмите культиватор.");
+      validatePlacement(save, action, 0.8);
+      nearby(save, action.x, action.z, 3.2);
+      if (
+        gardenBeds(save, save.planet).some(
+          (b) => surfaceDistance(b, action, save.planet) < 0.85,
+        )
+      )
+        throw new RuleError("Здесь уже есть грядка.");
+      if (world.gardens.length >= 256)
+        throw new RuleError("Лимит: 256 новых грядок на планете.");
+      if (
+        surfaceDistance(action, landingPad(save, save.planet), save.planet) < 3
+      )
+        throw new RuleError("На площадке нельзя делать грядки.");
+      prepareFoundation(world, action, save.planet, 1);
+      world.gardens.push({ x: action.x, z: action.z });
+      gainExperience(save, 2);
+      break;
+    }
+    case "removeFence": {
+      const f = world.fences[action.index];
+      if (!f) throw new RuleError("Ограда не найдена.");
+      nearby(save, f.x, f.z, 3.2);
+      world.fences.splice(action.index, 1);
+      break;
+    }
+    case "fence": {
+      if (surfaceDistance(action, save.position, save.planet) < 0.6)
+        throw new RuleError("Отойдите от места установки ограды.");
+      validatePlacement(save, action, 0.2);
+      nearby(save, action.x, action.z, 7);
+      if (
+        surfaceDistance(action, landingPad(save, save.planet), save.planet) < 3
+      )
+        throw new RuleError("Площадка должна оставаться свободной.");
+      if (world.fences.length >= 512)
+        throw new RuleError("Лимит оград на планете.");
+      if (
+        world.fences.some((f) => surfaceDistance(f, action, save.planet) < 0.65)
+      )
+        throw new RuleError("Здесь уже есть ограда.");
+      charge(
+        save,
+        action.kind === "energy"
+          ? { iron: 1, quartz: 1 }
+          : { [action.kind]: 1 },
+      );
+      world.fences.push({
+        x: action.x,
+        z: action.z,
+        kind: action.kind,
+        rotation: action.rotation,
+      });
+      break;
+    }
     case "upgradeBuilding": {
       const b = world.buildings.find((b) => b.id === action.id);
       if (!b || !["scanner", "planetdrill"].includes(b.kind))
@@ -939,7 +1148,11 @@ export function applyAction(
       break;
     }
     case "hand": {
-      if (action.item === "pickaxe" || action.item === "grapple") {
+      if (
+        action.item === "cultivator" ||
+        action.item === "pickaxe" ||
+        action.item === "grapple"
+      ) {
         if (!(save.inventory[`tool:${action.item}`] > 0))
           throw new RuleError("Предмета нет в рюкзаке.");
         save.equipment.weapon = null;
@@ -1325,7 +1538,9 @@ export function applyAction(
       )
         throw new RuleError("Это растение для другого биома.");
       if (
-        !beds(save.planet).some((b) => b.x === action.x && b.z === action.z) ||
+        !gardenBeds(save, save.planet).some(
+          (b) => b.x === action.x && b.z === action.z,
+        ) ||
         world.crops[k]
       )
         throw new RuleError("Нужна свободная грядка.");
@@ -1599,6 +1814,7 @@ const bSchema = z.object({
     "planetdrill",
     "scanner",
     "shipyard",
+    "telescope",
   ]),
   x: z.number().finite().min(0).max(224),
   z: z.number().finite().min(0).max(224),
@@ -1627,6 +1843,26 @@ const fSchema = z.object({
 });
 const worldSchema = z.object({
   crops: z.record(z.string(), cropSchema),
+  gardens: z
+    .array(
+      z.object({
+        x: z.number().finite().nonnegative(),
+        z: z.number().finite().nonnegative(),
+      }),
+    )
+    .max(256)
+    .default([]),
+  fences: z
+    .array(
+      z.object({
+        x: z.number().finite().nonnegative(),
+        z: z.number().finite().nonnegative(),
+        kind: z.enum(["wood", "stone", "energy"]),
+        rotation: z.number().int().min(0).max(3),
+      }),
+    )
+    .max(512)
+    .default([]),
   buildings: z.array(bSchema),
   depleted: z.record(z.string(), z.number().finite()),
   eventEpoch: z.number().finite(),
@@ -1674,6 +1910,21 @@ const positionSchema = z.object({
 });
 const saveSchema = z.object({
   version: z.literal(6),
+  prologue: z
+    .object({
+      phase: z.enum([
+        "arrival",
+        "plants",
+        "meteor",
+        "repair",
+        "launch",
+        "reveal",
+        "complete",
+      ]),
+      plants: z.array(z.number().int().min(0).max(2)).max(3),
+      meteor: z.boolean(),
+    })
+    .default({ phase: "complete", plants: [], meteor: false }),
   planetScale: z.union([z.literal(1), z.literal(1.2)]).default(1),
   freeConstruction: z.boolean().default(true),
   scans: z.array(planet).default(["home"]),
@@ -1699,7 +1950,15 @@ const saveSchema = z.object({
     .default(() => [starterShip()]),
   activeShip: z.string().default("starter"),
   hand: z
-    .enum(["pickaxe", "grapple", "sword", "spear", "blaster", "none"])
+    .enum([
+      "cultivator",
+      "pickaxe",
+      "grapple",
+      "sword",
+      "spear",
+      "blaster",
+      "none",
+    ])
     .default("pickaxe"),
   progression: z
     .object({
@@ -1869,6 +2128,7 @@ export function parseSave(raw: string): Save {
   const save = saveSchema.parse(data) as Save;
   expandSavedWorlds(save);
   save.inventory["tool:grapple"] ??= 1;
+  save.inventory["tool:cultivator"] ??= 1;
   if (data.hand === undefined)
     save.hand = (save.equipment.weapon as Save["hand"]) ?? "pickaxe";
   for (const p of save.discovered)
@@ -1887,6 +2147,13 @@ export function parseSave(raw: string): Save {
   )
     throw new Error("Повреждённый трос");
   for (const [id, w] of Object.entries(save.worlds)) {
+    const p = id as PlanetId;
+    if (
+      [...w.gardens, ...w.fences].some(
+        (v) => v.x >= planetSize(p) || v.z >= planetDepth(p),
+      )
+    )
+      throw new Error("Повреждённый сад");
     if (
       w.launchPad &&
       (w.launchPad.x >= planetSize(id as PlanetId) ||
@@ -1903,7 +2170,10 @@ export function parseSave(raw: string): Save {
   for (const p of Object.keys(save.worlds) as PlanetId[])
     for (const [k, crop] of Object.entries(save.worlds[p].crops)) {
       const [x, z] = k.split(",").map(Number);
-      if (!PLANTS[crop.plant] || !beds(p).some((b) => b.x === x && b.z === z))
+      if (
+        !PLANTS[crop.plant] ||
+        !gardenBeds(save, p).some((b) => b.x === x && b.z === z)
+      )
         throw new Error("Повреждённое растение");
     }
   if (

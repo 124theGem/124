@@ -68,6 +68,14 @@ export class Astronaut {
     this.equippedKey = key;
     this.equipment.clear();
     this.armor.clear();
+    if (hand === "cultivator") {
+      const hoe = new T.Group();
+      this.kit.box(hoe, 0, -0.3, 0.15, 0.06, 0.65, 0.06, 0xb89c72);
+      this.kit.box(hoe, 0, -0.6, 0.28, 0.35, 0.08, 0.3, 0x80d0c3);
+      for (const x of [-0.13, 0, 0.13])
+        this.kit.box(hoe, x, -0.66, 0.38, 0.045, 0.16, 0.06, 0xcce8df);
+      this.equipment.add(hoe);
+    }
     if (weapon && hand === weapon) {
       const object = this.kit.gear(weapon);
       object.scale.setScalar(0.55);

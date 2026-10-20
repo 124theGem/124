@@ -1,3 +1,5 @@
+import { STORY_PLANTS, STORY_ROBOT, STORY_METEOR } from "../../shared/prologue";
+import { gardenBeds } from "../../shared/model";
 import { voxelCell, surfaceHeight } from "../../shared/voxel";
 import { landingPad } from "../../shared/model";
 import * as T from "three";
@@ -51,6 +53,8 @@ export class SphereWorld {
   private landingBase!: T.Group;
   private shipVisualKey = "";
   readonly id: PlanetId;
+  private storyProps = new T.Group();
+  private storyKey = "";
   readonly tiles: number;
   nature: SphereNature;
   private clearingKey = "";
@@ -83,7 +87,7 @@ export class SphereWorld {
   ) {
     this.id = save.planet;
     this.blockHighlight.visible = false;
-    this.root.add(this.blockHighlight);
+    this.root.add(this.blockHighlight, this.storyProps);
     setTerrainEdits(this.id, save.worlds[this.id].terrain);
     const tile = tiledSphere(this.id);
     this.geometry = tile.geometry;
@@ -148,6 +152,35 @@ export class SphereWorld {
       sphereUp(center, this.id),
     );
   }
+  pickFence(ray: T.Ray): number | null {
+    this.root.updateMatrixWorld(true);
+    const caster = new T.Raycaster();
+    caster.ray.copy(ray);
+    const hit = caster.intersectObject(this.structures, true)[0];
+    const ground = caster.intersectObject(this.ground, false)[0];
+    if (!hit || (ground && ground.distance + 0.05 < hit.distance)) return null;
+    let o: T.Object3D | null = hit.object;
+    while (o) {
+      if (o.userData.fenceIndex !== undefined) return o.userData.fenceIndex;
+      o = o.parent;
+    }
+    return null;
+  }
+  pickStory(ray: T.Ray): number | null {
+    this.root.updateMatrixWorld(true);
+    const caster = new T.Raycaster();
+    caster.ray.copy(ray);
+    const hit = caster.intersectObject(this.storyProps, true)[0];
+    if (!hit) return null;
+    const ground = caster.intersectObject(this.ground, false)[0];
+    if (ground && ground.distance + 0.05 < hit.distance) return null;
+    let o: T.Object3D | null = hit.object;
+    while (o) {
+      if (o.userData.storyIndex !== undefined) return o.userData.storyIndex;
+      o = o.parent;
+    }
+    return null;
+  }
   pickShip(ray: T.Ray) {
     if (!this.ship.visible) return false;
     this.root.updateMatrixWorld(true);
@@ -203,14 +236,35 @@ export class SphereWorld {
       const design = save.fleet.find(
         (sh) => sh.id === (record?.shipId ?? save.activeShip),
       );
-      const key = JSON.stringify([pad, design]);
+      const key = JSON.stringify([pad, design, save.prologue.phase]);
       if (key !== this.shipVisualKey) {
         this.shipVisualKey = key;
         this.ship.traverse((o) => {
           if (o instanceof T.InstancedMesh) o.dispose();
         });
         this.ship.clear();
-        this.ship.add(this.kit.ship(design));
+        const model = this.kit.ship(design);
+        if (
+          this.id === "home" &&
+          ["arrival", "plants", "meteor", "repair"].includes(
+            save.prologue.phase,
+          )
+        ) {
+          model.rotation.z = 0.16;
+          this.kit.box(model, 0.6, 0.9, -1, 0.3, 0.3, 0.6, 0xe58b48, true);
+          for (let i = 0; i < 4; i++)
+            this.kit.box(
+              model,
+              -0.7 + i * 0.4,
+              0.5,
+              -1.7,
+              0.12,
+              0.22,
+              0.5,
+              0x29343b,
+            );
+        }
+        this.ship.add(model);
         this.ship.visible = record?.shipId !== null;
         this.landingBase.position.copy(spherePoint(pad, 0.04, this.id));
         this.landingBase.quaternion.setFromUnitVectors(
@@ -253,6 +307,8 @@ export class SphereWorld {
             level,
           }),
         ),
+        save.worlds[this.id].gardens,
+        save.worlds[this.id].fences,
         save.worlds[this.id].crops,
         Object.values(save.worlds[this.id].crops).map((c) => stage(c, now)),
       ]);
@@ -262,7 +318,7 @@ export class SphereWorld {
         if (o instanceof T.InstancedMesh) o.dispose();
       });
       this.structures.clear();
-      for (const b of beds(this.id)) {
+      for (const b of gardenBeds(save, this.id)) {
         const bed = new T.Group();
         this.kit.box(bed, 0, 0.04, 0, 0.85, 0.1, 0.85, 0x8b7552);
         const crop = save.worlds[this.id].crops[`${b.x},${b.z}`];
@@ -278,6 +334,39 @@ export class SphereWorld {
         );
         this.structures.add(bed);
       }
+      for (const [index, f] of save.worlds[this.id].fences.entries()) {
+        const g = new T.Group(),
+          color =
+            f.kind === "wood"
+              ? 0xb5966c
+              : f.kind === "stone"
+                ? 0xd0d9cb
+                : 0x425b65;
+        for (const x of [-0.48, 0.48])
+          this.kit.box(g, x, 0.38, 0, 0.12, 0.8, 0.12, color);
+        for (const y of [0.28, 0.6])
+          this.kit.box(
+            g,
+            0,
+            y,
+            0,
+            1.05,
+            0.1,
+            0.1,
+            f.kind === "energy" ? 0x72e5dc : color,
+            f.kind === "energy",
+          );
+        if (f.kind === "stone")
+          this.kit.box(g, 0, 0.2, 0, 0.9, 0.4, 0.18, color);
+        g.position.copy(spherePoint(f, 0.02, this.id));
+        g.quaternion.setFromUnitVectors(
+          T.Object3D.DEFAULT_UP,
+          sphereUp(f, this.id),
+        );
+        g.rotateY((f.rotation * Math.PI) / 2);
+        g.userData.fenceIndex = index;
+        this.structures.add(g);
+      }
       for (const b of save.worlds[this.id].buildings) {
         const model = this.kit.building(b.kind, this.id, b.level ?? 1);
         model.position.copy(spherePoint(b, 0, this.id));
@@ -290,6 +379,50 @@ export class SphereWorld {
       }
     }
 
+    const storyKey = JSON.stringify(save.prologue);
+    if (this.id === "home" && storyKey !== this.storyKey) {
+      this.storyKey = storyKey;
+      this.storyProps.traverse((o) => {
+        if (o instanceof T.InstancedMesh) o.dispose();
+      });
+      this.storyProps.clear();
+      const add = (g: T.Group, p: { x: number; z: number }, index: number) => {
+        g.position.copy(spherePoint(p, 0.05, this.id));
+        g.quaternion.setFromUnitVectors(
+          T.Object3D.DEFAULT_UP,
+          sphereUp(p, this.id),
+        );
+        g.userData.storyIndex = index;
+        this.storyProps.add(g);
+      };
+      if (save.prologue.phase !== "complete") {
+        const robot = new T.Group();
+        this.kit.box(robot, 0, 0.35, 0, 0.5, 0.55, 0.38, 0xd9e3d3);
+        this.kit.box(robot, 0, 0.7, 0, 0.65, 0.3, 0.45, 0x344e5a);
+        this.kit.box(robot, 0, 0.73, 0.24, 0.4, 0.08, 0.03, 0x8ceee0, true);
+        for (const x of [-0.27, 0.27])
+          this.kit.box(robot, x, 0.12, 0, 0.16, 0.24, 0.4, 0x55757d);
+        this.kit.box(robot, 0.2, 1, 0, 0.035, 0.35, 0.035, 0x7fe9de, true);
+        add(robot, STORY_ROBOT, -1);
+      }
+      STORY_PLANTS.forEach((p, i) => {
+        if (
+          save.prologue.phase === "complete" ||
+          save.prologue.plants.includes(i)
+        )
+          return;
+        const g = this.kit.plant(p.plant);
+        this.kit.box(g, 0, 0.05, 0, 0.8, 0.07, 0.8, 0x80efd5, true);
+        add(g, p, i);
+      });
+      if (!save.prologue.meteor && save.prologue.phase !== "complete") {
+        const g = new T.Group();
+        this.kit.box(g, 0, 0.35, 0, 1.1, 0.7, 0.85, 0x576675);
+        for (const x of [-0.3, 0, 0.3])
+          this.kit.box(g, x, 0.65, 0.18, 0.1, 0.18, 0.6, 0xefac64, true);
+        add(g, STORY_METEOR, 3);
+      }
+    }
     const ns = nodes(this.id),
       signature =
         terrainKey +

@@ -1,3 +1,4 @@
+import { storyText } from "../../shared/prologue";
 import { hudIcon } from "./Glyphs";
 import { SHIP_CLASS_NAMES, SHIP_STATS } from "../../shared/ships";
 import { GalaxyMap } from "./GalaxyMap";
@@ -79,7 +80,9 @@ export class UI {
   onProfile = () => {};
   onScanPlanet = (id: PlanetId) => {};
   private galaxyMap?: GalaxyMap;
-  onFirstPerson = () => {};
+  onObservePlanet = (id: PlanetId) => {};
+  onStory = () => {};
+  onStoryTarget = () => {};
   onHand = (hand: Save["hand"]) => {};
   onUnderfoot = () => {};
   onGrapple = (planet: PlanetId) => {};
@@ -125,8 +128,9 @@ export class UI {
   constructor(readonly local: boolean) {
     this.root.className = "hud";
     this.root.innerHTML = `
- <header class="topbar"><div class="identity"><button id="profile" class="avatar" aria-label="Профиль и космический паспорт">${hudIcon("profile")}</button><div><div class="brand">LITTLE PLANETS <span>AURORA / EXPLORER</span></div><strong id="planet-name">Родная</strong><small id="planet-tag"></small></div></div><div class="top-buttons"><button id="first-person" title="Вид от первого лица" aria-label="Вид от первого лица">${hudIcon("view")}</button><button id="view" title="Камера" aria-label="Переключить камеру">${hudIcon("planet")}</button><button id="audio-toggle" title="Звук" aria-label="Включить или выключить звук">${hudIcon("audio")}</button><button id="settings" title="Настройки" aria-label="Настройки">${hudIcon("settings")}</button></div></header>
+ <header class="topbar"><div class="identity"><button id="profile" class="avatar" aria-label="Профиль и космический паспорт">${hudIcon("profile")}</button><div><div class="brand">LITTLE PLANETS <span>AURORA / EXPLORER</span></div><strong id="planet-name">Родная</strong><small id="planet-tag"></small></div></div><div class="top-buttons"><button id="view" title="Камера" aria-label="Переключить камеру">${hudIcon("planet")}</button><button id="audio-toggle" title="Звук" aria-label="Включить или выключить звук">${hudIcon("audio")}</button><button id="settings" title="Настройки" aria-label="Настройки">${hudIcon("settings")}</button></div></header>
 
+ <aside id="story-panel" class="story-panel hidden"></aside><section id="optics" class="optics hidden"></section>
  <button id="mine-strike" class="mine-strike hidden" aria-label="Ударить киркой" title="Удерживайте, чтобы добывать">${hudIcon("pickaxe")}</button>
  <div id="combat-hud" class="combat-hud hidden"><span>${hudIcon("health")}<b id="health-value">100</b><small>ЦЕЛОСТНОСТЬ</small></span><div class="health-track"><i id="health-fill"></i></div><small id="equipped-label"></small></div><button id="attack" class="attack-button hidden" aria-label="Атаковать">${hudIcon("blaster")}<small>Атака</small></button>
  <div id="event-banner" class="event-banner hidden" role="status"></div><div id="context" class="context panel hidden"></div><div id="build-panel" class="build-panel panel hidden"></div>
@@ -147,8 +151,8 @@ export class UI {
      "",
    )}</nav><button id="menu-toggle" aria-label="Открыть меню" aria-expanded="false"><span>${hudIcon("menu")}</span><small>Системы</small></button><span class="save-status" id="save-status">${local ? "LOCAL" : "ONLINE"} · сохранено</span></div>
  <div id="joystick" aria-label="Джойстик движения"><span></span></div><div class="keyboard"><kbd>W A S D</kbd> движение <span>·</span> перетащите для обзора</div>
- <div id="placement-mode" class="placement-mode hidden"><span>${hudIcon("build")}</span><div><small>РАЗМЕЩЕНИЕ</small><strong id="placement-name"></strong></div><button id="cancel-placement" aria-label="Завершить размещение">${hudIcon("close")}</button></div>
- <div id="handbar" class="handbar" aria-label="Предмет в руках"></div><button id="underfoot" class="underfoot" title="Поставить блок под собой">${hudIcon("block")}<span>Под себя</span></button><div id="progress-hud" class="progress-hud"><button id="skills-button"></button><div><i id="xp-fill"></i></div><small id="day-clock"></small></div><div id="crosshair" class="crosshair hidden">+</div>
+ <div id="placement-mode" class="placement-mode hidden"><span>${hudIcon("build")}</span><div><small>РАЗМЕЩЕНИЕ</small><strong id="placement-name"></strong></div><button id="rotate-placement" class="hidden" aria-label="Повернуть ограду">↻</button><button id="cancel-placement" aria-label="Завершить размещение">${hudIcon("close")}</button></div>
+ <div id="handbar" class="handbar" aria-label="Предмет в руках"></div><button id="underfoot" class="underfoot" title="Поставить блок под собой">${hudIcon("block")}<span>Под себя</span></button><div id="progress-hud" class="progress-hud"><button id="skills-button"></button><div><i id="xp-fill"></i></div><small id="day-clock"></small></div>
  <section id="zipline-hud" class="zipline-hud hidden"><span class="eyebrow">ГАРПУН / МЕЖПЛАНЕТНЫЙ ТРОС</span><h3 id="zipline-target"></h3><progress id="zipline-progress" max="1"></progress><p>Держимся за перекладину · перелёт по тросу</p><button id="zipline-cancel">Вернуться на исходную планету</button></section><div id="toast" role="status"></div>
  <div id="modal" class="modal hidden"><section class="sheet" role="dialog" aria-modal="true" aria-labelledby="window-title"><header class="window-header"><div class="window-brand">${hudIcon("galaxy")}<span>AURORA<strong>КОМАНДНЫЙ ИНТЕРФЕЙС</strong></span></div><div class="window-breadcrumb"><span>СИСТЕМЫ</span><b id="window-title">Колония</b></div><button class="close" id="close-modal" aria-label="Закрыть окно">${hudIcon("close")}</button></header><nav class="window-nav" aria-label="Разделы командного интерфейса">${[
    ["profile", "profile", "Паспорт"],
@@ -172,7 +176,7 @@ export class UI {
     for (const [id, callback] of [
       ["cancel-placement", () => this.onCancelPlacement()],
       ["profile", () => this.onProfile()],
-      ["first-person", () => this.onFirstPerson()],
+
       ["skills-button", () => this.onSkills()],
       ["underfoot", () => this.onUnderfoot()],
       ["inventory", () => this.onInventory()],
@@ -280,11 +284,35 @@ export class UI {
     );
   }
   update(save: Save, now: number) {
+    const q = save.prologue,
+      storySignature = JSON.stringify(q);
+    this.root.classList.toggle("in-prologue", q.phase !== "complete");
+    const story = this.el("story-panel");
+    story.classList.toggle("hidden", q.phase === "complete");
+    if (story.dataset.signature !== storySignature) {
+      story.dataset.signature = storySignature;
+      const [title, text] = storyText(q);
+      story.innerHTML = `<span class="eyebrow">${hudIcon("automation")} ПИКО / БОРТОВОЙ ПОМОЩНИК</span><h3>${title}</h3><p>${text}</p>${q.phase === "arrival" ? '<button id="story-begin" class="primary">Начать восстановление</button>' : q.phase !== "reveal" ? '<button id="story-target">К цели задания ↗</button>' : ""}`;
+      if (q.phase === "arrival")
+        this.button("story-begin", () => this.onStory());
+      if (this.el("story-target"))
+        this.button("story-target", () => this.onStoryTarget());
+    }
+    if (this.el("mine-strike").dataset.tool !== save.hand) {
+      this.el("mine-strike").dataset.tool = save.hand;
+      this.el("mine-strike").innerHTML = hudIcon(
+        save.hand === "cultivator" ? "cultivator" : "pickaxe",
+      );
+      this.el("mine-strike").setAttribute(
+        "aria-label",
+        save.hand === "cultivator" ? "Обработать землю" : "Ударить киркой",
+      );
+    }
     this.el("save-status").dataset.testing = String(save.freeConstruction);
     const p = PLANETS[save.planet];
     this.el("mine-strike").classList.toggle(
       "hidden",
-      save.hand !== "pickaxe" ||
+      !["pickaxe", "cultivator"].includes(save.hand) ||
         !!save.inside ||
         !!save.flight ||
         !!save.grapple,
@@ -303,7 +331,13 @@ export class UI {
       available: boolean;
     }[] = [
       { id: "pickaxe", name: "Кирка", icon: "⛏", available: true },
-      { id: "grapple", name: "Гарпун", icon: "↗", available: true },
+      { id: "cultivator", name: "Культиватор", icon: "⚒", available: true },
+      {
+        id: "grapple",
+        name: "Гарпун",
+        icon: "↗",
+        available: save.prologue.phase === "complete",
+      },
       ...(["sword", "spear", "blaster"] as const).map((id) => ({
         id,
         name: GEAR[id].name,
@@ -320,7 +354,7 @@ export class UI {
       this.el("handbar").innerHTML = hands
         .map(
           (h, i) =>
-            `<button data-hand="${h.id}" title="${h.name}${h.available ? "" : " · сначала создайте"}" aria-label="${h.name}" aria-pressed="${save.hand === h.id}" ${h.available ? "" : "disabled"}><small>${i + 1}</small><span>${hudIcon(h.id)}</span></button>`,
+            `<button data-hand="${h.id}" title="${h.name}${h.available ? "" : h.id === "grapple" ? " · после первого запуска" : " · сначала создайте"}" aria-label="${h.name}" aria-pressed="${save.hand === h.id}" ${h.available ? "" : "disabled"}><small>${i + 1}</small><span>${hudIcon(h.id)}</span></button>`,
         )
         .join("");
       this.el("handbar")
@@ -612,17 +646,31 @@ export class UI {
       (id) => this.onScanPlanet(id),
       (id) =>
         this.travelMode === "grapple" ? this.onGrapple(id) : this.onTravel(id),
+      (id) => this.onObservePlanet(id),
     );
     (this.el("travel-mode") as HTMLSelectElement).onchange = () => {
       this.travelMode = (this.el("travel-mode") as HTMLSelectElement).value as
-        "ship" | "grapple";
+        | "ship"
+        | "grapple";
     };
   }
   placementMode(title: string | null) {
+    this.el("rotate-placement").classList.add("hidden");
     this.el("placement-mode").classList.toggle("hidden", !title);
     this.el("placement-name").textContent = title ?? "";
   }
   shipDock(save: Save) {
+    if (save.prologue.phase !== "complete") {
+      const q = save.prologue,
+        ready = q.phase === "launch";
+      this.panel(
+        `<span class="eyebrow">ПЕРВЫЙ СИГНАЛ / ДВИГАТЕЛЬ</span><h2>${ready ? "Корабль восстановлен" : "Повреждённый корабль"}</h2><p>${storyText(q)[1]}</p><div class="metric-strip"><span>Биоволокно<b>${q.plants.length}/3</b></span><span>Метеоритное железо<b>${q.meteor ? 3 : 0}/3</b></span></div>${q.phase === "repair" || ready ? `<button id="story-ship" class="primary">${ready ? "ЗАПУСТИТЬ" : "Восстановить двигатель · 3 биоволокна + 3 железа"}</button>` : ""}`,
+        "ship",
+      );
+      if (q.phase === "repair" || ready)
+        this.button("story-ship", () => this.onStory());
+      return;
+    }
     const dock = save.worlds[save.planet].launchPad;
     if (dock?.shipId === null) {
       this.panel(

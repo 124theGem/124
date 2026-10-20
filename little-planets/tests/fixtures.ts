@@ -27,3 +27,24 @@ export function legacySave() {
   });
   return save;
 }
+
+/** Complete the real introductory rules before unrelated flight regression fixtures. */
+export function prologueActions(): import("../shared/model").Action[] {
+  return [
+    { type: "story", step: "begin" },
+    ...[
+      { x: 8, z: 13 },
+      { x: 7, z: 14 },
+      { x: 9, z: 15 },
+    ].flatMap((at, index): import("../shared/model").Action[] => [
+      { type: "move", ...at },
+      { type: "story", step: "plant", index },
+    ]),
+    { type: "move", x: 6.5, z: 11 },
+    { type: "story", step: "meteor" },
+    { type: "move", x: 11.5, z: 11.5 },
+    { type: "story", step: "repair" },
+    { type: "story", step: "launch" },
+    { type: "story", step: "finish" },
+  ];
+}

@@ -1,3 +1,4 @@
+import { prologueActions } from "./fixtures";
 import {
   createAndPlaceDevice,
   placeInventoryItem,
@@ -65,6 +66,25 @@ const proxyAddress = proxy.address();
 if (!proxyAddress || typeof proxyAddress === "string")
   throw new Error("No proxy port");
 const url = `http://127.0.0.1:${proxyAddress.port}/planets/`;
+// New Telegram identities must repair the engine before flight; use authenticated API rules.
+let initial = await (
+  await fetch(url + "api/state", {
+    headers: { Authorization: `tma ${initData}` },
+  })
+).json();
+for (const action of prologueActions()) {
+  const r = await fetch(url + "api/action", {
+    method: "POST",
+    headers: {
+      Authorization: `tma ${initData}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ revision: initial.state.revision, action }),
+  });
+  initial = await r.json();
+  assert(r.ok, JSON.stringify(initial));
+}
+assert.equal(initial.state.prologue.phase, "complete");
 const browser = await chromium.launch({
   executablePath: process.env.CHROMIUM_PATH || "/usr/bin/chromium",
   headless: true,
@@ -116,7 +136,7 @@ try {
   await phone.waitForFunction(() =>
     Boolean(
       document.querySelector("canvas") ||
-      document.querySelector("#error-message"),
+        document.querySelector("#error-message"),
     ),
   );
   if (await phone.locator("#error-message").count())

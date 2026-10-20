@@ -52,6 +52,8 @@ export function expandSavedWorlds(save: Save) {
         return [key(Math.round(x * ratio), Math.round(z * ratio)), c];
       }),
     );
+    for (const g of w.gardens) point(g, p);
+    for (const f of w.fences) point(f, p);
     for (const b of w.buildings) point(b, p);
     for (const e of w.enemies) {
       point(e, p);

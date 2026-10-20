@@ -114,15 +114,13 @@ try {
     () => window.__planets.snapshot().state.progression.skills.combat === 1,
   );
   await page.locator("#close-modal").click();
-  await page.locator("#first-person").click();
-  await page.waitForFunction(() => window.__planets.snapshot().firstPerson);
+  assert.equal(await page.locator("#first-person").count(), 0);
   const before = (await snap()).position;
   await page.keyboard.down("w");
   await page.waitForTimeout(1100);
   await page.keyboard.up("w");
   assert.notDeepEqual((await snap()).position, before);
-  await page.screenshot({ path: "test-results/journey-first-person.png" });
-  await page.locator("#first-person").click();
+  await page.screenshot({ path: "test-results/journey-movement.png" });
   // Build on the current irregular, vegetated terrain; a prepared site is not required.
   await menu("build");
   await page.locator('[data-cube-building="house"]').click();
@@ -141,7 +139,7 @@ try {
   );
   assert((await snap()).state.worlds.home.cleared.length > 0);
   await page.screenshot({ path: "test-results/journey-colony.png" });
-  console.log("desktop: FPV and building checked");
+  console.log("desktop: third-person movement and building checked");
   await page.locator('[data-hand="grapple"]').click();
   await page.locator('[data-planet="nox"]').click();
   await page.waitForFunction(() => !!window.__planets.snapshot().zipline);
@@ -170,7 +168,7 @@ try {
   assert.deepEqual(errors, []);
   await context.close();
   console.log(
-    "PASS desktop: hands, block beneath feet, empty-program autosave/reload, skills, FPV, foundation and saved zipline arrival",
+    "PASS desktop: hands, block beneath feet, empty-program autosave/reload, skills, third-person movement, foundation and saved zipline arrival",
   );
   for (const viewport of [
     { width: 390, height: 844 },
@@ -188,15 +186,14 @@ try {
       false,
     );
     assert(await page.locator("#handbar").isVisible());
-    await page.locator("#first-person").click();
-    assert((await snap()).firstPerson);
+    assert.equal(await page.locator("#first-person").count(), 0);
     await page.screenshot({
       path: `test-results/journey-night-${viewport.width}x${viewport.height}.png`,
     });
     assert.deepEqual(errors, []);
     await context.close();
     console.log(
-      `PASS ${viewport.width}x${viewport.height}: hotbar, perspective view, night and viewport bounds`,
+      `PASS ${viewport.width}x${viewport.height}: hotbar, third-person view, night and viewport bounds`,
     );
   }
   {
@@ -205,27 +202,36 @@ try {
     fixture.position = { ...ship("ferra") };
     fixture = applyAction(fixture, { type: "deploy", kind: "collector" });
     const { page, context, errors } = await launch(
-      { width: 1100, height: 800 }, fixture,
+      { width: 1100, height: 800 },
+      fixture,
     );
     await page.waitForFunction(
-      () => window.__planets.snapshot().state.automation.devices[0].status !== "Готов",
+      () =>
+        window.__planets.snapshot().state.automation.devices[0].status !==
+        "Готов",
     );
-    const samples = await page.evaluate(() => new Promise((resolve) => {
-      const out = [];
-      const frame = () => {
-        const s = window.__planets.snapshot();
-        out.push({
-          robot: s.machines.find((d) => d.id === "device-1")?.position,
-          enemies: s.enemies.filter((e) => e.visible).map((e) => e.position),
-        });
-        if (out.length < 32) requestAnimationFrame(frame);
-        else resolve(out);
-      };
-      requestAnimationFrame(frame);
-    }));
+    const samples = await page.evaluate(
+      () =>
+        new Promise((resolve) => {
+          const out = [];
+          const frame = () => {
+            const s = window.__planets.snapshot();
+            out.push({
+              robot: s.machines.find((d) => d.id === "device-1")?.position,
+              enemies: s.enemies
+                .filter((e) => e.visible)
+                .map((e) => e.position),
+            });
+            if (out.length < 32) requestAnimationFrame(frame);
+            else resolve(out);
+          };
+          requestAnimationFrame(frame);
+        }),
+    );
     const positions = samples.map((s) => s.robot).filter(Boolean);
     assert(positions.length > 20);
-    let moved = 0, maxStep = 0;
+    let moved = 0,
+      maxStep = 0;
     for (let i = 1; i < positions.length; i++) {
       const distance = Math.hypot(
         ...positions[i].map((n, j) => n - positions[i - 1][j]),
@@ -239,7 +245,9 @@ try {
     assert.deepEqual(errors, []);
     await page.screenshot({ path: "test-results/journey-actors.png" });
     await context.close();
-    console.log("PASS live collector/enemy scene: intermediate render positions between server updates");
+    console.log(
+      "PASS live collector/enemy scene: intermediate render positions between server updates",
+    );
   }
   for (const [name, u, v] of [
     ["edge", 1, 0],

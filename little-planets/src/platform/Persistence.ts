@@ -6,7 +6,7 @@ import {
   type Action,
 } from "../../shared/model";
 export class Persistence {
-  state: Save = newGame(Date.now(), true);
+  state: Save = newGame(Date.now(), true, true);
   name = "Путешественник";
   private offset = 0;
   private queue = Promise.resolve();

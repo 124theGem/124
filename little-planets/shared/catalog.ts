@@ -48,7 +48,12 @@ export interface PlanetDefinition {
   sphereTheme?: SphereTheme;
 }
 export type GearKind =
-  "sword" | "spear" | "blaster" | "scout" | "guardian" | "aegis";
+  | "sword"
+  | "spear"
+  | "blaster"
+  | "scout"
+  | "guardian"
+  | "aegis";
 export const GEAR: Record<
   GearKind,
   {
@@ -142,9 +147,16 @@ export type BuildingKind =
   | "bioextractor"
   | "planetdrill"
   | "scanner"
-  | "shipyard";
+  | "shipyard"
+  | "telescope";
 export type FurnitureKind =
-  "chair" | "table" | "bed" | "sofa" | "cabinet" | "fireplace" | "rug";
+  | "chair"
+  | "table"
+  | "bed"
+  | "sofa"
+  | "cabinet"
+  | "fireplace"
+  | "rug";
 export const RESOURCE_LABELS = ALL_RESOURCE_LABELS;
 export const RESOURCE_ICONS: Record<string, string> = {
   wood: "🪵",
@@ -428,6 +440,15 @@ export interface BuildingRecipe {
   resources?: readonly string[];
 }
 export const BUILDINGS: Record<BuildingKind, BuildingRecipe> = {
+  telescope: {
+    name: "Орбитальный телескоп",
+    description:
+      "Оптическая обсерватория. Рассматривайте открытые планеты, вращайте и приближайте изображение.",
+    cost: { stone: 15, iron: 10, quartz: 8 },
+    icon: "⌕",
+    size: 3,
+    zone: "any",
+  },
   planetdrill: {
     name: "Планетарный поглотитель",
     description:
@@ -647,6 +668,10 @@ export function itemInfo(id: string): {
   icon: string;
   group: string;
 } {
+  if (id === "tool:cultivator")
+    return { name: "Культиватор", icon: "⚒", group: "Инструменты" };
+  if (id === "engine:fiber")
+    return { name: "Биоволокно двигателя", icon: "🌱", group: "Ресурсы" };
   if (id.startsWith("device:")) {
     const names: Record<string, string> = {
       collector: "Робот-сборщик",

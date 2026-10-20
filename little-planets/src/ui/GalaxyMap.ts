@@ -35,6 +35,7 @@ export class GalaxyMap {
     private save: Save,
     private scan: (p: PlanetId) => void,
     private travel: (p: PlanetId) => void,
+    private observe: (p: PlanetId) => void,
   ) {
     this.selection = save.lastDiscovery ?? save.planet;
     const station = scannerBuilding(save);
@@ -194,9 +195,12 @@ export class GalaxyMap {
       inRange = inScannerRange(this.save, id),
       parts = PLANET_COMPOSITION[id];
     this.root.querySelector("#sector-detail")!.innerHTML =
-      `<span class="eyebrow">${esc(constellationName(id))}</span><h3>${esc(p.name)}</h3><div class="scan-orb ${scanned ? "scanned" : ""}" style="--orb:${p.color};--scan-pie:conic-gradient(from 20deg,#74e0d5 0 ${parts[0].percent}%,#8a99e0 ${parts[0].percent}% ${parts[0].percent + parts[1].percent}%,#d6ac70 ${parts[0].percent + parts[1].percent}% 100%)"><span>${scanned ? "◈" : "?"}</span><i></i><b>${scanned ? "СПЕКТР ПОДТВЕРЖДЁН" : "НЕТ ДАННЫХ"}</b></div><p>${Math.round(planetDistance("home", id))} от Родной · ${p.hostile ? "Опасный сектор" : "Мирный сектор"}</p><div class="scan-resources">${scanned ? parts.map((r, i) => `<div><span>${RESOURCE_LABELS[r.resource]}</span><b>${r.percent}%</b><i style="width:${r.percent}%;--bar:${["#6ee6d8", "#8e9df5", "#efb86b"][i]}"></i></div>`).join("") : "<p>Состав неизвестен. Наведите сканер на сигнал.</p>"}</div><button id="scan-selected" class="primary" ${!inRange || scanned || this.save.planet !== "home" || this.save.flight ? "disabled" : ""}>${scanned ? "Скан завершён" : inRange ? "Сканировать планету" : "Вне радиуса сканера"}</button>${known && id !== this.save.planet ? '<button id="selected-course">Проложить маршрут ↗</button>' : ""}<small>Доли определяют реальную добычу поглотителя.</small>`;
+      `<span class="eyebrow">${esc(constellationName(id))}</span><h3>${esc(p.name)}</h3><div class="scan-orb ${scanned ? "scanned" : ""}" style="--orb:${p.color};--scan-pie:conic-gradient(from 20deg,#74e0d5 0 ${parts[0].percent}%,#8a99e0 ${parts[0].percent}% ${parts[0].percent + parts[1].percent}%,#d6ac70 ${parts[0].percent + parts[1].percent}% 100%)"><span>${scanned ? "◈" : "?"}</span><i></i><b>${scanned ? "СПЕКТР ПОДТВЕРЖДЁН" : "НЕТ ДАННЫХ"}</b></div><p>${Math.round(planetDistance("home", id))} от Родной · ${p.hostile ? "Опасный сектор" : "Мирный сектор"}</p><div class="scan-resources">${scanned ? parts.map((r, i) => `<div><span>${RESOURCE_LABELS[r.resource]}</span><b>${r.percent}%</b><i style="width:${r.percent}%;--bar:${["#6ee6d8", "#8e9df5", "#efb86b"][i]}"></i></div>`).join("") : "<p>Состав неизвестен. Наведите сканер на сигнал.</p>"}</div><button id="scan-selected" class="primary" ${!inRange || scanned || this.save.planet !== "home" || this.save.flight ? "disabled" : ""}>${scanned ? "Скан завершён" : inRange ? "Сканировать планету" : "Вне радиуса сканера"}</button><button id="observe-selected">Рассмотреть планету</button>${known && id !== this.save.planet ? '<button id="selected-course">Проложить маршрут ↗</button>' : ""}<small>Доли определяют реальную добычу поглотителя.</small>`;
     this.root.querySelector<HTMLButtonElement>("#scan-selected")!.onclick =
       () => this.scan(id);
+    const optics =
+      this.root.querySelector<HTMLButtonElement>("#observe-selected");
+    if (optics) optics.onclick = () => this.observe(id);
     const course =
       this.root.querySelector<HTMLButtonElement>("#selected-course");
     if (course) course.onclick = () => this.travel(id);

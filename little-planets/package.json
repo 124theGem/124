@@ -1,6 +1,6 @@
 {
   "name": "little-planets",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -13,7 +13,7 @@
     "build": "tsc --noEmit && vite build",
     "start": "tsx server/index.ts",
     "test": "vitest run",
-    "test:browser": "npm run test:cubeworks && npm run test:journey && npm run test:aurora && npm run test:flightdeck && npm run test:outfit",
+    "test:browser": "npm run test:cubeworks && npm run test:journey && npm run test:aurora && npm run test:flightdeck && npm run test:outfit && npm run test:firstlight",
     "test:production": "tsx tests/production-browser.ts",
     "package:server": "npm run build && node scripts/package-server.mjs",
     "test:upgrade": "node --import tsx tests/upgrade.mjs",
@@ -26,7 +26,8 @@
     "test:journey": "node --import tsx tests/journey-browser.mjs",
     "test:aurora": "node --import tsx tests/aurora-browser.mjs",
     "test:flightdeck": "node --import tsx tests/flightdeck-browser.mjs",
-    "test:outfit": "node --import tsx tests/outfit-browser.mjs"
+    "test:outfit": "node --import tsx tests/outfit-browser.mjs",
+    "test:firstlight": "node --import tsx tests/firstlight-browser.mjs"
   },
   "dependencies": {
     "three": "^0.180.0",

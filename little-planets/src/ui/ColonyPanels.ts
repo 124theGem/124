@@ -70,6 +70,22 @@ export class ColonyPanels {
       world = save.worlds[save.planet],
       b = world.buildings.find((b) => b.id === id);
     if (!b) return;
+    if (b.kind === "telescope") {
+      this.ui.panel(
+        `<span class="eyebrow">ОПТИЧЕСКАЯ ОБСЕРВАТОРИЯ</span><h2>Орбитальный телескоп</h2><p>Выберите мир из списка или найдите сигнал на карте. Перетаскивайте изображение для обзора со всех сторон; колесо и кнопки меняют увеличение.</p><div class="telescope-targets">${save.discovered.map((p) => `<button data-observe="${p}">${esc(PLANETS[p].name)} · ${esc(PLANETS[p].tag)}</button>`).join("")}</div><button id="telescope-map">Выбрать на звёздной карте</button>`,
+        "telescope",
+      );
+      this.ui
+        .el("modal-content")
+        .querySelectorAll<HTMLButtonElement>("[data-observe]")
+        .forEach(
+          (b) =>
+            (b.onclick = () =>
+              this.ui.onObservePlanet(b.dataset.observe as PlanetId)),
+        );
+      this.ui.button("telescope-map", () => this.ui.galaxy(this.state()));
+      return;
+    }
     if (b.kind === "shipyard") {
       this.shipyard(id);
       return;
@@ -182,7 +198,9 @@ export class ColonyPanels {
       name: (this.ui.el("ship-name") as HTMLInputElement).value || "Без имени",
       class: (this.ui.el("ship-class") as HTMLSelectElement).value as ShipClass,
       model: Number((this.ui.el("ship-model") as HTMLSelectElement).value) as
-        1 | 2 | 3,
+        | 1
+        | 2
+        | 3,
       hull: (this.ui.el("ship-hull") as HTMLSelectElement)
         .value as Starship["hull"],
       wings: (this.ui.el("ship-wings") as HTMLSelectElement)
