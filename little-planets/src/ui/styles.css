@@ -318,27 +318,7 @@ progress::-webkit-progress-value {
   width: 19px;
   height: 19px;
 }
-.minimap {
-  position: absolute;
-  right: calc(var(--right) + 20px);
-  top: calc(var(--top) + 89px);
-  width: 152px;
-  padding: 10px;
-  background: #0a141de8;
-  border: 1px solid var(--line-bright);
-  border-radius: 3px;
-  backdrop-filter: blur(10px);
-}
-.radar-heading {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font: 8px var(--mono);
-  letter-spacing: 0.05em;
-  color: #b3cad5;
-  margin-bottom: 9px;
-}
-.radar-heading i,
+
 .window-footer i,
 .window-nav-status i {
   width: 4px;
@@ -346,18 +326,6 @@ progress::-webkit-progress-value {
   background: var(--cyan);
   border-radius: 50%;
   box-shadow: 0 0 8px #78ddd180;
-}
-.radar-heading span {
-  margin-left: auto;
-  font-size: 7px;
-  color: var(--muted);
-}
-#minimap {
-  width: 100%;
-  height: auto;
-  display: block;
-  opacity: 0.84;
-  cursor: pointer;
 }
 .bottom {
   position: absolute;
@@ -2249,7 +2217,6 @@ progress::-webkit-progress-value {
   text-shadow: 0 0 9px #000;
 }
 .in-flight .topbar,
-.in-flight .minimap,
 .in-flight .bottom,
 .in-flight .handbar,
 .in-flight .underfoot,
@@ -2263,7 +2230,6 @@ progress::-webkit-progress-value {
 .in-zipline .bottom,
 .in-zipline .handbar,
 .in-zipline .underfoot,
-.in-zipline .minimap,
 .in-zipline .progress-hud,
 .in-zipline .keyboard,
 .in-zipline #joystick,
@@ -2468,20 +2434,6 @@ progress::-webkit-progress-value {
   .top-buttons #audio-toggle,
   .top-buttons #settings {
     display: none;
-  }
-  .minimap {
-    top: calc(var(--top) + 96px);
-    right: calc(var(--right) + 12px);
-    width: 107px;
-    padding: 7px;
-  }
-  .radar-heading {
-    font-size: 6px;
-    gap: 4px;
-    margin-bottom: 6px;
-  }
-  .radar-heading span {
-    font-size: 5px;
   }
   .bottom {
     left: calc(var(--left) + 12px);
@@ -3262,19 +3214,6 @@ progress::-webkit-progress-value {
     min-height: 32px;
     padding: 6px;
   }
-  .minimap {
-    top: calc(var(--top) + 67px);
-    right: calc(var(--right) + 12px);
-    width: 104px;
-    padding: 7px;
-  }
-  .radar-heading {
-    font-size: 6px;
-    margin-bottom: 6px;
-  }
-  .radar-heading span {
-    font-size: 5px;
-  }
   .progress-hud {
     right: calc(var(--right) + 12px);
     bottom: calc(var(--bottom) + 14px);
@@ -3501,5 +3440,104 @@ progress::-webkit-progress-value {
   *:after {
     transition: none !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* Outfit: scrollable colony systems and direct mining controls. */
+#menu-items {
+  pointer-events: auto;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: #78ddd170 #0b141d;
+}
+#menu-items > button {
+  touch-action: pan-y;
+}
+.window-nav {
+  touch-action: pan-x;
+}
+.device-palette .selected {
+  border-color: var(--cyan);
+  background: #1b333d;
+}
+.device-crafting {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  background: var(--raised);
+  border: 1px solid var(--line-bright);
+  margin: 12px 0;
+}
+.device-crafting > label {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex: 1;
+  min-width: 220px;
+  flex-wrap: wrap;
+}
+.device-crafting > label {
+  font-size: 9px;
+}
+.device-crafting > label select {
+  width: 100%;
+}
+.device-crafting > small {
+  width: 100%;
+}
+.mine-strike {
+  pointer-events: auto;
+  position: absolute;
+  right: calc(var(--right) + 24px);
+  bottom: calc(var(--bottom) + 150px);
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: #102b32eb;
+  border: 1px solid var(--cyan);
+  color: var(--cyan);
+  padding: 17px;
+  touch-action: none;
+  z-index: 8;
+}
+.mine-strike .ui-icon {
+  width: 30px;
+  height: 30px;
+}
+.mine-strike.striking .ui-icon {
+  animation: pickaxe-strike 0.42s ease-in-out infinite;
+}
+@keyframes pickaxe-strike {
+  45% {
+    transform: rotate(-42deg) translateY(3px);
+  }
+}
+.in-flight .mine-strike,
+.in-zipline .mine-strike,
+.hud:has(.modal:not(.hidden)) .mine-strike {
+  display: none !important;
+}
+@media (max-height: 520px) {
+  .mine-strike {
+    bottom: calc(var(--bottom) + 110px);
+    width: 54px;
+    height: 54px;
+    padding: 12px;
+  }
+}
+@media (max-width: 700px) {
+  .device-crafting > button {
+    width: 100%;
+  }
+  .mine-strike {
+    right: calc(var(--right) + 14px);
+    bottom: calc(var(--bottom) + 175px);
+    width: 56px;
+    height: 56px;
+    padding: 12px;
   }
 }

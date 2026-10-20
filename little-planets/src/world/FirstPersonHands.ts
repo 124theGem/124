@@ -4,6 +4,10 @@ import type { Save } from "../../shared/model";
 export class FirstPersonHands {
   readonly root = new T.Group();
   private key = "";
+  private strikeAt = -10;
+  strike() {
+    this.strikeAt = performance.now() / 1000;
+  }
   constructor(private kit: Models) {}
   update(hand: Save["hand"], camera: T.Camera, time: number, moving: boolean) {
     if (hand !== this.key) {
@@ -51,6 +55,13 @@ export class FirstPersonHands {
     this.root.position.copy(camera.position);
     this.root.quaternion.copy(camera.quaternion);
     this.root.translateY(moving ? Math.sin(time * 10) * 0.008 : 0);
+    const t = (time - this.strikeAt) / 0.32;
+    if (t >= 0 && t < 1) {
+      const swing = Math.sin(t * Math.PI);
+      this.root.rotateX(-swing * 0.65);
+      this.root.rotateZ(-swing * 0.28);
+      this.root.translateZ(-swing * 0.09);
+    }
   }
   dispose() {
     this.root.traverse((o) => {

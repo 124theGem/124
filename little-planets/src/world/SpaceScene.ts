@@ -187,7 +187,7 @@ export class SpaceScene {
         this.proxies.get(id)!.visible = true;
       } else view.animate(time);
     }
-    const pad = padPoint(f.target, 9),
+    const pad = padPoint(f.target, 9, f.pads?.[f.target]),
       normal = padNormal(f.target);
     this.beacon.position.set(pad.x, pad.y, pad.z);
     this.beacon.quaternion.setFromUnitVectors(

@@ -175,7 +175,7 @@ export class ColonyPanels {
         )
         .join(
           "",
-        )}</select></label><p>${save.freeConstruction ? "ТЕСТОВЫЙ ДОПУСК · стоимость 0" : resources(shipCost(design))}</p><button type="button" id="create-ship" class="primary">Создать и выбрать корабль</button></form></div><h3>Личный ангар</h3><div class="fleet-list">${save.fleet.map((s) => `<button data-select-ship="${esc(s.id)}" ${s.id === active.id ? "disabled" : ""}><strong>${esc(s.name)}</strong><small>${SHIP_CLASS_NAMES[s.class]} · MK ${s.model} · ${s.id === active.id ? "АКТИВЕН" : "ВЫБРАТЬ"}</small></button>`).join("")}</div>`,
+        )}</select></label><p>${save.freeConstruction ? "ТЕСТОВЫЙ ДОПУСК · стоимость 0" : resources(shipCost(design))}</p><button type="button" id="create-ship" class="primary">Создать в инвентарь</button></form></div><h3>Созданные корабли</h3><div class="fleet-list">${save.fleet.map((s) => `<button data-ship-inventory="${esc(s.id)}"><strong>${esc(s.name)}</strong><small>${SHIP_CLASS_NAMES[s.class]} · MK ${s.model} · ${save.inventory[`ship:${s.id}`] > 0 ? "В ИНВЕНТАРЕ / РАЗМЕСТИТЬ" : "РАЗМЕЩЁН"}</small></button>`).join("")}</div>`,
       "shipyard",
     );
     const read = () => ({
@@ -202,16 +202,18 @@ export class ColonyPanels {
     );
     this.ui
       .el("modal-content")
-      .querySelectorAll<HTMLButtonElement>("[data-select-ship]")
+      .querySelectorAll<HTMLButtonElement>("[data-ship-inventory]")
       .forEach(
         (b) =>
           (b.onclick = () =>
-            void this.run(
-              { type: "selectShip", id: b.dataset.selectShip! },
-              () => this.shipyard(id),
+            this.ui.inventory(
+              this.state(),
+              "Корабли",
+              `ship:${b.dataset.shipInventory}`,
             )),
       );
   }
+
   profile(name: string) {
     const s = this.state(),
       visits = Object.entries(s.profile.visits).sort(

@@ -327,9 +327,16 @@ describe("Personal fleet and access passport", () => {
           1100 + model,
         );
     expect(s.fleet).toHaveLength(10);
+    const constructed = s.fleet.at(-1)!;
+    expect(s.inventory[`ship:${constructed.id}`]).toBe(1);
+    s.position = { x: 8, z: 7 };
+    s = applyAction(
+      s,
+      { type: "placeShip", id: constructed.id, ...s.position },
+      1500,
+    );
     const active = s.fleet.find((sh) => sh.id === s.activeShip)!;
     expect(active.class).toBe("cargo");
-    s.position = { ...ship("home") };
     s = applyAction(s, { type: "travel", planet: "listoria" }, 2000);
     expect(s.flight!.topSpeed).toBe(SHIP_STATS(active).speed);
     expect(parseSave(JSON.stringify(s)).activeShip).toBe(active.id);

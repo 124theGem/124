@@ -1,3 +1,8 @@
+import {
+  createAndPlaceDevice,
+  placeInventoryItem,
+  openSystems,
+} from "./outfit-helpers.ts";
 import { chromium } from "@playwright/test";
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
@@ -27,6 +32,7 @@ for (const [k, x, z] of [
   ["planetdrill", 7, 10],
 ])
   fixture = applyAction(fixture, { type: "build", kind: k, x, z, rotation: 0 });
+fixture.position = { x: 9, z: 8 };
 const launch = async (viewport, save) => {
   const context = await browser.newContext({
       viewport,
@@ -64,16 +70,26 @@ const launch = async (viewport, save) => {
   };
 };
 const building = async (page, x, z) => {
-  const p = await page.evaluate(
-    (p) => window.__planets.project(p.x, p.z, p.height),
-    { x, z, height: 1.2 },
-  );
+  const project = () =>
+    page.evaluate((p) => window.__planets.project(p.x, p.z, 1.2), { x, z });
+  let p = await project();
+  const exposed = () =>
+    page.evaluate(
+      (p) => document.elementFromPoint(p.x, p.y)?.matches("canvas.world"),
+      p,
+    );
+  if (!(await exposed())) {
+    await page.locator("#view").click();
+    await page.waitForTimeout(700);
+    p = await project();
+  }
   assert(
-    p.x >= 0 && p.x <= 1100 && p.y >= 0 && p.y <= 800,
-    `Building projection ${JSON.stringify(p)}`,
+    await exposed(),
+    `Building is exposed in world canvas: ${JSON.stringify(p)}`,
   );
   await page.mouse.click(p.x, p.y);
 };
+
 try {
   const { page, context, errors, snap, menu } = await launch(
     { width: 1100, height: 800 },
@@ -150,17 +166,19 @@ try {
       .state.fleet.some((s) => s.name === "Караван Тест"),
   );
   const crafted = (await snap()).state;
-  assert.deepEqual(crafted.inventory, before);
-  const design = crafted.fleet.find((s) => s.id === crafted.activeShip);
+  const design = crafted.fleet.find((s) => s.name === "Караван Тест");
+  for (const [id, n] of Object.entries(before))
+    assert.equal(crafted.inventory[id], n);
+  assert.equal(crafted.inventory[`ship:${design.id}`], 1);
   assert.equal(design.color, "emerald");
   assert.equal(design.model, 3);
   assert.equal(design.class, "cargo");
   await page.screenshot({ path: "test-results/aurora-shipyard.png" });
   await page.locator("#close-modal").click();
   await menu("automation");
-  await page.locator('[data-deploy="warehouse"]').click();
-  await page.locator('[data-deploy="refinery"]').click();
-  await page.locator('[data-deploy="crawler"]').click();
+  await createAndPlaceDevice(page, "warehouse");
+  await createAndPlaceDevice(page, "refinery");
+  await createAndPlaceDevice(page, "crawler");
   const devices = (await snap()).state.automation.devices,
     crawler = devices.find((d) => d.kind === "crawler");
   await page.locator(`[data-device="${crawler.id}"]`).click();
@@ -172,7 +190,7 @@ try {
         (d) => d.kind === "crawler" && d.logistics,
       ),
   );
-  await page.locator('[data-deploy="drone"]').click();
+  await createAndPlaceDevice(page, "drone");
   const drone = (await snap()).state.automation.devices.find(
     (d) => d.kind === "drone",
   );

@@ -1,3 +1,4 @@
+import { planetSize } from "../shared/catalog";
 import { describe, it, expect } from "vitest";
 import * as T from "three";
 import {
@@ -130,8 +131,9 @@ describe("automatic foundations and detailed colony buildings", () => {
       cells: string[] = [];
     // Clearing all cells proves that roots are filtered before batching, rather than merely hidden by terrain.
     for (let face = 0; face < 6; face++)
-      for (let i = 0; i < 38; i++)
-        for (let j = 0; j < 38; j++) cells.push(`${face}:${i}:${j}`);
+      for (let i = 0; i < planetSize("home"); i++)
+        for (let j = 0; j < planetSize("home"); j++)
+          cells.push(`${face}:${i}:${j}`);
     const cleared = new SphereNature(kit, "home", cells);
     let before = 0,
       after = 0;

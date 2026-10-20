@@ -221,7 +221,7 @@ describe("SQLite persistence and authenticated API", () => {
         headers,
         payload: {
           revision: 1,
-          action: { type: "build", kind: "house", x: 12, z: 15, rotation: 0 },
+          action: { type: "build", kind: "house", x: 15, z: 18, rotation: 0 },
         },
       });
       expect(invalid.statusCode).toBe(400);

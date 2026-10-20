@@ -1,3 +1,8 @@
+import {
+  createAndPlaceDevice,
+  placeInventoryItem,
+  openSystems,
+} from "./outfit-helpers";
 import { chromium } from "@playwright/test";
 import { createServer, request } from "node:http";
 import { createHmac } from "node:crypto";
@@ -138,7 +143,7 @@ try {
   assert(events.some((e) => e.type === "web_app_setup_swipe_behavior"));
   await phone.locator("#menu-toggle").click();
   await phone.locator("#automation").click();
-  await phone.locator('[data-deploy="warehouse"]').click();
+  await createAndPlaceDevice(phone, "warehouse");
   await phone.waitForFunction(
     () =>
       (window as any).__planets.snapshot().state.automation.devices.length ===
@@ -146,7 +151,7 @@ try {
     {},
     { timeout: 60000 },
   );
-  await phone.locator('[data-deploy="collector"]').click();
+  await createAndPlaceDevice(phone, "collector");
   await phone.waitForFunction(
     () =>
       (window as any).__planets.snapshot().state.automation.devices.length ===

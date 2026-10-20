@@ -31,6 +31,8 @@ const ops: Record<ProgramNode["op"], string> = {
 };
 export class AutomationPanel {
   private selected = "";
+  private busy = false;
+  private catalogKind: DeviceKind = "collector";
   private draft?: Program;
   private source?: { id: string; port: "next" | "otherwise" };
   private serial = 0;
@@ -52,12 +54,27 @@ export class AutomationPanel {
       devices = s.automation.devices,
       selected = devices.find((d) => d.id === this.selected);
     this.ui.panel(
-      `<span class="eyebrow">АВТОМАТИЗАЦИЯ КОЛОНИИ</span><h2>Машины и цепочки</h2><p>Устройства создаются рядом с вами за материалы. Склад принадлежит планете; дроны перевозят его запасы. Симуляция работает во время открытой игры, в том числе на других планетах.</p><div class="device-palette">${(
+      `<span class="eyebrow">АВТОМАТИЗАЦИЯ КОЛОНИИ</span><h2>Машины и цепочки</h2><p>Создайте комплект в инвентарь, затем установите его на планету.</p><div class="device-crafting"><label>Устройство<select id="device-kind">${Object.entries(
+        DEVICE_NAMES,
+      )
+        .map(
+          ([id, name]) =>
+            `<option value="${id}" ${id === this.catalogKind ? "selected" : ""}>${name}</option>`,
+        )
+        .join(
+          "",
+        )}</select></label><button id="create-device" class="primary" ${this.busy ? "disabled" : ""}>Создать в инвентарь</button><button id="open-device-inventory">Разместить из инвентаря</button><small>В инвентаре: ${s.inventory[`device:${this.catalogKind}`] ?? 0} · ${
+        s.freeConstruction
+          ? "0 ресурсов · TEST"
+          : Object.entries(DEVICE_COSTS[this.catalogKind])
+              .map(([r, n]) => `${n} ${RESOURCE_LABELS[r]}`)
+              .join(" + ")
+      }</small></div><h3>Каталог устройств</h3><div class="device-palette">${(
         Object.keys(DEVICE_NAMES) as DeviceKind[]
       )
         .map(
           (k) =>
-            `<button data-deploy="${k}">${hudIcon(k)}${DEVICE_NAMES[k]}<small>${
+            `<button data-device-kind="${k}" class="${k === this.catalogKind ? "selected" : ""}">${hudIcon(k)}${DEVICE_NAMES[k]}<small>${
               s.freeConstruction
                 ? "0 ресурсов · TEST"
                 : Object.entries(DEVICE_COSTS[k])
@@ -67,20 +84,30 @@ export class AutomationPanel {
         )
         .join(
           "",
-        )}</div><div class="device-list">${devices.map((d) => `<button data-device="${d.id}" class="${d.id === this.selected ? "active" : ""}">${DEVICE_NAMES[d.kind]} · ${e(d.id)}<small>${PLANETS[d.planet].name} · ${e(d.status)} · груз ${cargoAmount(d)}/${d.capacity}</small></button>`).join("") || "<p>Создайте склад и первого сборщика.</p>"}</div><div id="device-detail"></div>`,
+        )}</div><h3>Размещённые устройства</h3><div class="device-list">${devices.map((d) => `<button data-device="${d.id}" class="${d.id === this.selected ? "active" : ""}">${DEVICE_NAMES[d.kind]} · ${e(d.id)}<small>${PLANETS[d.planet].name} · ${e(d.status)} · груз ${cargoAmount(d)}/${d.capacity}</small></button>`).join("") || "<p>Создайте склад и первого сборщика.</p>"}</div><div id="device-detail"></div>`,
       "automation",
     );
     this.ui
       .el("modal-content")
-      .querySelectorAll<HTMLButtonElement>("[data-deploy]")
+      .querySelectorAll<HTMLButtonElement>("[data-device-kind]")
       .forEach(
         (b) =>
-          (b.onclick = () =>
-            void this.run({
-              type: "deploy",
-              kind: b.dataset.deploy as DeviceKind,
-            })),
+          (b.onclick = () => {
+            this.catalogKind = b.dataset.deviceKind as DeviceKind;
+            this.render();
+          }),
       );
+    (this.ui.el("device-kind") as HTMLSelectElement).onchange = (e) => {
+      this.catalogKind = (e.target as HTMLSelectElement).value as DeviceKind;
+      this.render();
+    };
+    this.ui.button(
+      "create-device",
+      () => void this.run({ type: "craftDevice", kind: this.catalogKind }),
+    );
+    this.ui.button("open-device-inventory", () =>
+      this.ui.inventory(this.state(), "Машины", `device:${this.catalogKind}`),
+    );
     this.ui
       .el("modal-content")
       .querySelectorAll<HTMLButtonElement>("[data-device]")
@@ -473,12 +500,22 @@ export class AutomationPanel {
       });
   }
   private async run(action: Action) {
+    if (this.busy) return;
+    this.busy = true;
+    const create = this.ui.el("create-device") as HTMLButtonElement | null;
+    if (create) create.disabled = true;
     try {
       await this.act(action);
+      if (action.type === "craftDevice")
+        this.ui.toast(`${DEVICE_NAMES[action.kind]} создан в инвентаре.`);
       this.draft = undefined;
       this.render();
     } catch (error) {
       this.ui.toast((error as Error).message);
+    } finally {
+      this.busy = false;
+      const button = this.ui.el("create-device") as HTMLButtonElement | null;
+      if (button) button.disabled = false;
     }
   }
 }

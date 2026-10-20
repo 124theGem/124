@@ -1,3 +1,4 @@
+import { expandSavedWorlds } from "./expansion";
 import { resourceValid, INDUSTRIAL_RECIPES, RAW_RESOURCES } from "./resources";
 import {
   scannerBuilding,
@@ -131,9 +132,49 @@ export interface PlanetState {
   cleared: string[];
   clearedNodes: string[];
   stock: Record<string, number>;
+  launchPad?: { x: number; z: number; shipId: string | null };
+}
+export function landingPad(save: Pick<Save, "worlds">, p: PlanetId) {
+  return save.worlds[p]?.launchPad ?? ship(p);
+}
+export function flightPads(save: Pick<Save, "worlds">) {
+  return Object.fromEntries(
+    Object.entries(save.worlds)
+      .filter(([, w]) => w.launchPad)
+      .map(([p, w]) => [p, { x: w.launchPad!.x, z: w.launchPad!.z }]),
+  ) as Partial<Record<PlanetId, { x: number; z: number }>>;
+}
+function validatePlacement(
+  save: Save,
+  at: { x: number; z: number },
+  size: number,
+) {
+  if (
+    save.inside ||
+    at.x >= planetSize(save.planet) ||
+    at.z >= planetDepth(save.planet)
+  )
+    throw new RuleError("Выберите поверхность планеты.");
+  nearby(save, at.x, at.z, 7);
+  if (
+    save.worlds[save.planet].buildings.some(
+      (b) =>
+        surfaceDistance(at, buildingCenter(b), save.planet) <
+        (BUILDINGS[b.kind].size + size) / 2,
+    )
+  )
+    throw new RuleError("Площадка пересекается со зданием.");
+  if (
+    save.automation.devices.some(
+      (d) =>
+        d.planet === save.planet && surfaceDistance(at, d, save.planet) < 1.4,
+    )
+  )
+    throw new RuleError("Участок занят устройством.");
 }
 export interface Save {
   version: 6;
+  planetScale: number;
   freeConstruction: boolean;
   scans: PlanetId[];
   profile: {
@@ -241,6 +282,25 @@ export const ActionSchema = z.discriminatedUnion("type", [
     })
     .strict(),
   z.object({ type: z.literal("deploy"), kind: z.enum(deviceKinds) }).strict(),
+  z
+    .object({ type: z.literal("craftDevice"), kind: z.enum(deviceKinds) })
+    .strict(),
+  z
+    .object({
+      type: z.literal("placeDevice"),
+      kind: z.enum(deviceKinds),
+      x: z.number().finite().min(0).max(224),
+      z: z.number().finite().min(0).max(224),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("placeShip"),
+      id: z.string().max(100),
+      x: z.number().finite().min(0).max(224),
+      z: z.number().finite().min(0).max(224),
+    })
+    .strict(),
   z
     .object({
       type: z.literal("program"),
@@ -408,6 +468,7 @@ export function newGame(now = Date.now(), freeConstruction = false): Save {
   const worlds = {} as Save["worlds"];
   for (const p of Object.keys(PLANETS).slice(0, 30) as PlanetId[])
     worlds[p] = freshWorld(p, now);
+  worlds.home.launchPad = { ...ship("home"), shipId: "starter" };
   const inventory: Record<string, number> = {
     "tool:pickaxe": 1,
     "tool:grapple": 1,
@@ -422,6 +483,7 @@ export function newGame(now = Date.now(), freeConstruction = false): Save {
   for (const id of Object.keys(PLANTS)) inventory[`seed:${id}`] = 6;
   return {
     version: 6,
+    planetScale: 1.2,
     freeConstruction,
     scans: ["home"],
     profile: { visits: { home: { seconds: 0, arrivals: 1 } }, lastAt: now },
@@ -629,7 +691,7 @@ export function canBuild(
   )
     return false;
   if (
-    surfaceDistance({ x, z }, ship(save.planet), save.planet) <
+    surfaceDistance({ x, z }, landingPad(save, save.planet), save.planet) <
     2.5 + b.size / 2
   )
     return false;
@@ -794,12 +856,19 @@ export function applyAction(
       charge(save, shipCost(action.ship));
       const ship = { ...action.ship, id: `ship-${now}-${save.fleet.length}` };
       save.fleet.push(ship);
-      save.activeShip = ship.id;
+      save.inventory[`ship:${ship.id}`] =
+        (save.inventory[`ship:${ship.id}`] ?? 0) + 1;
       break;
     }
     case "selectShip": {
       if (!save.fleet.some((s) => s.id === action.id))
         throw new RuleError("Корабль не найден.");
+      if (save.inventory[`ship:${action.id}`] > 0)
+        throw new RuleError(
+          "Сначала разместите корабль с площадкой из инвентаря.",
+        );
+      if (world.launchPad && world.launchPad.shipId !== action.id)
+        throw new RuleError("Этот корабль не находится на местной площадке.");
       save.activeShip = action.id;
       break;
     }
@@ -916,7 +985,12 @@ export function applyAction(
       if (!save.grapple) throw new RuleError("Трос не натянут.");
       if (now >= save.grapple.endsAt) {
         save.planet = save.grapple.target;
-        save.position = offsetPoint(ship(save.planet), -1, 0, save.planet);
+        save.position = offsetPoint(
+          landingPad(save, save.planet),
+          -1,
+          0,
+          save.planet,
+        );
         save.grapple = null;
         save.worlds[save.planet] ??= freshWorld(save.planet, now);
         recordVisit(save, save.planet, now);
@@ -953,8 +1027,8 @@ export function applyAction(
         blocks = { ...(world.terrain[k]?.blocks ?? {}) },
         removed = new Set(world.terrain[k]?.removed ?? []);
       if (action.mode === "dig") {
-        if (!save.inventory["tool:pickaxe"])
-          throw new RuleError("Нужна кирка.");
+        if (!save.inventory["tool:pickaxe"] || save.hand !== "pickaxe")
+          throw new RuleError("Возьмите кирку в руки.");
         if (level <= -4) throw new RuleError("Неразрушимое ядро.");
         if (!blockSolid(c.normal, save.planet, level, world.terrain))
           throw new RuleError("Блок уже разрушен.");
@@ -1017,7 +1091,41 @@ export function applyAction(
       save.lastMine = now;
       break;
     }
+    case "craftDevice": {
+      charge(save, DEVICE_COSTS[action.kind]);
+      const item = `device:${action.kind}`;
+      save.inventory[item] = (save.inventory[item] ?? 0) + 1;
+      break;
+    }
+    case "placeShip": {
+      const item = `ship:${action.id}`;
+      if (
+        !(save.inventory[item] > 0) ||
+        !save.fleet.some((s) => s.id === action.id)
+      )
+        throw new RuleError("Корабля нет в инвентаре.");
+      validatePlacement(save, action, 7);
+      const previous = world.launchPad;
+      if (previous?.shipId)
+        save.inventory[`ship:${previous.shipId}`] =
+          (save.inventory[`ship:${previous.shipId}`] ?? 0) + 1;
+      prepareFoundation(world, action, save.planet, 6);
+      world.launchPad = { x: action.x, z: action.z, shipId: action.id };
+      save.inventory[item]--;
+      save.activeShip = action.id;
+      break;
+    }
+    case "placeDevice":
     case "deploy": {
+      const at =
+        action.type === "placeDevice"
+          ? { x: action.x, z: action.z }
+          : save.position;
+      if (action.type === "placeDevice") {
+        if (!(save.inventory[`device:${action.kind}`] > 0))
+          throw new RuleError("Устройства нет в инвентаре.");
+        validatePlacement(save, at, 3);
+      }
       if (save.automation.devices.length >= 80)
         throw new RuleError("Лимит: 80 устройств.");
       if (
@@ -1026,19 +1134,20 @@ export function applyAction(
           (d) =>
             d.kind === action.kind &&
             d.planet === save.planet &&
-            surfaceDistance(d, save.position, save.planet) < 3,
+            surfaceDistance(d, at, save.planet) < 3,
         )
       )
         throw new RuleError("Здесь уже есть станция.");
-      charge(save, DEVICE_COSTS[action.kind]);
+      if (action.type === "deploy") charge(save, DEVICE_COSTS[action.kind]);
+      else save.inventory[`device:${action.kind}`]--;
       if (action.kind === "warehouse" || action.kind === "refinery")
-        prepareFoundation(world, save.position, save.planet, 3);
+        prepareFoundation(world, at, save.planet, 3);
       const program = defaultProgram(action.kind, save.planet);
       save.automation.devices.push({
         id: `device-${++save.automation.serial}`,
         kind: action.kind,
         planet: save.planet,
-        ...save.position,
+        ...at,
         cargo: {},
         buffer: {},
         output: {},
@@ -1129,9 +1238,18 @@ export function applyAction(
         );
       save.planet = save.flight.target;
       save.flight = null;
-      const pad = ship(save.planet);
+      const pad = landingPad(save, save.planet);
       save.position = offsetPoint(pad, -1, 0, save.planet);
       save.worlds[save.planet] ??= freshWorld(save.planet, now);
+      const previous = save.worlds[save.planet].launchPad;
+      if (previous?.shipId && previous.shipId !== save.activeShip)
+        save.inventory[`ship:${previous.shipId}`] =
+          (save.inventory[`ship:${previous.shipId}`] ?? 0) + 1;
+      save.worlds[save.planet].launchPad = {
+        x: pad.x,
+        z: pad.z,
+        shipId: save.activeShip,
+      };
       recordVisit(save, save.planet, now);
       save.worlds[save.planet].lastSimAt = now;
       if (save.planet === "home") save.health = 100;
@@ -1357,13 +1475,26 @@ export function applyAction(
     case "travel": {
       const target =
         action.type === "boardShip" ? save.planet : (action.planet as PlanetId);
-      const pad = ship(save.planet);
+      const pad = landingPad(save, save.planet);
       nearby(save, pad.x, pad.z, 3);
       if (!save.discovered.includes(target))
         throw new RuleError("Сначала найдите эту планету сканером.");
       if (action.type === "travel" && save.planet === target)
         throw new RuleError("Вы уже здесь.");
-      save.flight = beginFlight(save.planet, target, save.discovered, now);
+      const parked = world.launchPad;
+      if (parked?.shipId === null)
+        throw new RuleError(
+          "На площадке нет корабля. Разместите его из инвентаря.",
+        );
+      if (parked?.shipId) save.activeShip = parked.shipId;
+      save.flight = beginFlight(
+        save.planet,
+        target,
+        save.discovered,
+        now,
+        flightPads(save),
+      );
+      world.launchPad = { x: pad.x, z: pad.z, shipId: null };
       save.flight.topSpeed = SHIP_STATS(
         save.fleet.find((s) => s.id === save.activeShip)!,
       ).speed;
@@ -1529,6 +1660,13 @@ const worldSchema = z.object({
     }),
   ),
   stock: z.record(z.string(), z.number().int().nonnegative()),
+  launchPad: z
+    .object({
+      x: z.number().finite().nonnegative(),
+      z: z.number().finite().nonnegative(),
+      shipId: z.string().max(100).nullable(),
+    })
+    .optional(),
 });
 const positionSchema = z.object({
   x: z.number().finite().nonnegative(),
@@ -1536,6 +1674,7 @@ const positionSchema = z.object({
 });
 const saveSchema = z.object({
   version: z.literal(6),
+  planetScale: z.union([z.literal(1), z.literal(1.2)]).default(1),
   freeConstruction: z.boolean().default(true),
   scans: z.array(planet).default(["home"]),
   profile: z
@@ -1658,6 +1797,16 @@ const saveSchema = z.object({
       topSpeed: z.number().min(20).max(100).default(46),
       origin: planet,
       target: planet,
+      pads: z
+        .record(
+          planet,
+          z.object({
+            x: z.number().finite().nonnegative(),
+            z: z.number().finite().nonnegative(),
+          }),
+        )
+        .optional(),
+
       position: z.object({
         x: z.number().finite(),
         y: z.number().finite(),
@@ -1718,6 +1867,7 @@ export function parseSave(raw: string): Save {
   // Prototype builds deliberately start a new world; no version-to-version migration.
   if ([1, 2, 3, 4, 5].includes(data?.version)) return newGame(Date.now(), true);
   const save = saveSchema.parse(data) as Save;
+  expandSavedWorlds(save);
   save.inventory["tool:grapple"] ??= 1;
   if (data.hand === undefined)
     save.hand = (save.equipment.weapon as Save["hand"]) ?? "pickaxe";
@@ -1736,6 +1886,16 @@ export function parseSave(raw: string): Save {
       save.flight)
   )
     throw new Error("Повреждённый трос");
+  for (const [id, w] of Object.entries(save.worlds)) {
+    if (
+      w.launchPad &&
+      (w.launchPad.x >= planetSize(id as PlanetId) ||
+        w.launchPad.z >= planetDepth(id as PlanetId) ||
+        (w.launchPad.shipId &&
+          !save.fleet.some((s) => s.id === w.launchPad!.shipId)))
+    )
+      throw new Error("Повреждённая взлётная площадка");
+  }
   if (!save.fleet.some((s) => s.id === save.activeShip))
     throw new Error("Повреждённый ангар");
   if (!save.discovered.includes(save.planet))
@@ -1906,7 +2066,7 @@ export function advanceEnemies(save: Save, now: number): boolean {
       save.health = 100;
       save.deaths++;
       save.planet = "home";
-      save.position = offsetPoint(ship("home"), -1, 0, "home");
+      save.position = offsetPoint(landingPad(save, "home"), -1, 0, "home");
       save.inside = null;
       save.outsidePosition = null;
       return true;

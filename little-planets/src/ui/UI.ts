@@ -54,7 +54,11 @@ const escape = (s: string) =>
 const art = (id: string) =>
   resourceIcon(id) ||
   hudIcon(
-    /^(seed|crop):/.test(id) ? "garden" : (id.split(":")[1] ?? id),
+    id.startsWith("ship:")
+      ? "ship"
+      : /^(seed|crop):/.test(id)
+        ? "garden"
+        : (id.split(":")[1] ?? id),
     "item-art",
   );
 const costs = (cost: Record<string, number>, save: Save) =>
@@ -70,6 +74,7 @@ export class UI {
   readonly root = document.createElement("div");
   onAutomation = () => {};
   onBoardShip = () => {};
+  onMineStrike = () => {};
   onCancelPlacement = () => {};
   onProfile = () => {};
   onScanPlanet = (id: PlanetId) => {};
@@ -121,7 +126,8 @@ export class UI {
     this.root.className = "hud";
     this.root.innerHTML = `
  <header class="topbar"><div class="identity"><button id="profile" class="avatar" aria-label="Профиль и космический паспорт">${hudIcon("profile")}</button><div><div class="brand">LITTLE PLANETS <span>AURORA / EXPLORER</span></div><strong id="planet-name">Родная</strong><small id="planet-tag"></small></div></div><div class="top-buttons"><button id="first-person" title="Вид от первого лица" aria-label="Вид от первого лица">${hudIcon("view")}</button><button id="view" title="Камера" aria-label="Переключить камеру">${hudIcon("planet")}</button><button id="audio-toggle" title="Звук" aria-label="Включить или выключить звук">${hudIcon("audio")}</button><button id="settings" title="Настройки" aria-label="Настройки">${hudIcon("settings")}</button></div></header>
- <aside class="minimap"><div class="radar-heading"><i></i>НАВИГАЦИЯ<span>LOCAL</span></div><canvas id="minimap" width="240" height="240" aria-label="Мини-карта планеты"></canvas></aside>
+
+ <button id="mine-strike" class="mine-strike hidden" aria-label="Ударить киркой" title="Удерживайте, чтобы добывать">${hudIcon("pickaxe")}</button>
  <div id="combat-hud" class="combat-hud hidden"><span>${hudIcon("health")}<b id="health-value">100</b><small>ЦЕЛОСТНОСТЬ</small></span><div class="health-track"><i id="health-fill"></i></div><small id="equipped-label"></small></div><button id="attack" class="attack-button hidden" aria-label="Атаковать">${hudIcon("blaster")}<small>Атака</small></button>
  <div id="event-banner" class="event-banner hidden" role="status"></div><div id="context" class="context panel hidden"></div><div id="build-panel" class="build-panel panel hidden"></div>
  <div class="bottom"><nav id="menu-items" class="hidden" aria-label="Меню игры"><div class="nav-heading">СИСТЕМЫ КОЛОНИИ<span>01 — 07</span></div>${[
@@ -205,6 +211,26 @@ export class UI {
       for (const event of ["pointerup", "pointercancel", "lostpointercapture"])
         button.addEventListener(event, () => hold(false));
     }
+    const strike = this.el("mine-strike");
+    let strikeTimer: number | undefined;
+    const stopStrike = () => {
+      clearInterval(strikeTimer);
+      strikeTimer = undefined;
+      strike.classList.remove("striking");
+    };
+    strike.onpointerdown = (e) => {
+      e.preventDefault();
+      strike.setPointerCapture(e.pointerId);
+      strike.classList.add("striking");
+      this.onMineStrike();
+      strikeTimer = window.setInterval(() => this.onMineStrike(), 420);
+    };
+    for (const event of ["pointerup", "pointercancel", "lostpointercapture"])
+      strike.addEventListener(event, stopStrike);
+    window.addEventListener("blur", stopStrike);
+    strike.onclick = (e) => {
+      if (e.detail === 0) this.onMineStrike();
+    };
     this.button("menu-toggle", () => this.toggleMenu());
     const navigate: Record<string, () => void> = {
       profile: () => this.onProfile(),
@@ -222,7 +248,6 @@ export class UI {
     this.el("modal").addEventListener("click", (e) => {
       if (e.target === this.el("modal")) this.close();
     });
-    this.el("minimap").addEventListener("click", () => this.onCamera());
   }
   el(id: string) {
     return this.root.querySelector<HTMLElement>(`#${id}`)!;
@@ -257,6 +282,13 @@ export class UI {
   update(save: Save, now: number) {
     this.el("save-status").dataset.testing = String(save.freeConstruction);
     const p = PLANETS[save.planet];
+    this.el("mine-strike").classList.toggle(
+      "hidden",
+      save.hand !== "pickaxe" ||
+        !!save.inside ||
+        !!save.flight ||
+        !!save.grapple,
+    );
     const level = experienceLevel(save.progression.xp),
       floor = levelFloor(level),
       next = levelFloor(level + 1);
@@ -318,7 +350,10 @@ export class UI {
       `Сохранено · ${new Date(save.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
     const combat = !!PLANETS[save.planet].hostile && !save.inside;
     this.el("combat-hud").classList.toggle("hidden", !combat);
-    this.el("attack").classList.toggle("hidden", !combat);
+    this.el("attack").classList.toggle(
+      "hidden",
+      !combat || save.hand === "pickaxe",
+    );
     this.el("health-value").textContent = String(save.health);
     this.el("health-fill").style.width = `${save.health}%`;
     this.el("equipped-label").textContent = save.equipment.weapon
@@ -341,105 +376,6 @@ export class UI {
               storm: "⛈ Гроза · молнии над планетой",
               hurricane: "🌪 Ураган · вихри и сильный ветер",
             }[event.type];
-  }
-  minimap(
-    save: Save,
-    position: { x: number; z: number },
-    heading: number,
-    now: number,
-    animals: { x: number; z: number }[] = [],
-  ) {
-    const canvas = this.el("minimap") as HTMLCanvasElement,
-      ctx = canvas.getContext("2d")!;
-    const width = save.inside ? ROOM.width : planetSize(save.planet),
-      depth = save.inside ? ROOM.depth : planetDepth(save.planet),
-      pad = 9,
-      unit = 222 / Math.max(width, depth),
-      draw = (x: number, z: number, w: number, d: number, color: string) => {
-        ctx.fillStyle = color;
-        ctx.fillRect(
-          pad + (x - 0.5) * unit,
-          pad + (z - 0.5) * unit,
-          w * unit,
-          d * unit,
-        );
-      };
-    ctx.clearRect(0, 0, 240, 240);
-
-    draw(
-      0.5,
-      0.5,
-      width - 1,
-      depth - 1,
-      save.inside
-        ? "#7e6852"
-        : save.planet === "mycelia"
-          ? "#67528d"
-          : save.planet === "pyros"
-            ? "#6f5555"
-            : "#4d714c",
-    );
-    if (save.inside) {
-      for (const f of roomItems(save)) {
-        const recipe = FURNITURE[f.kind];
-        draw(
-          f.x,
-          f.z,
-          f.rotation ? recipe.d : recipe.w,
-          f.rotation ? recipe.w : recipe.d,
-          "#d6bc88",
-        );
-      }
-      draw(ROOM.door.x - 0.5, ROOM.door.z, 2, 0.6, "#8fdfbb");
-    } else {
-      for (const n of nodes(save.planet))
-        draw(n.x, n.z, 0.8, 0.8, n.resource === "wood" ? "#b7d18a" : "#c6d3d3");
-      for (const b of beds(save.planet)) {
-        const crop = save.worlds[save.planet].crops[key(b.x, b.z)];
-        draw(b.x, b.z, 1, 1, crop && ready(crop, now) ? "#f3d276" : "#967553");
-      }
-      for (const b of save.worlds[save.planet].buildings)
-        draw(
-          b.x,
-          b.z,
-          BUILDINGS[b.kind].size,
-          BUILDINGS[b.kind].size,
-          BUILDINGS[b.kind].zone === "home" ? "#f2c486" : "#84c7dd",
-        );
-      const padPos = ship(save.planet);
-      draw(padPos.x - 1, padPos.z - 1, 3, 3, "#7b9eb8");
-      for (const a of animals) draw(a.x, a.z, 0.3, 0.3, "#f2e6cf");
-      for (const e of save.worlds[save.planet].enemies)
-        if (e.hp > 0) draw(e.x - 0.25, e.z - 0.25, 0.8, 0.8, "#ff897b");
-      const event = worldEvent(save, save.planet, now);
-      if (event?.type === "meteor" && !event.claimed) {
-        ctx.fillStyle = "#ffad70";
-        ctx.beginPath();
-        ctx.arc(
-          pad + event.x * unit,
-          pad + event.z * unit,
-          4.5,
-          0,
-          Math.PI * 2,
-        );
-        ctx.fill();
-      }
-    }
-    ctx.save();
-    ctx.translate(pad + position.x * unit, pad + position.z * unit);
-    ctx.rotate(Math.PI - heading);
-    ctx.fillStyle = "#fff9d8";
-    ctx.strokeStyle = "#17314a";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(0, -6);
-    ctx.lineTo(4.5, 5);
-    ctx.lineTo(0, 3);
-    ctx.lineTo(-4.5, 5);
-    ctx.closePath();
-    ctx.stroke();
-    ctx.fill();
-    ctx.restore();
   }
   toggleMenu(open?: boolean) {
     const expanded = open ?? this.el("menu-items").classList.contains("hidden");
@@ -507,8 +443,14 @@ export class UI {
         ([id]) => group === "Все" || itemInfo(id).group === group,
       );
     const info = selected ? itemInfo(selected) : null;
+    const itemName = (id: string) =>
+      id.startsWith("ship:")
+        ? (save.fleet.find((s) => s.id === id.slice(5))?.name ??
+          itemInfo(id).name)
+        : itemInfo(id).name;
+    if (info) info.name = itemName(selected);
     this.show(
-      `<span class="eyebrow">ЛИЧНЫЙ ИНВЕНТАРЬ</span><h2>Снаряжение и ресурсы</h2><div class="equipment-row"><div><small>ОРУЖИЕ</small><strong>${save.equipment.weapon ? GEAR[save.equipment.weapon].name : "Не надето"}</strong>${save.equipment.weapon ? '<button id="unequip-weapon">Снять</button>' : ""}</div><div><small>БРОНЯ</small><strong>${save.equipment.armor ? GEAR[save.equipment.armor].name : "Не надета"}</strong>${save.equipment.armor ? '<button id="unequip-armor">Снять</button>' : ""}</div><span>♥ ${save.health} / 100<br>Побед: ${save.kills}</span></div><div class="tabs">${["Все", "Ресурсы", "Семена", "Урожай", "Постройки", "Мебель", "Экипировка"].map((g) => `<button data-inventory-tab="${g}" class="${g === group ? "active" : ""}">${g}</button>`).join("")}</div><div class="bag-layout"><div class="slots">${shown.map(([id, n]) => `<button class="slot ${id === selected ? "selected" : ""}" data-item="${escape(id)}" aria-label="${escape(itemInfo(id).name)}: ${n}" title="${escape(itemInfo(id).name)}">${art(id)}${id.startsWith("gear:") && Object.values(save.equipment).includes(id.split(":")[1] as GearKind) ? '<i class="equipped-mark">✓</i>' : ""}<b>${n}</b><small>${escape(itemInfo(id).name)}</small></button>`).join("")}${'<div class="slot empty"></div>'.repeat(Math.max(0, 24 - shown.length))}</div><aside class="item-detail">${info ? `${selected.startsWith("gear:") ? illustration(selected) : art(selected)}<small>${info.group}</small><h3>${escape(info.name)}</h3><p>В рюкзаке: <b>${save.inventory[selected] ?? 0}</b></p>${selected.startsWith("gear:") ? `<p>${GEAR[selected.split(":")[1] as GearKind].description}</p><button id="equip-item" class="primary">Надеть</button>` : selected.startsWith("kit:") || selected.startsWith("furniture:") ? '<button id="place-item" class="primary">Разместить</button>' : '<p class="muted">Ресурсы расходуются по рецептам. Семена сажаются в свободную грядку своего биома.</p>'}` : `<span class="bag-icon">${hudIcon("inventory")}</span><h3>Всё под рукой</h3><p>Выберите предмет, чтобы увидеть его название и действие.</p>`}</aside></div><footer class="bag-footer">${items.length} типов предметов · общий инвентарь всех планет</footer>`,
+      `<span class="eyebrow">ЛИЧНЫЙ ИНВЕНТАРЬ</span><h2>Снаряжение и ресурсы</h2><div class="equipment-row"><div><small>ОРУЖИЕ</small><strong>${save.equipment.weapon ? GEAR[save.equipment.weapon].name : "Не надето"}</strong>${save.equipment.weapon ? '<button id="unequip-weapon">Снять</button>' : ""}</div><div><small>БРОНЯ</small><strong>${save.equipment.armor ? GEAR[save.equipment.armor].name : "Не надета"}</strong>${save.equipment.armor ? '<button id="unequip-armor">Снять</button>' : ""}</div><span>♥ ${save.health} / 100<br>Побед: ${save.kills}</span></div><div class="tabs">${["Все", "Ресурсы", "Семена", "Урожай", "Постройки", "Мебель", "Экипировка", "Машины", "Корабли"].map((g) => `<button data-inventory-tab="${g}" class="${g === group ? "active" : ""}">${g}</button>`).join("")}</div><div class="bag-layout"><div class="slots">${shown.map(([id, n]) => `<button class="slot ${id === selected ? "selected" : ""}" data-item="${escape(id)}" aria-label="${escape(itemName(id))}: ${n}" title="${escape(itemName(id))}">${art(id)}${id.startsWith("gear:") && Object.values(save.equipment).includes(id.split(":")[1] as GearKind) ? '<i class="equipped-mark">✓</i>' : ""}<b>${n}</b><small>${escape(itemName(id))}</small></button>`).join("")}${'<div class="slot empty"></div>'.repeat(Math.max(0, 24 - shown.length))}</div><aside class="item-detail">${info ? `${selected.startsWith("gear:") ? illustration(selected) : art(selected)}<small>${info.group}</small><h3>${escape(info.name)}</h3><p>В рюкзаке: <b>${save.inventory[selected] ?? 0}</b></p>${selected.startsWith("gear:") ? `<p>${GEAR[selected.split(":")[1] as GearKind].description}</p><button id="equip-item" class="primary">Надеть</button>` : selected.startsWith("kit:") || selected.startsWith("furniture:") || selected.startsWith("device:") || selected.startsWith("ship:") ? `<button id="place-item" class="primary" ${save.inventory[selected] > 0 ? "" : "disabled"}>Разместить</button>` : '<p class="muted">Ресурсы расходуются по рецептам. Семена сажаются в свободную грядку своего биома.</p>'}` : `<span class="bag-icon">${hudIcon("inventory")}</span><h3>Всё под рукой</h3><p>Выберите предмет, чтобы увидеть его название и действие.</p>`}</aside></div><footer class="bag-footer">${items.length} типов предметов · общий инвентарь всех планет</footer>`,
     );
     this.root
       .querySelectorAll<HTMLButtonElement>("[data-inventory-tab]")
@@ -681,9 +623,21 @@ export class UI {
     this.el("placement-name").textContent = title ?? "";
   }
   shipDock(save: Save) {
+    const dock = save.worlds[save.planet].launchPad;
+    if (dock?.shipId === null) {
+      this.panel(
+        `<span class="eyebrow">ВЗЛЁТНАЯ ПЛОЩАДКА</span><h2>Площадка свободна</h2><p>Разместите корабль из инвентаря или создайте новый на верфи.</p><button id="dock-inventory" class="primary">Открыть корабли в инвентаре</button>`,
+        "ship",
+      );
+      this.button("dock-inventory", () => this.inventory(save, "Корабли"));
+      return;
+    }
+
     this.travelMode = "ship";
     this.hideContext();
-    const ship = save.fleet.find((s) => s.id === save.activeShip)!,
+    const ship = save.fleet.find(
+        (s) => s.id === (dock?.shipId ?? save.activeShip),
+      )!,
       stats = SHIP_STATS(ship);
     this.panel(
       `<span class="eyebrow">ПОСАДОЧНАЯ ПЛОЩАДКА / БОРТОВЫЕ СИСТЕМЫ</span><h2>${escape(ship.name)}</h2><div class="ship-dock"><div class="dock-vessel">${hudIcon("ship")}<span>MK ${ship.model} / ${SHIP_CLASS_NAMES[ship.class]}</span></div><section><div class="status-tag">ГОТОВ К ВЫЛЕТУ</div><h3>Ваша кабина готова</h3><p>Садитесь за штурвал для ручного полёта или выберите планету назначения на звёздной карте.</p><div class="metric-strip"><span>Класс<b>${SHIP_CLASS_NAMES[ship.class]}</b></span><span>Скорость<b>${stats.speed} м/с</b></span></div><button id="board-ship" class="primary">${hudIcon("ship")}Войти в кабину</button><button id="ship-route">${hudIcon("galaxy")}Выбрать маршрут</button></section></div>`,

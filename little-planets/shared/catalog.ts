@@ -48,12 +48,7 @@ export interface PlanetDefinition {
   sphereTheme?: SphereTheme;
 }
 export type GearKind =
-  | "sword"
-  | "spear"
-  | "blaster"
-  | "scout"
-  | "guardian"
-  | "aegis";
+  "sword" | "spear" | "blaster" | "scout" | "guardian" | "aegis";
 export const GEAR: Record<
   GearKind,
   {
@@ -149,13 +144,7 @@ export type BuildingKind =
   | "scanner"
   | "shipyard";
 export type FurnitureKind =
-  | "chair"
-  | "table"
-  | "bed"
-  | "sofa"
-  | "cabinet"
-  | "fireplace"
-  | "rug";
+  "chair" | "table" | "bed" | "sofa" | "cabinet" | "fireplace" | "rug";
 export const RESOURCE_LABELS = ALL_RESOURCE_LABELS;
 export const RESOURCE_ICONS: Record<string, string> = {
   wood: "🪵",
@@ -610,14 +599,24 @@ export const ROOM = {
   door: { x: 6, z: 8.6 },
   spawn: { x: 6, z: 7.5 },
 };
-export const HOME_HQ = { x: 12, z: 15 };
-export function planetSize(p: PlanetId) {
+export const HOME_HQ = {
+  x: Math.round((12 * 46) / 38),
+  z: Math.round((15 * 46) / 38),
+};
+export function basePlanetSize(p: PlanetId) {
   return p === "home" ? HOME_SIZE : (PLANETS[p]?.size ?? SIZE);
+}
+export function planetSize(p: PlanetId) {
+  return Math.round(basePlanetSize(p) * 1.2);
 }
 export function beds(p: PlanetId) {
   return BEDS.map((b) => ({
-    x: b.x + (p === "home" ? 10 : 0),
-    z: b.z + (p === "home" ? 2 : -2),
+    x: Math.round(
+      ((b.x + (p === "home" ? 10 : 0)) * planetSize(p)) / basePlanetSize(p),
+    ),
+    z: Math.round(
+      ((b.z + (p === "home" ? 2 : -2)) * planetSize(p)) / basePlanetSize(p),
+    ),
   }));
 }
 export function ship(p: PlanetId) {
@@ -648,6 +647,23 @@ export function itemInfo(id: string): {
   icon: string;
   group: string;
 } {
+  if (id.startsWith("device:")) {
+    const names: Record<string, string> = {
+      collector: "Робот-сборщик",
+      drone: "Грузовой дрон",
+      hunter: "Тяжёлый охотник",
+      crawler: "Гусеничный логист",
+      warehouse: "Местный склад",
+      refinery: "Станция переработки",
+    };
+    return {
+      name: names[id.slice(7)] ?? "Устройство",
+      icon: "⚙",
+      group: "Машины",
+    };
+  }
+  if (id.startsWith("ship:"))
+    return { name: "Корабль с площадкой", icon: "🚀", group: "Корабли" };
   if (id === "tool:grapple")
     return { name: "Гарпун", icon: "↗", group: "Инструменты" };
   if (id === "tool:pickaxe")

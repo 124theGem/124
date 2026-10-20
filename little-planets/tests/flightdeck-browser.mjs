@@ -55,7 +55,8 @@ async function point(page, x, z, h) {
   });
 }
 try {
-  for (const viewport of process.env.FLIGHTDECK_SHIP_ONLY
+  for (const viewport of process.env.FLIGHTDECK_SHIP_ONLY ||
+  process.env.FLIGHTDECK_INTERACTIONS_ONLY
     ? []
     : [
         { width: 1440, height: 1000 },
@@ -140,7 +141,17 @@ try {
       (b) => b.kind === "house",
     );
     // Select the physical model immediately without switching the item in hand.
-    p = await point(page, b.x + 0.5, b.z + 0.5, 1.2);
+    await page.waitForTimeout(700);
+    p = await point(page, b.x, b.z, 1.2);
+    const exposed = () => page.evaluate(
+      (p) => document.elementFromPoint(p.x, p.y)?.matches("canvas.world"), p,
+    );
+    if (!(await exposed())) {
+      await page.locator("#view").click();
+      await page.waitForTimeout(700);
+      p = await point(page, b.x, b.z, 1.2);
+    }
+    assert(await exposed(), `Building exposed in world canvas: ${JSON.stringify(p)}`);
     await page.mouse.click(p.x, p.y);
     await page.locator(".facility-summary").waitFor();
     assert.equal(

@@ -48,6 +48,11 @@ const paths: Record<string, string> = {
   refinery: "M4 21V7h5v6l5-4v4l6-4v12ZM6 3h3v4M8 17h1m5 0h1",
 };
 export function hudIcon(name: string, extra = "") {
-  const key = name === "headquarters" ? "house" : name;
+  const key =
+    name === "headquarters"
+      ? "house"
+      : name === "collector"
+        ? "automation"
+        : name;
   return `<svg class="ui-icon ${extra}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[key] ?? paths.resource}"/></svg>`;
 }

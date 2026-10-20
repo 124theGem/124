@@ -1,3 +1,5 @@
+import { landingPad } from "../../shared/model";
+import { DEVICE_NAMES, type DeviceKind } from "../../shared/automation";
 import { hudIcon } from "../ui/Glyphs";
 import { illustration } from "../ui/Illustrations";
 import { ColonyPanels } from "../ui/ColonyPanels";
@@ -10,7 +12,7 @@ import { Occlusion } from "../world/Occlusion";
 import { AutomationActors } from "../world/AutomationActors";
 import { AutomationPanel } from "../ui/AutomationPanel";
 import { ArtRenderer } from "../world/ArtRenderer";
-import { surfaceHeight } from "../../shared/voxel";
+import { surfaceHeight, setTerrainEdits } from "../../shared/voxel";
 import { SpaceScene } from "../world/SpaceScene";
 import { StarSky } from "../world/StarSky";
 import {
@@ -109,6 +111,8 @@ export class Game {
   private terrainMode: "dig" | "place" = "dig";
   private terrainMaterial: "stone" | "wood" | "obsidian" = "stone";
   private buildOnCube?: BuildingKind;
+  private inventoryPlacement?: string;
+  private miningAim?: { x: number; y: number };
   private firstPerson = false;
   private lookPitch = 0;
   private visualUp = new T.Vector3(0, 1, 0);
@@ -345,6 +349,7 @@ export class Game {
       this.ui.travelMode = "ship";
       menu(() => this.ui.galaxy(store.state));
     };
+    this.ui.onMineStrike = () => void this.mineStrike();
     this.ui.onBoardShip = () => void this.travel(store.state.planet, true);
     this.ui.onTravel = (p) => void this.travel(p);
     this.ui.onSpaceAuto = () => {
@@ -393,6 +398,23 @@ export class Game {
     this.ui.onCraft = (recipe) => void this.craft(recipe);
     this.ui.onItemPlace = (id) => {
       const [prefix, kind] = id.split(":");
+      if (prefix === "device" || prefix === "ship") {
+        if (store.state.inside || this.flying) return;
+        if (!(store.state.inventory[id] > 0)) {
+          this.ui.toast("Предмета нет в инвентаре.");
+          return;
+        }
+        this.stopBuild();
+        this.clearSelection();
+        this.inventoryPlacement = id;
+        this.ui.close();
+        this.ui.placementMode(
+          prefix === "device"
+            ? DEVICE_NAMES[kind as DeviceKind]
+            : "Корабль с площадкой",
+        );
+        return;
+      }
       if (prefix === "furniture" && !store.state.inside) {
         this.ui.toast("Войдите в главный дом, чтобы разместить мебель.");
         return;
@@ -445,6 +467,7 @@ export class Game {
           else if (
             this.mode === "build" ||
             this.buildOnCube ||
+            this.inventoryPlacement ||
             this.terrainMode === "place"
           )
             this.stopBuild();
@@ -552,6 +575,7 @@ export class Game {
             sphereForward: this.sphereForward.toArray(),
             firstPerson: this.firstPerson,
             placement:
+              this.inventoryPlacement ??
               this.buildOnCube ??
               (this.terrainMode === "place" ? "block" : null),
             cockpit: !!this.space,
@@ -1083,6 +1107,12 @@ export class Game {
       this.camera,
     );
     if (this.view instanceof SphereWorld) {
+      if (this.inventoryPlacement) {
+        const point = this.view.pick(this.raycaster.ray);
+        if (point)
+          this.approach({ ...point, type: "ground" }, () => this.showContext());
+        return;
+      }
       const enemyId = this.enemies?.pick(this.raycaster.ray);
       const enemy = this.store.state.worlds[
         this.store.state.planet
@@ -1093,8 +1123,12 @@ export class Game {
       }
       if (this.view.pickShip(this.raycaster.ray)) {
         this.stopBuild();
-        this.approach({ ...ship(this.store.state.planet), type: "ship" }, () =>
-          this.ui.shipDock(this.store.state),
+        this.approach(
+          {
+            ...landingPad(this.store.state, this.store.state.planet),
+            type: "ship",
+          },
+          () => this.ui.shipDock(this.store.state),
         );
         return;
       }
@@ -1123,7 +1157,7 @@ export class Game {
       );
       if (!point) return;
       let selected: Selection = { ...point, type: "ground" };
-      const pad = ship(this.store.state.planet),
+      const pad = landingPad(this.store.state, this.store.state.planet),
         node = nodes(this.store.state.planet).find(
           (n) =>
             !this.store.state.worlds[
@@ -1153,6 +1187,17 @@ export class Game {
       }
       if (this.terrainMode === "place" || this.buildOnCube) {
         this.approach(selected, () => this.showContext());
+        return;
+      }
+      if (this.store.state.hand === "pickaxe" && this.terrainMode === "dig") {
+        this.clearSelection();
+        this.selected = { ...point, type: "ground" };
+        this.sphereDestination = undefined;
+        this.path = [];
+        this.arrived = undefined;
+        this.input.clear();
+        this.miningAim = { x: clientX, y: clientY };
+        this.view.highlightBlock(point);
         return;
       }
       const meteor = worldEvent(
@@ -1237,7 +1282,7 @@ export class Game {
     } else {
       const n = nodes(state.planet).find((n) => n.x === x && n.z === z),
         b = buildingAt(state.worlds[state.planet], x, z),
-        pad = ship(state.planet),
+        pad = landingPad(state, state.planet),
         event = worldEvent(state, state.planet, this.store.now());
       if (
         event?.type === "meteor" &&
@@ -1259,6 +1304,7 @@ export class Game {
     this.selected = undefined;
     this.marker.visible = false;
     this.ui.hideContext();
+    if (this.view instanceof SphereWorld) this.view.highlightBlock(null);
   }
   private approach(s: Selection, done: () => void) {
     if (this.busy || this.flying || this.ui.modalOpen) return;
@@ -1314,6 +1360,22 @@ export class Game {
       world = state.worlds[state.planet],
       now = this.store.now();
     if (!s || this.mode === "build") return;
+    if (s.type === "ground" && this.inventoryPlacement) {
+      this.ui.context(
+        "Размещение",
+        "Установить выбранный предмет на этом участке.",
+        "Установить",
+      );
+      return;
+    }
+    if (
+      s.type === "ground" &&
+      !this.buildOnCube &&
+      this.terrainMode === "dig"
+    ) {
+      this.ui.hideContext();
+      return;
+    }
     if (s.type === "enemy") {
       const e = world.enemies.find((e) => e.id === s.id && e.hp > 0);
       if (!e) {
@@ -1411,6 +1473,22 @@ export class Game {
     if (!s || this.busy) return;
     const state = this.store.state;
     if (s.type === "ground") {
+      if (this.inventoryPlacement) {
+        const id = this.inventoryPlacement;
+        void this.perform(
+          id.startsWith("device:")
+            ? {
+                type: "placeDevice",
+                kind: id.slice(7) as DeviceKind,
+                x: s.x,
+                z: s.z,
+              }
+            : { type: "placeShip", id: id.slice(5), x: s.x, z: s.z },
+          "tool",
+          "Предмет размещён.",
+        );
+        return;
+      }
       if (this.buildOnCube)
         void this.perform(
           {
@@ -1473,6 +1551,61 @@ export class Game {
     else if (s.type === "building" && s.id) this.colonyPanels.building(s.id);
   }
 
+  private async mineStrike() {
+    if (
+      this.busy ||
+      this.flying ||
+      this.ui.modalOpen ||
+      this.store.state.inside ||
+      this.store.state.hand !== "pickaxe" ||
+      this.buildOnCube ||
+      this.inventoryPlacement ||
+      this.terrainMode !== "dig"
+    )
+      return;
+    if (!(this.view instanceof SphereWorld)) return;
+    const aim = this.firstPerson
+      ? { x: innerWidth / 2, y: innerHeight / 2 }
+      : this.miningAim;
+    let point;
+    if (aim) {
+      this.raycaster.setFromCamera(
+        new T.Vector2(
+          (aim.x / innerWidth) * 2 - 1,
+          1 - (aim.y / innerHeight) * 2,
+        ),
+        this.camera,
+      );
+      point = this.view.pick(this.raycaster.ray);
+    } else
+      point = {
+        ...sphereStep(
+          this.position,
+          this.sphereForward,
+          1.1,
+          this.store.state.planet,
+        ),
+      };
+    if (!point) return;
+    if (surfaceDistance(point, this.position, this.store.state.planet) > 3.2) {
+      this.ui.toast("Подойдите ближе к блоку.");
+      return;
+    }
+    this.view.highlightBlock(point);
+    this.firstHands.strike();
+    await this.perform(
+      {
+        type: "terrain",
+        mode: "dig",
+        material: "stone",
+        x: point.x,
+        z: point.z,
+        level: "level" in point ? (point.level as number) : undefined,
+      },
+      "tool",
+      "",
+    );
+  }
   private async flushMove() {
     if (this.flying) return;
     const old = this.store.state.position;
@@ -1515,7 +1648,8 @@ export class Game {
         oldHealth = this.store.state.health,
         oldKills = this.store.state.kills;
       await this.store.action(action);
-      if (action.type === "build") this.stopBuild();
+      if (["build", "placeDevice", "placeShip"].includes(action.type))
+        this.stopBuild();
       if (
         oldInside !== this.store.state.inside ||
         oldPlanet !== this.store.state.planet
@@ -1542,7 +1676,7 @@ export class Game {
       if (this.store.state.health < oldHealth) this.audio.play("hurt");
       this.ui.refreshModal(this.store.state);
       this.clearSelection();
-      this.ui.toast(message);
+      if (message) this.ui.toast(message);
     } catch (e) {
       this.ui.toast(
         e instanceof Error ? e.message : "Не удалось сохранить действие.",
@@ -1584,7 +1718,8 @@ export class Game {
       this.ui.button("tool-dig", () => {
         this.stopBuild();
         this.ui.close();
-        this.ui.toast("Выберите блок рядом с собой.");
+        void this.chooseHand("pickaxe");
+        this.ui.toast("Выберите блок и удерживайте кнопку удара.");
       });
       this.ui
         .el("modal-content")
@@ -1723,6 +1858,7 @@ export class Game {
   private stopBuild(resetTools = true) {
     if (resetTools) {
       this.buildOnCube = undefined;
+      this.inventoryPlacement = undefined;
       this.terrainMode = "dig";
       this.ui.placementMode(null);
     }
@@ -1898,6 +2034,8 @@ export class Game {
   }
   private enterSpace() {
     if (!this.store.state.flight) return;
+    for (const [p, w] of Object.entries(this.store.state.worlds))
+      setTerrainEdits(p as PlanetId, w.terrain);
     this.space?.dispose();
     this.flightState = structuredClone(this.store.state.flight);
     this.space = new SpaceScene(this.kit, this.store.state);
@@ -1933,7 +2071,7 @@ export class Game {
       this.view instanceof Interior
     )
       return;
-    const pad = ship(this.store.state.planet);
+    const pad = landingPad(this.store.state, this.store.state.planet);
     if (surfaceDistance(this.position, pad, this.store.state.planet) > 2.7) {
       this.ui.close();
       this.ui.toast("Подходим к кораблю для вылета.");
@@ -1960,7 +2098,9 @@ export class Game {
         base = source.ship.position.clone(),
         up =
           !this.store.state.inside && isSphere(this.store.state.planet)
-            ? this.sphereUp(ship(this.store.state.planet))
+            ? this.sphereUp(
+                landingPad(this.store.state, this.store.state.planet),
+              )
             : new T.Vector3(0, 1, 0);
       this.atmosphere?.startLaunch(base.x, base.y, base.z, up);
       this.audio.play("launch");
@@ -2085,7 +2225,11 @@ export class Game {
       if (!landingInfo(this.flightState).allowed)
         throw new Error("Снизьте скорость и подойдите ближе к маяку.");
       const start = { ...this.flightState.position },
-        end = padPoint(this.flightState.target);
+        end = padPoint(
+          this.flightState.target,
+          0,
+          this.flightState.pads?.[this.flightState.target],
+        );
       await this.animateFlight(2600, (t) => {
         if (!this.flightState) return;
         const k = t * t * (3 - 2 * t);
@@ -2315,6 +2459,16 @@ export class Game {
       if (this.view instanceof Planet || this.view instanceof SphereWorld)
         this.view.updateCrops(this.store.state, this.store.now());
       this.ui.update(this.store.state, this.store.now());
+      this.ui
+        .el("mine-strike")
+        .classList.toggle(
+          "hidden",
+          this.store.state.hand !== "pickaxe" ||
+            !!this.store.state.inside ||
+            !!this.buildOnCube ||
+            !!this.inventoryPlacement ||
+            this.terrainMode === "place",
+        );
       this.automationPanel?.refresh();
       this.colonyPanels?.refresh();
       const audioButton = this.ui.el("audio-toggle");
@@ -2322,13 +2476,6 @@ export class Game {
         audioButton.dataset.muted = String(this.audio.muted);
         audioButton.innerHTML = hudIcon(this.audio.muted ? "muted" : "audio");
       }
-      this.ui.minimap(
-        this.store.state,
-        this.position,
-        this.avatar.root.rotation.y,
-        this.store.now(),
-        this.life?.positions,
-      );
       if (!this.busy && this.ui.contextOpen) this.showContext();
     }
     if (this.saveTick > 2 && !this.busy) {

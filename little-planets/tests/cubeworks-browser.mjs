@@ -1,3 +1,8 @@
+import {
+  createAndPlaceDevice,
+  placeInventoryItem,
+  openSystems,
+} from "./outfit-helpers.ts";
 import { chromium } from "@playwright/test";
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
@@ -61,7 +66,7 @@ try {
     await page.waitForFunction(
       () => window.__planets?.snapshot().art?.frameCalls > 0,
     );
-    assert.equal((await snap()).sphere.tiles, 6 * 38 * 38);
+    assert.equal((await snap()).sphere.tiles, 6 * 46 * 46);
     assert.equal((await snap()).state.inventory["tool:pickaxe"], 1);
     if (viewport.width === 1100) {
       console.log("desktop: scene ready");
@@ -89,9 +94,8 @@ try {
         "desktop: target selected",
         await page.evaluate(() => window.__planets.snapshot().selected),
       );
-      await page
-        .getByRole("button", { name: "⛏ Разрушить блок", exact: true })
-        .click();
+      assert(await page.locator("#context").isHidden());
+      await page.locator("#mine-strike").click();
       await page.waitForFunction(
         () =>
           Object.keys(window.__planets.snapshot().state.worlds.home.terrain)
@@ -115,11 +119,11 @@ try {
       );
       console.log("desktop: block placed");
       await menu("automation");
-      await page.locator('[data-deploy="warehouse"]').click();
+      await createAndPlaceDevice(page, "warehouse");
       await page.waitForFunction(
         () => window.__planets.snapshot().state.automation.devices.length === 1,
       );
-      await page.locator('[data-deploy="collector"]').click();
+      await createAndPlaceDevice(page, "collector");
       await page.waitForFunction(
         () => window.__planets.snapshot().state.automation.devices.length === 2,
       );
@@ -169,7 +173,7 @@ try {
       await page.locator("#close-modal").click();
     } else {
       await menu("automation");
-      assert(await page.locator('[data-deploy="drone"]').isVisible());
+      assert(await page.locator('[data-device-kind="drone"]').isVisible());
       await page.locator("#close-modal").click();
       if (viewport.width === 390) {
         const cdp = await context.newCDPSession(page),

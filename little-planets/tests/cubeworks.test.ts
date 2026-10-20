@@ -46,8 +46,8 @@ function put(s: Save, p: PlanetId) {
   return s;
 }
 describe("six cube faces, shared rendering and physical surface", () => {
-  it("removes the eight round worlds, keeps a home with 38 cells along every face", () => {
-    expect(planetSize("home")).toBe(38);
+  it("removes the eight round worlds, keeps a home with 46 cells along every face", () => {
+    expect(planetSize("home")).toBe(46);
     expect(INITIAL_PLANETS).toEqual([
       "home",
       "listoria",
@@ -73,7 +73,7 @@ describe("six cube faces, shared rendering and physical surface", () => {
       s = newGame(0);
     setTerrainEdits(id, s.worlds.home.terrain);
     const { geometry, tiles } = tiledSphere(id);
-    expect(tiles).toBe(6 * 38 * 38);
+    expect(tiles).toBe(6 * planetSize("home") ** 2);
     const mesh = new T.Mesh(geometry, new T.MeshBasicMaterial());
     mesh.updateMatrixWorld();
     for (let f = 0; f < 6; f++) {

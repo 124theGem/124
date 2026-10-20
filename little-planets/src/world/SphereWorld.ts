@@ -1,3 +1,5 @@
+import { voxelCell, surfaceHeight } from "../../shared/voxel";
+import { landingPad } from "../../shared/model";
 import * as T from "three";
 import { Models } from "./Models";
 import {
@@ -41,7 +43,13 @@ export function sphereUp(p: Point, id: PlanetId = "home") {
 }
 export class SphereWorld {
   readonly root = new T.Group();
+  private blockHighlight = new T.LineSegments(
+    new T.EdgesGeometry(new T.BoxGeometry(1.02, 0.46, 1.02)),
+    new T.LineBasicMaterial({ color: 0x89fff0, depthTest: true }),
+  );
   readonly ship: T.Group;
+  private landingBase!: T.Group;
+  private shipVisualKey = "";
   readonly id: PlanetId;
   readonly tiles: number;
   nature: SphereNature;
@@ -74,6 +82,8 @@ export class SphereWorld {
     now: number,
   ) {
     this.id = save.planet;
+    this.blockHighlight.visible = false;
+    this.root.add(this.blockHighlight);
     setTerrainEdits(this.id, save.worlds[this.id].terrain);
     const tile = tiledSphere(this.id);
     this.geometry = tile.geometry;
@@ -98,7 +108,7 @@ export class SphereWorld {
     this.nature = new SphereNature(kit, this.id, save.worlds[this.id].cleared);
     this.clearingKey = JSON.stringify(save.worlds[this.id].cleared);
     this.root.add(this.nature.root);
-    const pad = ship(this.id),
+    const pad = landingPad(save, this.id),
       base = new T.Group();
     kit.box(base, 0, -0.03, 0, 4, 0.12, 4, 0x899d9f);
     for (const x of [-1.5, 1.5])
@@ -110,13 +120,36 @@ export class SphereWorld {
       sphereUp(pad, this.id),
     );
     this.root.add(base);
-    this.ship = kit.ship(save.fleet.find((s) => s.id === save.activeShip));
+    this.landingBase = base;
+    this.ship = new T.Group();
+    this.ship.visible = save.worlds[this.id].launchPad?.shipId !== null;
     this.ship.position.copy(spherePoint(pad, 0.14, this.id));
     this.ship.quaternion.copy(base.quaternion);
     this.root.add(this.ship);
     this.rebuild(save, now);
   }
+  highlightBlock(point: { x: number; z: number; level?: number } | null) {
+    this.blockHighlight.visible = !!point;
+    if (!point) return;
+    const normal = voxelCell(sphereNormal(point, this.id), this.id).normal;
+    const center = sphereCoordinates(normal, this.id);
+    this.blockHighlight.position.copy(spherePoint(center, 0, this.id));
+    if (point.level !== undefined)
+      this.blockHighlight.position.addScaledVector(
+        sphereUp(center, this.id),
+        point.level * 0.45 - surfaceHeight(center, this.id),
+      );
+    this.blockHighlight.position.addScaledVector(
+      sphereUp(center, this.id),
+      -0.225,
+    );
+    this.blockHighlight.quaternion.setFromUnitVectors(
+      T.Object3D.DEFAULT_UP,
+      sphereUp(center, this.id),
+    );
+  }
   pickShip(ray: T.Ray) {
+    if (!this.ship.visible) return false;
     this.root.updateMatrixWorld(true);
     const caster = new T.Raycaster();
     caster.ray.copy(ray);
@@ -164,6 +197,30 @@ export class SphereWorld {
   }
   rebuild(save: Save, now: number) {
     setTerrainEdits(this.id, save.worlds[this.id].terrain);
+    if (!save.flight) {
+      const pad = landingPad(save, this.id),
+        record = save.worlds[this.id].launchPad;
+      const design = save.fleet.find(
+        (sh) => sh.id === (record?.shipId ?? save.activeShip),
+      );
+      const key = JSON.stringify([pad, design]);
+      if (key !== this.shipVisualKey) {
+        this.shipVisualKey = key;
+        this.ship.traverse((o) => {
+          if (o instanceof T.InstancedMesh) o.dispose();
+        });
+        this.ship.clear();
+        this.ship.add(this.kit.ship(design));
+        this.ship.visible = record?.shipId !== null;
+        this.landingBase.position.copy(spherePoint(pad, 0.04, this.id));
+        this.landingBase.quaternion.setFromUnitVectors(
+          T.Object3D.DEFAULT_UP,
+          sphereUp(pad, this.id),
+        );
+        this.ship.position.copy(spherePoint(pad, 0.14, this.id));
+        this.ship.quaternion.copy(this.landingBase.quaternion);
+      }
+    }
     const clearingKey = JSON.stringify(save.worlds[this.id].cleared);
     if (clearingKey !== this.clearingKey) {
       this.clearingKey = clearingKey;
@@ -268,6 +325,8 @@ export class SphereWorld {
     this.nature.animate(time);
   }
   dispose() {
+    this.blockHighlight.geometry.dispose();
+    this.blockHighlight.material.dispose();
     this.nature.dispose();
     this.root.traverse((o) => {
       if (o instanceof T.InstancedMesh) o.dispose();

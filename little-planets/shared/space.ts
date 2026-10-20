@@ -28,6 +28,7 @@ export interface PilotInput {
 }
 export interface FlightState {
   topSpeed?: number;
+  pads?: Partial<Record<PlanetId, { x: number; z: number }>>;
   origin: PlanetId;
   target: PlanetId;
   position: Vec;
@@ -102,16 +103,16 @@ export function bodyRadius(id: PlanetId) {
     ? (sphereRadius(id) + MAX_TERRAIN_HEIGHT) * 1.74
     : planetSize(id) * 0.52;
 }
-export function padNormal(id: PlanetId): Vec {
-  return isSphere(id)
-    ? cubeUp(sphereNormal(ship(id), id))
-    : { x: 0, y: 1, z: 0 };
+export function padNormal(id: PlanetId, p = ship(id)): Vec {
+  return isSphere(id) ? cubeUp(sphereNormal(p, id)) : { x: 0, y: 1, z: 0 };
 }
-export function padPoint(id: PlanetId, height = 0): Vec {
-  const c = bodyCenter(id),
-    p = ship(id);
+export function padPoint(id: PlanetId, height = 0, p = ship(id)): Vec {
+  const c = bodyCenter(id);
   if (isSphere(id))
-    return add(add(c, surfacePoint(p, id)), mul(padNormal(id), 0.14 + height));
+    return add(
+      add(c, surfacePoint(p, id)),
+      mul(padNormal(id, p), 0.14 + height),
+    );
   const offset = (planetSize(id) - 1) / 2;
   return add(c, {
     x: p.x - offset,
@@ -119,8 +120,8 @@ export function padPoint(id: PlanetId, height = 0): Vec {
     z: p.z - offset,
   });
 }
-export function approachPoint(id: PlanetId) {
-  return padPoint(id, 9);
+export function approachPoint(id: PlanetId, p = ship(id)) {
+  return padPoint(id, 9, p);
 }
 function segmentDistance(a: Vec, b: Vec, p: Vec) {
   const d = sub(b, a),
@@ -134,9 +135,10 @@ export function flightRoute(
   start: Vec,
   target: PlanetId,
   known: PlanetId[],
+  pads: FlightState["pads"] = {},
 ): Vec[] {
-  const end = approachPoint(target),
-    outer = padPoint(target, 35),
+  const end = approachPoint(target, pads[target]),
+    outer = padPoint(target, 35, pads[target]),
     points: Vec[] = [{ ...start }];
   // A pilot can enable guidance next to any hemisphere after a manual approach.
   // First climb clear of the nearby body before calculating the transfer legs.
@@ -189,20 +191,22 @@ export function beginFlight(
   target: PlanetId,
   known: PlanetId[],
   now: number,
+  pads: FlightState["pads"] = {},
 ): FlightState {
-  const position = padPoint(origin, 13),
-    departure = padPoint(origin, 38);
+  const position = padPoint(origin, 13, pads[origin]),
+    departure = padPoint(origin, 38, pads[origin]);
   return {
     origin,
     target,
+    pads,
     position,
     velocity: { x: 0, y: 0, z: 0 },
     forward: unit(sub(departure, position)),
     up:
-      Math.abs(padNormal(origin).y) > 0.9
+      Math.abs(padNormal(origin, pads[origin]).y) > 0.9
         ? { x: 0, y: 0, z: 1 }
         : { x: 0, y: 1, z: 0 },
-    route: [departure, ...flightRoute(departure, target, known)],
+    route: [departure, ...flightRoute(departure, target, known, pads)],
     waypoint: 0,
     autopilot: false,
     topSpeed: 46,
@@ -219,12 +223,12 @@ export function redirectFlight(
   return {
     ...f,
     target,
-    route: flightRoute(f.position, target, known),
+    route: flightRoute(f.position, target, known, f.pads),
     waypoint: 0,
   };
 }
 export function landingInfo(f: FlightState) {
-  const gate = approachPoint(f.target),
+  const gate = approachPoint(f.target, f.pads?.[f.target]),
     distance = len(sub(f.position, gate)),
     speed = len(f.velocity);
   return {
@@ -258,13 +262,14 @@ export function stepFlight(
   const steps = Math.max(1, Math.ceil(dt / 0.035)),
     h = dt / steps;
   if (input.autopilot && !original.autopilot) {
-    f.route = flightRoute(f.position, f.target, known);
+    f.route = flightRoute(f.position, f.target, known, f.pads);
     f.waypoint = 0;
   }
   for (let i = 0; i < steps; i++) {
     let acceleration: Vec;
     if (input.autopilot) {
-      let goal = f.route[f.waypoint] ?? approachPoint(f.target);
+      let goal =
+        f.route[f.waypoint] ?? approachPoint(f.target, f.pads?.[f.target]);
       if (len(sub(goal, f.position)) < 5 && f.waypoint < f.route.length - 1) {
         f.waypoint++;
         goal = f.route[f.waypoint];
