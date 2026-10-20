@@ -110,11 +110,25 @@ export class SphereWorld {
       sphereUp(pad, this.id),
     );
     this.root.add(base);
-    this.ship = kit.ship();
+    this.ship = kit.ship(save.fleet.find((s) => s.id === save.activeShip));
     this.ship.position.copy(spherePoint(pad, 0.14, this.id));
     this.ship.quaternion.copy(base.quaternion);
     this.root.add(this.ship);
     this.rebuild(save, now);
+  }
+  pickBuilding(ray: T.Ray) {
+    this.root.updateMatrixWorld(true);
+    const caster = new T.Raycaster();
+    caster.ray.copy(ray);
+    const hit = caster.intersectObject(this.structures, true)[0],
+      ground = caster.intersectObject(this.ground, false)[0];
+    if (ground && hit && ground.distance + 0.05 < hit.distance) return null;
+    let o: T.Object3D | null = hit?.object ?? null;
+    while (o) {
+      if (o.userData.buildingId) return o.userData.buildingId as string;
+      o = o.parent;
+    }
+    return null;
   }
   pick(ray: T.Ray, place = false) {
     this.root.updateMatrixWorld(true);
@@ -159,7 +173,16 @@ export class SphereWorld {
     const buildingKey =
       terrainKey +
       JSON.stringify([
-        save.worlds[this.id].buildings,
+        save.worlds[this.id].buildings.map(
+          ({ id, kind, x, z, rotation, level }) => ({
+            id,
+            kind,
+            x,
+            z,
+            rotation,
+            level,
+          }),
+        ),
         save.worlds[this.id].crops,
         Object.values(save.worlds[this.id].crops).map((c) => stage(c, now)),
       ]);
@@ -186,12 +209,13 @@ export class SphereWorld {
         this.structures.add(bed);
       }
       for (const b of save.worlds[this.id].buildings) {
-        const model = this.kit.building(b.kind, this.id);
+        const model = this.kit.building(b.kind, this.id, b.level ?? 1);
         model.position.copy(spherePoint(b, 0, this.id));
         model.quaternion.setFromUnitVectors(
           T.Object3D.DEFAULT_UP,
           sphereUp(b, this.id),
         );
+        model.userData.buildingId = b.id;
         this.structures.add(model);
       }
     }
@@ -214,7 +238,7 @@ export class SphereWorld {
         )
       )
         continue;
-      const model = this.kit.resource(biomeOf(this.id), n.variant);
+      const model = this.kit.resource(biomeOf(this.id), n.variant, n.resource);
       model.position.copy(spherePoint(n, 0, this.id));
       model.quaternion.setFromUnitVectors(
         T.Object3D.DEFAULT_UP,

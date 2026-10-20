@@ -156,7 +156,8 @@ try {
     url: "/api/state",
     headers: { authorization: `tma ${initData}` },
   });
-  assert.equal(persisted.json().state.inventory.wood, 78);
+  assert.equal(persisted.json().state.freeConstruction, true);
+  assert.equal(persisted.json().state.inventory.wood, 90);
   assert.equal(persisted.json().state.automation.devices.length, 2);
   await phone.locator("#close-modal").click();
   await phone.goto(gameUrl);

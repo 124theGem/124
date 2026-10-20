@@ -41,7 +41,8 @@ export class AutomationPanel {
     private state: () => Save,
     private act: (a: Action) => Promise<void>,
   ) {}
-  open() {
+  open(id?: string) {
+    if (id) this.selected = id;
     this.draft = this.drafts.get(this.selected);
     this.render();
   }
@@ -55,11 +56,13 @@ export class AutomationPanel {
       )
         .map(
           (k) =>
-            `<button data-deploy="${k}">${DEVICE_NAMES[k]}<small>${Object.entries(
-              DEVICE_COSTS[k],
-            )
-              .map(([r, n]) => `${n} ${RESOURCE_LABELS[r]}`)
-              .join(" + ")}</small></button>`,
+            `<button data-deploy="${k}">${DEVICE_NAMES[k]}<small>${
+              s.freeConstruction
+                ? "0 ресурсов · TEST"
+                : Object.entries(DEVICE_COSTS[k])
+                    .map(([r, n]) => `${n} ${RESOURCE_LABELS[r]}`)
+                    .join(" + ")
+            }</small></button>`,
         )
         .join(
           "",
@@ -139,9 +142,15 @@ export class AutomationPanel {
     if (selected.kind === "refinery") {
       detail.insertAdjacentHTML(
         "beforeend",
-        `<p>Сырьё берётся с местного склада при запуске цикла; результат возвращается туда по завершении.</p><select id="refinery-recipe">${Object.entries(
-          RECIPES,
-        )
+        `<p>Сырьё привозят гусеничные дроны. Готовый материал они возвращают на склад.</p><h3>Входной буфер</h3><p id="refinery-inputs">${
+          Object.entries(selected.buffer)
+            .map(([k, n]) => `${RESOURCE_LABELS[k]}: ${n}`)
+            .join(" · ") || "Пусто"
+        }</p><h3>Готовая продукция</h3><p id="refinery-outputs">${
+          Object.entries(selected.output)
+            .map(([k, n]) => `${RESOURCE_LABELS[k]}: ${n}`)
+            .join(" · ") || "Пусто"
+        }</p><select id="refinery-recipe">${Object.entries(RECIPES)
           .map(
             ([id, r]) =>
               `<option value="${id}" ${id === selected.recipe ? "selected" : ""}>${Object.entries(
@@ -163,6 +172,66 @@ export class AutomationPanel {
           }),
       );
       return;
+    }
+    if (selected.kind === "drone" || selected.kind === "crawler") {
+      const route = selected.logistics,
+        options = (current: string) =>
+          s.discovered
+            .map(
+              (p) =>
+                `<option value="${p}" ${p === current ? "selected" : ""}>${PLANETS[p].name}</option>`,
+            )
+            .join("");
+      detail.insertAdjacentHTML(
+        "beforeend",
+        `<section class="route-builder"><span class="eyebrow">${selected.kind === "crawler" ? "НАЗЕМНАЯ ДОСТАВКА" : "МЕЖПЛАНЕТНАЯ ЛОГИСТИКА"}</span><h3>${selected.kind === "crawler" ? "Склад ⇄ Переработка" : "Склад А → Склад Б"}</h3><label>Отправление<select id="route-from">${options(route?.from ?? selected.planet)}</select></label>${
+          selected.kind === "drone"
+            ? `<label>Получение<select id="route-to">${options(route?.to ?? s.planet)}</select></label><label>Ресурс<select id="route-resource">${Object.entries(
+                RESOURCE_LABELS,
+              )
+                .map(
+                  ([r, n]) =>
+                    `<option value="${r}" ${r === route?.resource ? "selected" : ""}>${n}</option>`,
+                )
+                .join("")}</select></label>`
+            : `<label>Станция переработки<select id="route-refinery">${s.automation.devices
+                .filter(
+                  (d) => d.kind === "refinery" && d.planet === selected.planet,
+                )
+                .map(
+                  (d) =>
+                    `<option value="${d.id}" ${d.id === route?.refineryId ? "selected" : ""}>${e(d.id)} · ${RECIPES[d.recipe].name}</option>`,
+                )
+                .join(
+                  "",
+                )}</select></label><p>Автоматически доставляет оба вида сырья выбранного рецепта и увозит продукцию на склад.</p>`
+        }<button id="route-save" class="primary">Назначить и запустить маршрут</button><p>${route ? `${PLANETS[route.from].name} → ${selected.kind === "crawler" ? "переработка" : PLANETS[route.to].name}` : "Маршрут не назначен"}</p></section>`,
+      );
+      this.ui.button("route-save", () => {
+        const from = (this.ui.el("route-from") as HTMLSelectElement)
+          .value as PlanetId;
+        void this.run({
+          type: "logisticsRoute",
+          id: selected.id,
+          from,
+          to:
+            selected.kind === "crawler"
+              ? from
+              : ((this.ui.el("route-to") as HTMLSelectElement)
+                  .value as PlanetId),
+          resource:
+            selected.kind === "crawler"
+              ? "wood"
+              : (this.ui.el("route-resource") as HTMLSelectElement).value,
+          ...(selected.kind === "crawler"
+            ? {
+                refineryId: (this.ui.el("route-refinery") as HTMLSelectElement)
+                  .value,
+              }
+            : {}),
+        });
+      });
+      if (selected.kind === "crawler") return;
     }
     this.draft ??= structuredClone(selected.program);
     this.drafts.set(selected.id, this.draft);
@@ -356,6 +425,18 @@ export class AutomationPanel {
       .forEach((n) =>
         n.classList.toggle("executing", n.dataset.node === d.pc && d.enabled),
       );
+    for (const [id, values] of [
+      ["refinery-inputs", d.buffer],
+      ["refinery-outputs", d.output],
+    ] as const) {
+      const el = this.ui.el(id);
+      if (el)
+        el.textContent =
+          Object.entries(values)
+            .filter(([, n]) => n > 0)
+            .map(([k, n]) => `${RESOURCE_LABELS[k]}: ${n}`)
+            .join(" · ") || "Пусто";
+    }
     const stock = this.ui.el("stock-status");
     if (stock)
       stock.textContent =

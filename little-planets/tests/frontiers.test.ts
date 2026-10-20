@@ -1,3 +1,4 @@
+import { inScannerRange } from "../shared/sector";
 import { describe, it, expect } from "vitest";
 import {
   newGame,
@@ -140,20 +141,29 @@ describe("planet scanner and weather", () => {
     expect(s.worlds.home.enemies).toHaveLength(0);
     expect(Object.hasOwn(PLANETS, "orbis")).toBe(false);
   });
-  it("discovers random unused worlds, gates travel and exhausts the 24-world pool", () => {
-    let s = newGame(0);
+  it("requires an antenna scanner, discovers unused worlds in range and exhausts its current radius", () => {
+    let s = newGame(0, true);
     s.position = { ...ship("home") };
     expect(() =>
       applyAction(s, { type: "travel", planet: "wild-1" }, 1000),
     ).toThrow(/найдите/);
-    for (let i = 0; i < 24; i++) {
-      s = applyAction(s, { type: "scan" }, 1000 + i);
-      expect(s.lastDiscovery?.startsWith("wild-")).toBe(true);
-    }
-    expect(new Set(s.discovered).size).toBe(INITIAL_PLANETS.length + 24);
-    expect(() => applyAction(s, { type: "scan" }, 2000)).toThrow(/24/);
+    expect(() => applyAction(s, { type: "scan" }, 1000)).toThrow(/сканера/);
+    s = applyAction(
+      s,
+      { type: "build", kind: "scanner", x: 8, z: 7, rotation: 0 },
+      1000,
+    );
+    const reachable = Object.keys(PLANETS).filter(
+      (p) =>
+        inScannerRange(s, p as PlanetId) && !s.scans.includes(p as PlanetId),
+    );
+    for (let i = 0; i < reachable.length; i++)
+      s = applyAction(s, { type: "scan" }, 1100 + i);
+    expect(s.scans.length).toBe(1 + reachable.length);
+    expect(new Set(s.scans).size).toBe(s.scans.length);
+    expect(() => applyAction(s, { type: "scan" }, 2000)).toThrow(/радиусе/);
     expect(
-      ActionSchema.safeParse({ type: "travel", planet: "wild-99" }).success,
+      ActionSchema.safeParse({ type: "travel", planet: "wild-99999" }).success,
     ).toBe(false);
     const id = s.lastDiscovery!;
     s = applyAction(s, { type: "travel", planet: id }, 3000);
@@ -173,12 +183,16 @@ describe("planet scanner and weather", () => {
       expect(n.x).toBeLessThan(planetSize("wild-1"));
     }
   });
-  it("only scans near a ship and never repeats a discovery", () => {
-    const s = newGame(0);
-    expect(() => applyAction(s, { type: "scan" }, 1000)).toThrow(/поближе/);
-    s.position = { ...ship("home") };
-    const first = applyAction(s, { type: "scan" }, 1000),
-      second = applyAction(first, { type: "scan" }, 1000);
+  it("scans from the built station without a ship restriction and never repeats a discovery", () => {
+    let s = newGame(0, true);
+    s = applyAction(
+      s,
+      { type: "build", kind: "scanner", x: 8, z: 7, rotation: 0 },
+      1000,
+    );
+    s.position = { x: 2, z: 2 };
+    const first = applyAction(s, { type: "scan" }, 1100),
+      second = applyAction(first, { type: "scan" }, 1200);
     expect(first.lastDiscovery).not.toBe(second.lastDiscovery);
   });
   it("produces meteor, wind, rain, storm and hurricane on synchronized saved timelines", () => {

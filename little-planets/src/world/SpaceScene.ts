@@ -1,3 +1,4 @@
+import { cockpit } from "./Cockpit";
 import * as T from "three";
 import { Models } from "./Models";
 import { Planet } from "./Planet";
@@ -22,7 +23,7 @@ import {
 import type { Save } from "../../shared/model";
 export class SpaceScene {
   readonly scene = new T.Scene();
-  readonly camera = new T.PerspectiveCamera(53, 1, 0.1, 4000);
+  readonly camera = new T.PerspectiveCamera(53, 1, 0.1, 30000);
   readonly ship: T.Group;
   private sky = new StarSky();
   private proxies = new Map<PlanetId, T.Group>();
@@ -50,7 +51,7 @@ export class SpaceScene {
     32,
   );
   private target: PlanetId;
-  private cameraReady = false;
+  private cabin: T.Group;
   constructor(
     private kit: Models,
     private save: Save,
@@ -61,7 +62,14 @@ export class SpaceScene {
     light.position.set(-180, 250, 130);
     this.scene.add(light, this.sky.root);
     this.sky.root.scale.setScalar(10);
-    for (const id of save.discovered) {
+    for (const id of save.discovered
+      .slice(0, 100)
+      .concat(
+        save.discovered.includes(save.flight!.target) &&
+          save.discovered.indexOf(save.flight!.target) >= 100
+          ? [save.flight!.target]
+          : [],
+      )) {
       const root = new T.Group(),
         c = bodyCenter(id);
       root.position.set(c.x, c.y, c.z);
@@ -104,7 +112,10 @@ export class SpaceScene {
       this.proxies.set(id, root);
     }
     this.target = save.flight!.target;
-    this.ship = kit.ship();
+    this.ship = kit.ship(save.fleet.find((s) => s.id === save.activeShip));
+    this.ship.visible = false;
+    this.cabin = cockpit(kit);
+    this.scene.add(this.cabin);
     this.scene.add(this.ship, this.exhaust);
     this.exhaust.frustumCulled = false;
     for (const offset of [0, 1]) {
@@ -122,6 +133,11 @@ export class SpaceScene {
   }
   private detail(id: PlanetId) {
     if (this.detailed.has(id)) return;
+    if (!this.proxies.has(id)) {
+      const proxy = new T.Group();
+      this.proxies.set(id, proxy);
+      this.scene.add(proxy);
+    }
     const state = { ...this.save, planet: id, flight: null };
     const view = isSphere(id)
         ? new SphereWorld(this.kit, state, Date.now())
@@ -179,46 +195,12 @@ export class SpaceScene {
       new T.Vector3(normal.x, normal.y, normal.z),
     );
     this.beacon.scale.setScalar(1 + Math.sin(time * 3) * 0.06);
-    const closest = [f.origin, f.target].sort(
-        (a, b) =>
-          len(subPosition(f.position, bodyCenter(a))) -
-          bodyRadius(a) -
-          (len(subPosition(f.position, bodyCenter(b))) - bodyRadius(b)),
-      )[0],
-      c = bodyCenter(closest),
-      near =
-        this.ship.position.distanceTo(new T.Vector3(c.x, c.y, c.z)) <
-        bodyRadius(closest) + 48;
-    let desired: T.Vector3,
-      look = this.ship.position.clone().addScaledVector(forward, 8);
-    if (near) {
-      const radial = this.ship.position
-          .clone()
-          .sub(new T.Vector3(c.x, c.y, c.z))
-          .normalize(),
-        tangent = forward.clone().addScaledVector(radial, -forward.dot(radial));
-      if (tangent.length() < 0.1) {
-        tangent.set(
-          0,
-          Math.abs(radial.y) > 0.9 ? 0 : 1,
-          Math.abs(radial.y) > 0.9 ? 1 : 0,
-        );
-        tangent.addScaledVector(radial, -tangent.dot(radial));
-      }
-      tangent.normalize();
-      desired = this.ship.position
+    const desired = this.ship.position
         .clone()
-        .addScaledVector(radial, 6)
-        .addScaledVector(tangent, -12);
-      look = this.ship.position.clone().addScaledVector(tangent, 4);
-      this.camera.up.copy(radial);
-    } else {
-      desired = this.ship.position
-        .clone()
-        .addScaledVector(forward, -11)
-        .addScaledVector(up, 5);
-      this.camera.up.copy(up);
-    }
+        .addScaledVector(up, 1.15)
+        .addScaledVector(forward, 0.35),
+      look = desired.clone().addScaledVector(forward, 100);
+    this.camera.up.copy(up);
     const trail = landing
         ? new T.Vector3(normal.x, normal.y, normal.z).negate()
         : forward.clone().negate(),
@@ -233,20 +215,20 @@ export class SpaceScene {
       this.exhaust.setMatrixAt(i, matrix);
     }
     this.exhaust.instanceMatrix.needsUpdate = true;
-    this.camera.position.lerp(
-      desired,
-      this.cameraReady ? 1 - Math.exp(-6 * dt) : 1,
-    );
-    this.cameraReady = true;
+    this.camera.position.copy(desired);
     this.camera.lookAt(look);
     this.camera.updateMatrixWorld();
+    this.cabin.position.copy(this.camera.position);
+    this.cabin.quaternion.copy(this.camera.quaternion);
     this.sky.update(this.camera);
+    this.sky.root.scale.setScalar(100);
   }
   projectTarget() {
     return this.beacon.position.clone().project(this.camera);
   }
   get stats() {
     return {
+      cockpit: true,
       bodies: this.proxies.size,
       detailed: [...this.detailed.keys()],
       ship: this.ship.position.toArray(),

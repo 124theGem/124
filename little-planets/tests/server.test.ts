@@ -189,7 +189,8 @@ describe("SQLite persistence and authenticated API", () => {
         },
       });
       expect(built.statusCode).toBe(200);
-      expect(built.json().state.inventory.wood).toBe(72);
+      expect(built.json().state.freeConstruction).toBe(true);
+      expect(built.json().state.inventory.wood).toBe(90);
       const conflict = await app.inject({
         method: "POST",
         url: "/api/action",

@@ -1,3 +1,20 @@
+import { resourceValid, INDUSTRIAL_RECIPES, RAW_RESOURCES } from "./resources";
+import {
+  scannerBuilding,
+  inScannerRange,
+  constellationName,
+  recordVisit,
+  upgradeCost,
+  drillSize,
+} from "./sector";
+import {
+  starterShip,
+  shipCost,
+  SHIP_CLASSES,
+  SHIP_STATS,
+  type Starship,
+} from "./ships";
+import { advanceIndustry } from "./industry";
 import { prepareFoundation, foundationCells } from "./construction";
 import {
   gainExperience,
@@ -14,6 +31,7 @@ import {
   defaultProgram,
   RECIPES,
   localWarehouse,
+  cargoAmount,
   type Automation,
 } from "./automation";
 import {
@@ -77,6 +95,10 @@ export interface Building {
   rotation: number;
   resource?: string;
   collectedAt?: number;
+  level?: number;
+  produced?: number;
+  productionAt?: number;
+  buffer?: Record<string, number>;
 }
 export interface Furniture {
   id: string;
@@ -112,6 +134,14 @@ export interface PlanetState {
 }
 export interface Save {
   version: 6;
+  freeConstruction: boolean;
+  scans: PlanetId[];
+  profile: {
+    visits: Record<string, { seconds: number; arrivals: number }>;
+    lastAt: number;
+  };
+  fleet: Starship[];
+  activeShip: string;
   hand: "pickaxe" | "grapple" | "sword" | "spear" | "blaster" | "none";
   progression: Progression;
   grapple: GrappleState | null;
@@ -150,7 +180,41 @@ const pilotInput = z
     autopilot: z.boolean(),
   })
   .strict();
+const resourceSchema = z.string().refine(resourceValid);
+const recipeSchema = z
+  .string()
+  .refine((r) => Object.hasOwn(INDUSTRIAL_RECIPES, r));
+const starshipSchema = z.object({
+  id: z.string().max(100),
+  name: z.string().min(1).max(40),
+  class: z.enum(SHIP_CLASSES),
+  model: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  hull: z.enum(["needle", "armored", "freighter"]),
+  wings: z.enum(["swept", "delta", "twin"]),
+  color: z.enum(["ivory", "graphite", "cobalt", "ember", "emerald"]),
+});
 export const ActionSchema = z.discriminatedUnion("type", [
+  z
+    .object({ type: z.literal("upgradeBuilding"), id: z.string().max(100) })
+    .strict(),
+  z.object({ type: z.literal("scanPlanet"), planet }).strict(),
+  z
+    .object({
+      type: z.literal("createShip"),
+      ship: starshipSchema.omit({ id: true }),
+    })
+    .strict(),
+  z.object({ type: z.literal("selectShip"), id: z.string().max(100) }).strict(),
+  z
+    .object({
+      type: z.literal("logisticsRoute"),
+      id: z.string().max(100),
+      from: planet,
+      to: planet,
+      resource: resourceSchema,
+      refineryId: z.string().max(100).optional(),
+    })
+    .strict(),
   z
     .object({
       type: z.literal("hand"),
@@ -195,22 +259,13 @@ export const ActionSchema = z.discriminatedUnion("type", [
     .object({
       type: z.literal("refineryRecipe"),
       id: z.string().max(100),
-      recipe: z.enum(["composite", "alloy"]),
+      recipe: recipeSchema,
     })
     .strict(),
   z
     .object({
       type: z.literal("stock"),
-      resource: z.enum([
-        "wood",
-        "stone",
-        "spores",
-        "crystal",
-        "obsidian",
-        "thermal",
-        "composite",
-        "alloy",
-      ]),
+      resource: resourceSchema,
       amount: z.number().int().min(1).max(1000),
       direction: z.enum(["deposit", "withdraw"]),
     })
@@ -271,6 +326,9 @@ export const ActionSchema = z.discriminatedUnion("type", [
         "laboratory",
         "extractor",
         "bioextractor",
+        "planetdrill",
+        "scanner",
+        "shipyard",
       ]),
       x: z.number().finite().min(0).max(224),
       z: z.number().finite().min(0).max(224),
@@ -317,25 +375,38 @@ export const ActionSchema = z.discriminatedUnion("type", [
     .strict(),
 ]);
 export type Action = z.infer<typeof ActionSchema>;
-export function newGame(now = Date.now()): Save {
+export function freshWorld(p: PlanetId, now: number): PlanetState {
+  return {
+    crops: {},
+    buildings:
+      p === "home"
+        ? [
+            {
+              id: "home-hq",
+              kind: "headquarters",
+              ...HOME_HQ,
+              rotation: 0,
+              level: 1,
+              produced: 0,
+              buffer: {},
+            },
+          ]
+        : [],
+    depleted: {},
+    eventEpoch: now,
+    salvaged: [],
+    enemies: spawnEnemies(p),
+    lastSimAt: now,
+    terrain: {},
+    cleared: [],
+    clearedNodes: [],
+    stock: {},
+  };
+}
+export function newGame(now = Date.now(), freeConstruction = false): Save {
   const worlds = {} as Save["worlds"];
-  for (const p of Object.keys(PLANETS) as PlanetId[])
-    worlds[p] = {
-      crops: {},
-      buildings:
-        p === "home"
-          ? [{ id: "home-hq", kind: "headquarters", ...HOME_HQ, rotation: 0 }]
-          : [],
-      depleted: {},
-      eventEpoch: now,
-      salvaged: [],
-      enemies: spawnEnemies(p),
-      lastSimAt: now,
-      terrain: {},
-      cleared: [],
-      clearedNodes: [],
-      stock: {},
-    };
+  for (const p of Object.keys(PLANETS).slice(0, 30) as PlanetId[])
+    worlds[p] = freshWorld(p, now);
   const inventory: Record<string, number> = {
     "tool:pickaxe": 1,
     "tool:grapple": 1,
@@ -346,9 +417,15 @@ export function newGame(now = Date.now()): Save {
     obsidian: 12,
     thermal: 8,
   };
+  for (const id of Object.keys(RAW_RESOURCES)) inventory[id] ??= 0;
   for (const id of Object.keys(PLANTS)) inventory[`seed:${id}`] = 6;
   return {
     version: 6,
+    freeConstruction,
+    scans: ["home"],
+    profile: { visits: { home: { seconds: 0, arrivals: 1 } }, lastAt: now },
+    fleet: [starterShip()],
+    activeShip: "starter",
     hand: "pickaxe",
     progression: freshProgression(),
     grapple: null,
@@ -535,7 +612,11 @@ export function canBuild(
 ): boolean {
   if (save.inside || !Number.isFinite(x) || !Number.isFinite(z)) return false;
   const b = BUILDINGS[kind];
-  if (!b || b.zone !== (save.planet === "home" ? "home" : "outpost"))
+  if (
+    !b ||
+    (b.zone !== "any" &&
+      b.zone !== (save.planet === "home" ? "home" : "outpost"))
+  )
     return false;
   if (b.zone === "outpost" && !moduleResources(save.planet, kind).length)
     return false;
@@ -607,11 +688,15 @@ export function moduleAmount(save: Save, b: Building, now: number) {
   );
 }
 export function canAfford(save: Save, cost: Record<string, number>, count = 1) {
-  return Object.entries(cost).every(
-    ([r, n]) => (save.inventory[r] ?? 0) >= n * count,
+  return (
+    save.freeConstruction ||
+    Object.entries(cost).every(
+      ([r, n]) => (save.inventory[r] ?? 0) >= n * count,
+    )
   );
 }
 function charge(save: Save, cost: Record<string, number>, count = 1) {
+  if (save.freeConstruction) return;
   if (!canAfford(save, cost, count))
     throw new RuleError("Не хватает ресурсов.");
   for (const [r, n] of Object.entries(cost)) save.inventory[r] -= n * count;
@@ -640,6 +725,14 @@ export function applyAction(
     throw new RuleError("Завершите поездку по тросу.");
   if (save.flight && !["pilot", "course", "land"].includes(action.type))
     throw new RuleError("Сначала завершите полёт и посадку.");
+  const visit = save.profile.visits[save.planet] ?? { seconds: 0, arrivals: 1 };
+  visit.seconds += Math.max(
+    0,
+    Math.min(30, (now - save.profile.lastAt) / 1000),
+  );
+  save.profile.visits[save.planet] = visit;
+  save.profile.lastAt = now;
+  advanceIndustry(save, now);
   advanceAutomation(save, now);
   if (advanceEnemies(save, now)) {
     save.revision++;
@@ -662,6 +755,119 @@ export function applyAction(
   )
     throw new RuleError("Сначала выйдите из дома.");
   switch (action.type) {
+    case "upgradeBuilding": {
+      const b = world.buildings.find((b) => b.id === action.id);
+      if (!b || !["scanner", "planetdrill"].includes(b.kind))
+        throw new RuleError("Это здание не имеет уровней.");
+      nearby(save, b.x, b.z, b.kind === "planetdrill" ? 6 : 4);
+      const limit = b.kind === "scanner" ? 10 : 5;
+      if ((b.level ?? 1) >= limit)
+        throw new RuleError("Достигнут максимальный уровень.");
+      charge(save, upgradeCost(b));
+      b.level = (b.level ?? 1) + 1;
+      break;
+    }
+    case "scanPlanet": {
+      const target = action.planet as PlanetId;
+      if (save.planet !== "home" || !scannerBuilding(save))
+        throw new RuleError("Постройте сканер на Родной.");
+      if (!inScannerRange(save, target))
+        throw new RuleError("Цель вне радиуса. Улучшите сканер.");
+      if (save.scans.includes(target))
+        throw new RuleError("Планета уже просканирована.");
+      if (!save.discovered.includes(target)) save.discovered.push(target);
+      save.worlds[target] ??= freshWorld(target, now);
+      save.scans.push(target);
+      save.lastDiscovery = target;
+      // Reveals the surrounding constellation chart; resources still need their own scan.
+      break;
+    }
+    case "createShip": {
+      if (
+        !save.worlds.home.buildings.some((b) => b.kind === "shipyard") ||
+        save.planet !== "home"
+      )
+        throw new RuleError("Нужна верфь на Родной.");
+      if (save.fleet.length >= 30)
+        throw new RuleError("Лимит ангара: 30 кораблей.");
+      charge(save, shipCost(action.ship));
+      const ship = { ...action.ship, id: `ship-${now}-${save.fleet.length}` };
+      save.fleet.push(ship);
+      save.activeShip = ship.id;
+      break;
+    }
+    case "selectShip": {
+      if (!save.fleet.some((s) => s.id === action.id))
+        throw new RuleError("Корабль не найден.");
+      save.activeShip = action.id;
+      break;
+    }
+    case "logisticsRoute": {
+      const d = save.automation.devices.find((d) => d.id === action.id),
+        from = action.from as PlanetId,
+        to = action.to as PlanetId;
+      if (!d || !["drone", "crawler"].includes(d.kind))
+        throw new RuleError("Выберите грузовой или гусеничный дрон.");
+      if (d.transit || cargoAmount(d) > 0)
+        throw new RuleError(
+          "Дождитесь завершения перевозки перед сменой маршрута.",
+        );
+      if (!save.discovered.includes(from) || !save.discovered.includes(to))
+        throw new RuleError("Сначала откройте обе планеты.");
+      if (!localWarehouse(save, from) || !localWarehouse(save, to))
+        throw new RuleError("На маршруте нужны местные склады.");
+      if (d.kind === "crawler") {
+        const ref = save.automation.devices.find(
+          (r) =>
+            r.id === action.refineryId &&
+            r.kind === "refinery" &&
+            r.planet === d.planet,
+        );
+        if (!ref || from !== to || from !== d.planet)
+          throw new RuleError(
+            "Гусеничный дрон работает между местным складом и переработкой.",
+          );
+        if (cargoAmount(d) > 0)
+          throw new RuleError("Дождитесь выгрузки текущего груза.");
+        d.logistics = {
+          from,
+          to,
+          resource: action.resource,
+          refineryId: ref.id,
+          phase: "warehouse",
+        };
+      } else {
+        const node = (id: string, op: any, planet: PlanetId, next: string) => ({
+          id,
+          op,
+          planet,
+          next,
+          otherwise: next,
+          resource: action.resource,
+          threshold: 1,
+          x: 40 + ["back", "load", "fly", "unload"].indexOf(id) * 270,
+          y: 40,
+        });
+        d.program = {
+          entry: "back",
+          nodes: [
+            node("back", "travel", from, "load"),
+            node("load", "load", from, "fly"),
+            node("fly", "travel", to, "unload"),
+            node("unload", "unload", to, "back"),
+          ],
+        };
+        d.pc = "back";
+        d.logistics = {
+          from,
+          to,
+          resource: action.resource,
+          phase: "warehouse",
+        };
+      }
+      d.enabled = true;
+      break;
+    }
     case "hand": {
       if (action.item === "pickaxe" || action.item === "grapple") {
         if (!(save.inventory[`tool:${action.item}`] > 0))
@@ -711,6 +917,8 @@ export function applyAction(
         save.planet = save.grapple.target;
         save.position = offsetPoint(ship(save.planet), -1, 0, save.planet);
         save.grapple = null;
+        save.worlds[save.planet] ??= freshWorld(save.planet, now);
+        recordVisit(save, save.planet, now);
         save.worlds[save.planet].lastSimAt = now;
         gainExperience(save, 15);
       }
@@ -763,7 +971,7 @@ export function applyAction(
         if (level > 28) throw new RuleError("Достигнута предельная высота.");
         if (blockSolid(c.normal, save.planet, level, world.terrain))
           throw new RuleError("Здесь уже есть блок.");
-        if (!(save.inventory[action.material] > 0))
+        if (!save.freeConstruction && !(save.inventory[action.material] > 0))
           throw new RuleError("Не хватает материала.");
         // Placed blocks must touch the terrain/another block; no floating placement.
         const connected =
@@ -789,7 +997,7 @@ export function applyAction(
           throw new RuleError(
             "Блок должен примыкать к земле или другому блоку.",
           );
-        save.inventory[action.material]--;
+        if (!save.freeConstruction) save.inventory[action.material]--;
         removed.delete(level);
         blocks[String(level)] = action.material;
       }
@@ -831,6 +1039,9 @@ export function applyAction(
         planet: save.planet,
         ...save.position,
         cargo: {},
+        buffer: {},
+        output: {},
+        logistics: null,
         capacity: 30,
         program,
         pc: program.entry,
@@ -919,6 +1130,8 @@ export function applyAction(
       save.flight = null;
       const pad = ship(save.planet);
       save.position = offsetPoint(pad, -1, 0, save.planet);
+      save.worlds[save.planet] ??= freshWorld(save.planet, now);
+      recordVisit(save, save.planet, now);
       save.worlds[save.planet].lastSimAt = now;
       if (save.planet === "home") save.health = 100;
       break;
@@ -940,16 +1153,17 @@ export function applyAction(
       break;
     }
     case "scan": {
-      const pad = ship(save.planet);
-      nearby(save, pad.x, pad.z, 3);
-      const pool = Object.keys(PLANETS).filter(
-        (p) =>
-          p.startsWith("wild-") && !save.discovered.includes(p as PlanetId),
-      ) as PlanetId[];
+      if (save.planet !== "home" || !scannerBuilding(save))
+        throw new RuleError("Постройте здание сканера на Родной.");
+      const pool = (Object.keys(PLANETS) as PlanetId[]).filter(
+        (p) => !save.scans.includes(p) && inScannerRange(save, p),
+      );
       if (!pool.length)
-        throw new RuleError("Все 24 экспедиционных мира уже обнаружены.");
+        throw new RuleError("Все цели в радиусе исследованы. Улучшите сканер.");
       const p = pool[hash(Math.floor(now) ^ save.revision) % pool.length];
-      save.discovered.push(p);
+      if (!save.discovered.includes(p)) save.discovered.push(p);
+      save.worlds[p] ??= freshWorld(p, now);
+      save.scans.push(p);
       save.lastDiscovery = p;
       break;
     }
@@ -1045,7 +1259,10 @@ export function applyAction(
     }
     case "build": {
       const recipe = BUILDINGS[action.kind];
-      if (recipe.zone !== (save.planet === "home" ? "home" : "outpost"))
+      if (
+        recipe.zone !== "any" &&
+        recipe.zone !== (save.planet === "home" ? "home" : "outpost")
+      )
         throw new RuleError(
           save.planet === "home"
             ? "Добывающие модули размещаются на исследовательских планетах."
@@ -1079,7 +1296,8 @@ export function applyAction(
       if (action.kind === "bioextractor" && !hasLab(save))
         throw new RuleError("Для биомодуля нужна лаборатория.");
       const kit = `kit:${action.kind}`;
-      if ((save.inventory[kit] ?? 0) > 0) save.inventory[kit]--;
+      if (!save.freeConstruction && (save.inventory[kit] ?? 0) > 0)
+        save.inventory[kit]--;
       else charge(save, recipe.cost);
       const b: Building = {
         id: `b-${now}-${action.x}-${action.z}`,
@@ -1087,10 +1305,37 @@ export function applyAction(
         x: action.x,
         z: action.z,
         rotation: action.rotation,
+        level: 1,
+        produced: 0,
+        productionAt: now,
+        buffer: {},
         ...(resource ? { resource, collectedAt: now } : {}),
       };
       prepareFoundation(world, b, save.planet, recipe.size + 1);
       world.buildings.push(b);
+      if (b.kind === "warehouse") {
+        const program = defaultProgram("warehouse", save.planet);
+        save.automation.devices.push({
+          id: `device-${++save.automation.serial}`,
+          kind: "warehouse",
+          planet: save.planet,
+          x: b.x,
+          z: b.z,
+          cargo: {},
+          buffer: {},
+          output: {},
+          logistics: null,
+          capacity: 30,
+          program,
+          pc: program.entry,
+          enabled: true,
+          status: "Склад колонии",
+          cooldown: 0,
+          transit: null,
+          recipe: "composite",
+          job: null,
+        });
+      }
       gainExperience(save, 12);
       if (b.kind === "headquarters") save.interiors[b.id] = [];
       break;
@@ -1119,6 +1364,9 @@ export function applyAction(
         save.discovered,
         now,
       );
+      save.flight.topSpeed = SHIP_STATS(
+        save.fleet.find((s) => s.id === save.activeShip)!,
+      ).speed;
       break;
     }
     case "enter": {
@@ -1217,12 +1465,19 @@ const bSchema = z.object({
     "laboratory",
     "extractor",
     "bioextractor",
+    "planetdrill",
+    "scanner",
+    "shipyard",
   ]),
   x: z.number().finite().min(0).max(224),
   z: z.number().finite().min(0).max(224),
   rotation: z.number().int().min(0).max(1),
   resource: z.string().optional(),
   collectedAt: z.number().finite().optional(),
+  level: z.number().int().min(1).max(10).default(1),
+  produced: z.number().int().nonnegative().default(0),
+  productionAt: z.number().finite().optional(),
+  buffer: z.record(z.string(), z.number().int().nonnegative()).default({}),
 });
 const fSchema = z.object({
   id: z.string(),
@@ -1281,6 +1536,29 @@ const positionSchema = z.object({
 });
 const saveSchema = z.object({
   version: z.literal(6),
+  freeConstruction: z.boolean().default(true),
+  scans: z.array(planet).default(["home"]),
+  profile: z
+    .object({
+      visits: z.record(
+        planet,
+        z.object({
+          seconds: z.number().nonnegative(),
+          arrivals: z.number().int().nonnegative(),
+        }),
+      ),
+      lastAt: z.number().finite(),
+    })
+    .default(() => ({
+      visits: { home: { seconds: 0, arrivals: 1 } },
+      lastAt: Date.now(),
+    })),
+  fleet: z
+    .array(starshipSchema)
+    .min(1)
+    .max(30)
+    .default(() => [starterShip()]),
+  activeShip: z.string().default("starter"),
   hand: z
     .enum(["pickaxe", "grapple", "sword", "spear", "blaster", "none"])
     .default("pickaxe"),
@@ -1333,6 +1611,22 @@ const saveSchema = z.object({
           planet,
           x: z.number().finite(),
           z: z.number().finite(),
+          buffer: z
+            .record(z.string(), z.number().int().nonnegative())
+            .default({}),
+          output: z
+            .record(z.string(), z.number().int().nonnegative())
+            .default({}),
+          logistics: z
+            .object({
+              from: planet,
+              to: planet,
+              resource: resourceSchema,
+              refineryId: z.string().optional(),
+              phase: z.enum(["warehouse", "refinery"]),
+            })
+            .nullable()
+            .default(null),
           cargo: z.record(z.string(), z.number().int().nonnegative()),
           capacity: z.number().positive(),
           program: programSchema,
@@ -1348,10 +1642,10 @@ const saveSchema = z.object({
               ends: z.number().finite(),
             })
             .nullable(),
-          recipe: z.enum(["composite", "alloy"]),
+          recipe: recipeSchema,
           job: z
             .object({
-              recipe: z.enum(["composite", "alloy"]),
+              recipe: recipeSchema,
               ends: z.number().finite(),
             })
             .nullable(),
@@ -1361,6 +1655,7 @@ const saveSchema = z.object({
   }),
   flight: z
     .object({
+      topSpeed: z.number().min(20).max(100).default(46),
       origin: planet,
       target: planet,
       position: z.object({
@@ -1421,13 +1716,13 @@ const saveSchema = z.object({
 export function parseSave(raw: string): Save {
   const data = JSON.parse(raw);
   // Prototype builds deliberately start a new world; no version-to-version migration.
-  if ([1, 2, 3, 4, 5].includes(data?.version)) return newGame();
+  if ([1, 2, 3, 4, 5].includes(data?.version)) return newGame(Date.now(), true);
   const save = saveSchema.parse(data) as Save;
   save.inventory["tool:grapple"] ??= 1;
   if (data.hand === undefined)
     save.hand = (save.equipment.weapon as Save["hand"]) ?? "pickaxe";
-  for (const p of Object.keys(PLANETS) as PlanetId[])
-    if (!save.worlds[p]) throw new Error("Отсутствует планета");
+  for (const p of save.discovered)
+    save.worlds[p] ??= freshWorld(p, save.updatedAt);
   if (
     save.flight &&
     (save.flight.origin !== save.planet ||
@@ -1441,9 +1736,11 @@ export function parseSave(raw: string): Save {
       save.flight)
   )
     throw new Error("Повреждённый трос");
+  if (!save.fleet.some((s) => s.id === save.activeShip))
+    throw new Error("Повреждённый ангар");
   if (!save.discovered.includes(save.planet))
     throw new Error("Планета не открыта");
-  for (const p of Object.keys(PLANETS) as PlanetId[])
+  for (const p of Object.keys(save.worlds) as PlanetId[])
     for (const [k, crop] of Object.entries(save.worlds[p].crops)) {
       const [x, z] = k.split(",").map(Number);
       if (!PLANTS[crop.plant] || !beds(p).some((b) => b.x === x && b.z === z))

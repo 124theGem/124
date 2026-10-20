@@ -1,3 +1,4 @@
+import { GalaxyMap } from "./GalaxyMap";
 import {
   SKILLS,
   experienceLevel,
@@ -51,15 +52,20 @@ const escape = (s: string) =>
 const art = (id: string) =>
   resourceIcon(id) || `<span class="emoji-art">${itemInfo(id).icon}</span>`;
 const costs = (cost: Record<string, number>, save: Save) =>
-  Object.entries(cost)
-    .map(
-      ([r, n]) =>
-        `<span class="cost ${(save.inventory[r] ?? 0) < n ? "short" : ""}" title="${escape(itemInfo(r).name)}">${art(r)}<b>${n}</b></span>`,
-    )
-    .join("");
+  save.freeConstruction
+    ? `<span class="cost testing-cost">0 · TEST PILOT</span>`
+    : Object.entries(cost)
+        .map(
+          ([r, n]) =>
+            `<span class="cost ${(save.inventory[r] ?? 0) < n ? "short" : ""}" title="${escape(itemInfo(r).name)}">${art(r)}<b>${n}</b></span>`,
+        )
+        .join("");
 export class UI {
   readonly root = document.createElement("div");
   onAutomation = () => {};
+  onProfile = () => {};
+  onScanPlanet = (id: PlanetId) => {};
+  private galaxyMap?: GalaxyMap;
   onFirstPerson = () => {};
   onHand = (hand: Save["hand"]) => {};
   onUnderfoot = () => {};
@@ -106,7 +112,7 @@ export class UI {
   constructor(readonly local: boolean) {
     this.root.className = "hud";
     this.root.innerHTML = `
- <header class="topbar"><div class="identity"><div class="avatar">🧑‍🚀</div><div><div class="brand">LITTLE PLANETS <span>✦ CUBEWORKS</span></div><strong id="planet-name">Родная</strong><small id="planet-tag"></small></div></div><div class="top-buttons"><button id="first-person" title="Вид от первого лица" aria-label="Вид от первого лица">◉</button><button id="view" title="Камера" aria-label="Переключить камеру">🌐</button><button id="audio-toggle" title="Звук" aria-label="Включить или выключить звук">♫</button><button id="settings" title="Настройки" aria-label="Настройки">⚙</button></div></header>
+ <header class="topbar"><div class="identity"><button id="profile" class="avatar" aria-label="Профиль и космический паспорт">◈</button><div><div class="brand">LITTLE PLANETS <span>✦ AURORA NETWORK</span></div><strong id="planet-name">Родная</strong><small id="planet-tag"></small></div></div><div class="top-buttons"><button id="first-person" title="Вид от первого лица" aria-label="Вид от первого лица">◉</button><button id="view" title="Камера" aria-label="Переключить камеру">🌐</button><button id="audio-toggle" title="Звук" aria-label="Включить или выключить звук">♫</button><button id="settings" title="Настройки" aria-label="Настройки">⚙</button></div></header>
  <aside class="minimap"><canvas id="minimap" width="240" height="240" aria-label="Мини-карта планеты"></canvas></aside>
  <div id="combat-hud" class="combat-hud hidden"><span>♥ <b id="health-value">100</b></span><div class="health-track"><i id="health-fill"></i></div><small id="equipped-label"></small></div><button id="attack" class="attack-button hidden" aria-label="Атаковать">⚔<small>Атака</small></button>
  <div id="event-banner" class="event-banner hidden" role="status"></div><div id="context" class="context panel hidden"></div><div id="build-panel" class="build-panel panel hidden"></div>
@@ -117,6 +123,7 @@ export class UI {
  <div id="flight" class="flight hidden"><span>🚀</span><h2 id="flight-title"></h2><p>Ваш маленький мир всегда ждёт возвращения</p></div>`;
     document.querySelector("#app")!.append(this.root);
     for (const [id, callback] of [
+      ["profile", () => this.onProfile()],
       ["first-person", () => this.onFirstPerson()],
       ["skills-button", () => this.onSkills()],
       ["underfoot", () => this.onUnderfoot()],
@@ -193,6 +200,7 @@ export class UI {
     );
   }
   update(save: Save, now: number) {
+    this.el("save-status").dataset.testing = String(save.freeConstruction);
     const p = PLANETS[save.planet];
     const level = experienceLevel(save.progression.xp),
       floor = levelFloor(level),
@@ -391,6 +399,8 @@ export class UI {
     return !this.el("context").classList.contains("hidden");
   }
   close() {
+    this.galaxyMap?.dispose();
+    this.galaxyMap = undefined;
     this.el("modal").classList.add("hidden");
     this.activeModal = null;
   }
@@ -399,6 +409,8 @@ export class UI {
     this.show(html);
   }
   private show(html: string) {
+    this.galaxyMap?.dispose();
+    this.galaxyMap = undefined;
     this.el("modal-content").innerHTML = html;
     this.el("modal-content").scrollTop = 0;
     this.el("modal").classList.remove("hidden");
@@ -570,37 +582,21 @@ export class UI {
   galaxy(save: Save, query = this.galaxyQuery) {
     this.activeModal = "galaxy";
     this.galaxyQuery = query;
-    const planets = save.discovered
-      .map((id) => PLANETS[id])
-      .filter((p) => p.name.toLowerCase().includes(query.toLowerCase()));
     this.show(
-      `<span class="eyebrow">ЗВЁЗДНЫЙ АТЛАС</span><h2>За пределами знакомого</h2><label class="travel-selector">Способ путешествия <select id="travel-mode"><option value="ship" ${this.travelMode === "ship" ? "selected" : ""}>Корабль</option><option value="grapple" ${this.travelMode === "grapple" ? "selected" : ""}>Гарпун и трос</option></select></label><div class="planet-search"><input id="planet-search" type="search" placeholder="Найти планету по названию…" value="${escape(query)}" aria-label="Название планеты"><button id="scan-planets" class="primary">✦ Найти случайную планету</button></div><p class="atlas-note">Сканер открывает новые экспедиционные миры. ${save.discovered.filter((p) => p.startsWith("wild-")).length} / 24 найдено.</p>${save.lastDiscovery ? `<p class="discovery-note">✦ Открыта ${PLANETS[save.lastDiscovery].name}</p>` : ""}<div class="planet-cards">${planets.map((p) => `<button data-planet="${p.id}" ${p.id === save.planet && !save.flight ? "disabled" : ""} style="--planet:${p.color}"><div class="mini-planet">${p.icon}</div><strong>${p.name}</strong><small>${p.description}</small><em>Куб · 6 граней ${planetSize(p.id)} × ${planetSize(p.id)} · ${p.hostile ? "⚔ Противники" : p.id === "home" ? "База" : "Мирная"}</em><b>${save.flight ? (p.id === save.flight.target ? "Текущий курс" : "Задать курс ↗") : p.id === save.planet ? "Вы здесь" : "Отправиться ↗"}</b></button>`).join("") || "<p>Такая планета пока не найдена. Воспользуйтесь сканером.</p>"}</div>`,
+      `<span class="eyebrow">AURORA / STELLAR CARTOGRAPHY</span><h2>Звёздная сеть</h2><label class="travel-selector">Способ путешествия<select id="travel-mode"><option value="ship" ${this.travelMode === "ship" ? "selected" : ""}>Корабль</option><option value="grapple" ${this.travelMode === "grapple" ? "selected" : ""}>Гарпун и трос</option></select></label><div id="galaxy-network"></div>`,
     );
-    (this.el("scan-planets") as HTMLButtonElement).disabled = !!save.flight;
-    this.button("scan-planets", () => this.onScan());
+    this.galaxyMap = new GalaxyMap(
+      this.el("galaxy-network"),
+      save,
+      (id) => this.onScanPlanet(id),
+      (id) =>
+        this.travelMode === "grapple" ? this.onGrapple(id) : this.onTravel(id),
+    );
     (this.el("travel-mode") as HTMLSelectElement).onchange = () => {
       this.travelMode = (this.el("travel-mode") as HTMLSelectElement).value as
         | "ship"
         | "grapple";
-      this.galaxy(save, query);
     };
-    const input = this.el("planet-search") as HTMLInputElement;
-    input.oninput = () => {
-      const cursor = input.selectionStart;
-      this.galaxy(save, input.value);
-      const next = this.el("planet-search") as HTMLInputElement;
-      next.focus();
-      next.setSelectionRange(cursor, cursor);
-    };
-    this.root
-      .querySelectorAll<HTMLButtonElement>("[data-planet]")
-      .forEach(
-        (b) =>
-          (b.onclick = () =>
-            this.travelMode === "grapple"
-              ? this.onGrapple(b.dataset.planet as PlanetId)
-              : this.onTravel(b.dataset.planet as PlanetId)),
-      );
   }
   skills(save: Save) {
     this.panel(
@@ -667,6 +663,7 @@ export class UI {
     this.el("space-auto").textContent = f.autopilot
       ? "Автопилот ✓"
       : "Автопилот";
+    this.el("space-land").classList.toggle("hidden", !info.allowed);
     (this.el("space-land") as HTMLButtonElement).disabled =
       busy || !info.allowed;
     for (const id of ["space-auto", "space-course"])

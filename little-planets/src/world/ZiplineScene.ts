@@ -8,7 +8,7 @@ import type { Save } from "../../shared/model";
 /** The rider actually hangs from a transverse handle attached to the rendered interplanetary cable. */
 export class ZiplineScene {
   readonly scene = new T.Scene();
-  readonly camera = new T.PerspectiveCamera(58, 1, 0.1, 4000);
+  readonly camera = new T.PerspectiveCamera(58, 1, 0.1, 40000);
   readonly rider: T.Group;
   private astronaut: Astronaut;
   private handle = new T.Group();
@@ -31,7 +31,7 @@ export class ZiplineScene {
       const y = 1 - (2 * (i + 0.5)) / 1000,
         a = i * 2.39996,
         r = Math.sqrt(1 - y * y);
-      points.push(Math.cos(a) * r * 2000, y * 2000, Math.sin(a) * r * 2000);
+      points.push(Math.cos(a) * r * 20000, y * 20000, Math.sin(a) * r * 20000);
     }
     const starGeo = new T.BufferGeometry().setAttribute(
         "position",

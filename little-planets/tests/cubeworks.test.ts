@@ -345,6 +345,21 @@ describe("programs control real actors and conserved resources", () => {
     }
     put(s, "mycelia");
     s = deploy(s, "refinery");
+    const factory = s.automation.devices.at(-1)!;
+    s.inventory.iron = 20;
+    s = deploy(s, "crawler");
+    s = applyAction(
+      s,
+      {
+        type: "logisticsRoute",
+        id: s.automation.devices.at(-1)!.id,
+        from: "mycelia",
+        to: "mycelia",
+        resource: "wood",
+        refineryId: factory.id,
+      },
+      1000,
+    );
     put(s, "listoria");
     s = deploy(s, "drone");
     const source = s.automation.devices.at(-1)!.id;
@@ -428,6 +443,20 @@ describe("programs control real actors and conserved resources", () => {
     let s = deploy(newGame(0), "warehouse");
     s = deploy(s, "refinery");
     const d = s.automation.devices.at(-1)!;
+    s.inventory.iron = 20;
+    s = deploy(s, "crawler");
+    s = applyAction(
+      s,
+      {
+        type: "logisticsRoute",
+        id: s.automation.devices.at(-1)!.id,
+        from: "home",
+        to: "home",
+        resource: "wood",
+        refineryId: d.id,
+      },
+      1000,
+    );
     s.worlds.home.stock = { composite: 3, crystal: 2 };
     s = applyAction(
       s,

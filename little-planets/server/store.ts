@@ -25,6 +25,7 @@ export class Store {
       const raw = JSON.parse(row.state);
       const needsDefaults =
         raw.version !== 6 ||
+        raw.scans === undefined || raw.profile === undefined || raw.fleet === undefined || raw.freeConstruction === undefined ||
         raw.hand === undefined ||
         raw.progression === undefined ||
         raw.cycleEpoch === undefined ||
@@ -38,7 +39,7 @@ export class Store {
           .run(JSON.stringify(save), String(userId), row.state);
       return save;
     }
-    const save = newGame(now);
+    const save = newGame(now, true);
     this.db
       .prepare("INSERT INTO saves(user_id,state) VALUES(?,?)")
       .run(String(userId), JSON.stringify(save));

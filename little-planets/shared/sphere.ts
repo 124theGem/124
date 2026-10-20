@@ -95,3 +95,28 @@ export function cubeVisualUp(p: Point, id: PlanetId = "home", margin = 2): Vec {
     length = Math.hypot(q.x, q.y, q.z);
   return { x: q.x / length, y: q.y / length, z: q.z / length };
 }
+
+/** Route over adjacent cube faces; projecting a distant target directly can trap an actor on the opposite face. */
+export function cubeRouteDirection(from: Point, to: Point, id: PlanetId): Vec {
+  const a = sphereNormal(from, id),
+    b = sphereNormal(to, id),
+    up = cubeUp(a),
+    goalUp = cubeUp(b),
+    r = sphereRadius(id);
+  const scaleA = r / Math.max(Math.abs(a.x), Math.abs(a.y), Math.abs(a.z)),
+    scaleB = r / Math.max(Math.abs(b.x), Math.abs(b.y), Math.abs(b.z));
+  const q = { x: a.x * scaleA, y: a.y * scaleA, z: a.z * scaleA },
+    target = { x: b.x * scaleB, y: b.y * scaleB, z: b.z * scaleB };
+  const axes = ["x", "y", "z"] as const,
+    axis = axes.find((k) => up[k])!,
+    goalAxis = axes.find((k) => goalUp[k])!;
+  if (axis !== goalAxis) target[goalAxis] = goalUp[goalAxis] * r * 1.05;
+  else if (up[axis] !== goalUp[axis]) {
+    const choices = axes
+        .filter((k) => k !== axis)
+        .sort((i, j) => Math.abs(target[j]) - Math.abs(target[i])),
+      edge = choices[0];
+    target[edge] = (Math.sign(target[edge]) || 1) * r * 1.05;
+  }
+  return { x: target.x - q.x, y: target.y - q.y, z: target.z - q.z };
+}

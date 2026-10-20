@@ -27,6 +27,7 @@ export interface PilotInput {
   autopilot: boolean;
 }
 export interface FlightState {
+  topSpeed?: number;
   origin: PlanetId;
   target: PlanetId;
   position: Vec;
@@ -74,8 +75,21 @@ const centers: Partial<Record<PlanetId, Vec>> = {
 };
 export function bodyCenter(id: PlanetId): Vec {
   if (centers[id]) return { ...centers[id]! };
-  const i = Number(id.split("-")[1]) || 1,
-    angle = i * 2.39996,
+  const i = Number(id.split("-")[1]) || 1;
+  if (i > 24) {
+    const sector = Math.floor((i - 1) / 20),
+      local = (i - 1) % 20,
+      angle = sector * 2.399963,
+      radius = 1300 + sector * 125,
+      a = local * 2.399963,
+      spread = 80 + local * 9;
+    return {
+      x: Math.cos(angle) * radius + Math.cos(a) * spread,
+      y: Math.sin(sector * 1.73) * 650 + Math.sin(a * 0.7) * 60,
+      z: Math.sin(angle) * radius + Math.sin(a) * spread,
+    };
+  }
+  const angle = i * 2.39996,
     r = 530 + (i % 3) * 110;
   return {
     x: Math.cos(angle) * r,
@@ -191,6 +205,7 @@ export function beginFlight(
     route: [departure, ...flightRoute(departure, target, known)],
     waypoint: 0,
     autopilot: false,
+    topSpeed: 46,
     startedAt: now,
     lastUpdate: now,
     distance: 0,
@@ -258,7 +273,7 @@ export function stepFlight(
         distance = len(delta),
         last = f.waypoint >= f.route.length - 1,
         speed = Math.min(
-          44,
+          (f.topSpeed ?? 46) - 2,
           Math.sqrt(Math.max(0, distance - (last ? 0.4 : 0)) * 17),
         ),
         desired = mul(unit(delta), speed);
@@ -292,7 +307,8 @@ export function stepFlight(
       );
     f.up = unit(projectedUp);
     f.velocity = add(f.velocity, mul(acceleration, h));
-    const maxSpeed = input.boost && !input.autopilot ? 64 : 46;
+    const maxSpeed =
+      (f.topSpeed ?? 46) * (input.boost && !input.autopilot ? 1.4 : 1);
     if (len(f.velocity) > maxSpeed)
       f.velocity = mul(unit(f.velocity), maxSpeed);
     let next = add(f.position, mul(f.velocity, h));

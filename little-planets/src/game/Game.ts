@@ -1,3 +1,4 @@
+import { ColonyPanels } from "../ui/ColonyPanels";
 import { SurfaceFollower } from "../world/Motion";
 import { FirstPersonHands } from "../world/FirstPersonHands";
 import { ZiplineScene } from "../world/ZiplineScene";
@@ -20,6 +21,7 @@ import {
 } from "../../shared/space";
 import {
   sphereNormal,
+  cubeRouteDirection,
   sphereCoordinates,
   sphereStep,
   surfaceDistance,
@@ -99,6 +101,7 @@ type Selection = {
 const wait = (ms: number) => new Promise<void>((done) => setTimeout(done, ms));
 export class Game {
   private automationPanel?: AutomationPanel;
+  private colonyPanels!: ColonyPanels;
   private occlusion = new Occlusion();
   private machines = new AutomationActors(new Models());
   private terrainMode: "dig" | "place" = "dig";
@@ -250,6 +253,22 @@ export class Game {
         this.machines.update(store.state, this.previousTime / 1000);
       },
     ));
+    this.colonyPanels = new ColonyPanels(
+      this.ui,
+      () => store.state,
+      async (action) => {
+        await this.flushMove();
+        const inside = store.state.inside,
+          ship = store.state.activeShip;
+        await store.action(action);
+        if (inside !== store.state.inside || ship !== store.state.activeShip)
+          this.loadScene();
+      },
+      (id) => automation.open(id),
+      () => this.rebuild(),
+    );
+    this.ui.onProfile = () => menu(() => this.colonyPanels.profile(store.name));
+    this.ui.onScanPlanet = (id) => void this.scanPlanet(id);
     this.ui.onAutomation = () => menu(() => automation.open());
     this.ui.onInventory = () => menu(() => this.ui.inventory(store.state));
     this.ui.onCraftMenu = () => menu(() => this.ui.craft(store.state));
@@ -327,10 +346,7 @@ export class Game {
         return;
       }
       this.ui.travelMode = "ship";
-      this.approach({ ...ship(store.state.planet), type: "ship" }, () => {
-        this.ui.hideContext();
-        this.ui.galaxy(store.state);
-      });
+      menu(() => this.ui.galaxy(store.state));
     };
     this.ui.onTravel = (p) => void this.travel(p);
     this.ui.onSpaceAuto = () => {
@@ -525,6 +541,7 @@ export class Game {
               .toArray(),
             sphereForward: this.sphereForward.toArray(),
             firstPerson: this.firstPerson,
+            cockpit: !!this.space,
             hand: store.state.hand,
             zipline: store.state.grapple,
             ziplineRider: this.zipline?.rider.position.toArray(),
@@ -681,6 +698,20 @@ export class Game {
       this.ziplinePending = false;
     }
   }
+  private async scanPlanet(planet: PlanetId) {
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      await this.flushMove();
+      await this.store.action({ type: "scanPlanet", planet });
+      this.ui.galaxy(this.store.state);
+      this.audio.play("gather");
+    } catch (e) {
+      this.ui.toast((e as Error).message);
+    } finally {
+      this.busy = false;
+    }
+  }
   private async scan() {
     if (this.busy) return;
     this.busy = true;
@@ -835,7 +866,11 @@ export class Game {
         .addScaledVector(controlForward, input.z);
       this.mode = "explore";
     } else if (this.sphereDestination) {
-      const raw = sphereNormal(this.sphereDestination, this.store.state.planet);
+      const raw = cubeRouteDirection(
+        this.position,
+        this.sphereDestination,
+        this.store.state.planet,
+      );
       const goal = new T.Vector3(raw.x, raw.y, raw.z);
       if (
         surfaceDistance(
@@ -850,21 +885,7 @@ export class Game {
         done?.();
         return false;
       }
-      const current = sphereNormal(this.position, this.store.state.planet),
-        r = sphereRadius(this.store.state.planet);
-      const a = r / Math.max(Math.abs(raw.x), Math.abs(raw.y), Math.abs(raw.z)),
-        b =
-          r /
-          Math.max(
-            Math.abs(current.x),
-            Math.abs(current.y),
-            Math.abs(current.z),
-          );
-      direction.set(
-        raw.x * a - current.x * b,
-        raw.y * a - current.y * b,
-        raw.z * a - current.z * b,
-      );
+      direction.copy(goal);
       direction.addScaledVector(up, -direction.dot(up));
     }
     if (direction.lengthSq() < 1e-8) return false;
@@ -1057,6 +1078,23 @@ export class Game {
       if (enemy) {
         this.approach({ ...enemy, type: "enemy" }, () => this.showContext());
         return;
+      }
+      if (!this.buildOnCube && this.terrainMode !== "place") {
+        const id = this.view.pickBuilding(this.raycaster.ray),
+          b = this.store.state.worlds[this.store.state.planet].buildings.find(
+            (b) => b.id === id,
+          );
+        if (b) {
+          this.approach({ ...b, type: "building", id: b.id }, () =>
+            this.colonyPanels.building(b.id),
+          );
+          return;
+        }
+        const device = this.machines.pick(this.raycaster.ray);
+        if (device) {
+          this.automationPanel?.open(device);
+          return;
+        }
       }
       const point = this.view.pick(
         this.raycaster.ray,
@@ -1317,12 +1355,8 @@ export class Game {
         b.resource
           ? `${RESOURCE_LABELS[b.resource]}: ${moduleAmount(state, b, now)} / ${moduleCapacity(state)}. +3 каждые 20 секунд.`
           : BUILDINGS[b.kind].description,
-        b.kind === "headquarters"
-          ? "Войти"
-          : b.resource
-            ? "Забрать ресурсы"
-            : undefined,
-        !!b.resource && !moduleAmount(state, b, now),
+        "Управление зданием",
+        false,
       );
     } else if (s.type === "ground")
       this.ui.context(
@@ -1406,22 +1440,9 @@ export class Game {
         "tool",
         "+4 кристалла · +6 камня.",
       );
-    else if (s.type === "building") {
-      const b = state.worlds[state.planet].buildings.find((b) => b.id === s.id);
-      if (b?.kind === "headquarters")
-        void this.perform(
-          { type: "enter", id: b.id },
-          "idle",
-          "Главный дом · обустройте его через меню «Мебель».",
-        );
-      else if (b?.resource)
-        void this.perform(
-          { type: "collect", id: b.id },
-          "gather",
-          "Добытые ресурсы в рюкзаке.",
-        );
-    }
+    else if (s.type === "building" && s.id) this.colonyPanels.building(s.id);
   }
+
   private async flushMove() {
     if (this.flying) return;
     const old = this.store.state.position;
@@ -1871,6 +1892,13 @@ export class Game {
       this.view instanceof Interior
     )
       return;
+    const pad = ship(this.store.state.planet);
+    if (surfaceDistance(this.position, pad, this.store.state.planet) > 2.7) {
+      this.ui.close();
+      this.ui.toast("Подходим к кораблю для вылета.");
+      this.approach({ ...pad, type: "ship" }, () => void this.travel(planet));
+      return;
+    }
     this.busy = true;
     this.ui.close();
     this.clearSelection();
@@ -2242,6 +2270,7 @@ export class Game {
         this.view.updateCrops(this.store.state, this.store.now());
       this.ui.update(this.store.state, this.store.now());
       this.automationPanel?.refresh();
+      this.colonyPanels?.refresh();
       this.ui.el("audio-toggle").textContent = this.audio.muted ? "🔇" : "♫";
       this.ui.minimap(
         this.store.state,
@@ -2259,12 +2288,17 @@ export class Game {
       });
     }
     if (
-      time - this.lastCombatPoll > 850 &&
+      time - this.lastCombatPoll >
+        (PLANETS[this.store.state.planet].hostile ||
+        this.store.state.automation.devices.length ||
+        Object.values(this.store.state.worlds).some((w) =>
+          w.buildings.some((b) => b.kind === "planetdrill"),
+        )
+          ? 850
+          : 10000) &&
       !this.pulsePending &&
       !this.busy &&
-      !this.flying &&
-      (PLANETS[this.store.state.planet].hostile ||
-        this.store.state.automation.devices.length > 0)
+      !this.flying
     ) {
       this.lastCombatPoll = time;
       void this.combatPulse();

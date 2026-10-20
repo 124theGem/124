@@ -1,23 +1,17 @@
+import { bodyCenter, len, sub } from "./space";
+import { resourceValid, INDUSTRIAL_RECIPES } from "./resources";
 import { gainExperience } from "./progression";
 import { z } from "zod";
 import { PLANETS, nodes, ship, type PlanetId } from "./catalog";
 import {
   sphereNormal,
+  cubeRouteDirection,
   sphereStep,
   surfaceDistance,
   type Point,
 } from "./sphere";
 import type { Save } from "./model";
-const resource = z.enum([
-  "wood",
-  "stone",
-  "spores",
-  "crystal",
-  "obsidian",
-  "thermal",
-  "composite",
-  "alloy",
-]);
+const resource = z.string().refine(resourceValid);
 const planet = z.string().refine((p) => Object.hasOwn(PLANETS, p));
 export const programNodeSchema = z
   .object({
@@ -67,9 +61,11 @@ export const deviceKinds = [
   "hunter",
   "warehouse",
   "refinery",
+  "crawler",
 ] as const;
 export type DeviceKind = (typeof deviceKinds)[number];
 export const DEVICE_NAMES: Record<DeviceKind, string> = {
+  crawler: "Гусеничный логист",
   collector: "Робот-сборщик",
   drone: "Грузовой дрон",
   hunter: "Тяжёлый охотник",
@@ -77,31 +73,28 @@ export const DEVICE_NAMES: Record<DeviceKind, string> = {
   refinery: "Станция переработки",
 };
 export const DEVICE_COSTS: Record<DeviceKind, Record<string, number>> = {
+  crawler: { iron: 6, stone: 8 },
   collector: { wood: 6, stone: 8 },
   drone: { stone: 10, crystal: 5 },
   hunter: { stone: 16, crystal: 6 },
   warehouse: { wood: 6, stone: 6 },
   refinery: { wood: 8, stone: 10 },
 };
-export const RECIPES = {
-  composite: {
-    name: "Композит",
-    input: { wood: 3, stone: 3 } as Record<string, number>,
-    output: 1,
-    seconds: 6,
-  },
-  alloy: {
-    name: "Звёздный сплав",
-    input: { composite: 3, crystal: 2 } as Record<string, number>,
-    output: 1,
-    seconds: 9,
-  },
-};
+export const RECIPES = INDUSTRIAL_RECIPES;
 export interface Device extends Point {
   id: string;
   kind: DeviceKind;
   planet: PlanetId;
   cargo: Record<string, number>;
+  buffer: Record<string, number>;
+  output: Record<string, number>;
+  logistics: null | {
+    from: PlanetId;
+    to: PlanetId;
+    resource: string;
+    refineryId?: string;
+    phase: "warehouse" | "refinery";
+  };
   capacity: number;
   program: Program;
   pc: string;
@@ -172,7 +165,7 @@ function move(d: Device, target: Point, dt: number) {
   if (near(d, target, d.planet)) return true;
   const a = sphereNormal(d, d.planet),
     b = sphereNormal(target, d.planet);
-  let direction = { x: b.x - a.x, y: b.y - a.y, z: b.z - a.z };
+  let direction = cubeRouteDirection(d, target, d.planet);
   // Deterministic fallback when the destination is exactly opposite.
   if (Math.hypot(direction.x, direction.y, direction.z) < 1e-8)
     direction = { x: 1, y: 0, z: 1 };
@@ -212,18 +205,88 @@ export function advanceAutomation(save: Save, now: number) {
       if (d.kind === "refinery") {
         if (d.job && t >= d.job.ends) {
           const r = RECIPES[d.job.recipe];
-          const stock = save.worlds[d.planet].stock;
-          stock[d.job.recipe] = (stock[d.job.recipe] ?? 0) + r.output;
+          d.output[d.job.recipe] = (d.output[d.job.recipe] ?? 0) + r.output;
           d.job = null;
+          d.status = "Готово: ожидает гусеничный транспорт";
         }
-        if (!d.enabled || d.job || !localWarehouse(save, d.planet)) continue;
+        if (!d.enabled || d.job) continue;
         const r = RECIPES[d.recipe],
-          stock = save.worlds[d.planet].stock;
+          stock = d.buffer;
         if (Object.entries(r.input).every(([k, v]) => (stock[k] ?? 0) >= v)) {
           for (const [k, v] of Object.entries(r.input)) stock[k] -= v;
           d.job = { recipe: d.recipe, ends: t + r.seconds * 1000 };
           d.status = `Переработка: ${r.name}`;
-        } else d.status = "Ожидает сырьё на местном складе";
+        } else d.status = "Ожидает доставку сырья гусеничным дроном";
+        continue;
+      }
+      if (d.kind === "crawler") {
+        if (!d.enabled) {
+          d.status = "Пауза";
+          continue;
+        }
+        const route = d.logistics,
+          warehouse = localWarehouse(save, d.planet),
+          ref = save.automation.devices.find(
+            (r) =>
+              r.id === route?.refineryId &&
+              r.kind === "refinery" &&
+              r.planet === d.planet,
+          );
+        if (!route || !warehouse || !ref) {
+          d.status = "Назначьте склад и станцию переработки";
+          continue;
+        }
+        const stock = save.worlds[d.planet].stock;
+        if (route.phase === "warehouse") {
+          d.status = "К местному складу";
+          if (!move(d, warehouse, dt)) continue;
+          for (const [k, v] of Object.entries(d.cargo)) {
+            stock[k] = (stock[k] ?? 0) + v;
+          }
+          d.cargo = {};
+          const recipe = RECIPES[ref.recipe];
+          for (const [k, n] of Object.entries(recipe.input)) {
+            const reserved = save.automation.devices
+              .filter(
+                (o) =>
+                  o.id !== d.id &&
+                  o.kind === "crawler" &&
+                  o.logistics?.refineryId === ref.id &&
+                  o.logistics.phase === "refinery",
+              )
+              .reduce((a, o) => a + (o.cargo[k] ?? 0), 0);
+            const amount = Math.max(
+              0,
+              Math.min(
+                n * 3 - (ref.buffer[k] ?? 0) - reserved,
+                stock[k] ?? 0,
+                d.capacity - cargoAmount(d),
+              ),
+            );
+            if (amount) {
+              stock[k] -= amount;
+              d.cargo[k] = amount;
+            }
+          }
+          if (cargoAmount(d) || Object.values(ref.output).some((n) => n > 0))
+            route.phase = "refinery";
+          else d.status = "Склад: ожидает сырьё для выбранного рецепта";
+        } else {
+          d.status = "К переработке";
+          if (!move(d, ref, dt)) continue;
+          for (const [k, v] of Object.entries(d.cargo))
+            ref.buffer[k] = (ref.buffer[k] ?? 0) + v;
+          d.cargo = {};
+          for (const [k, v] of Object.entries(ref.output)) {
+            const n = Math.min(v, d.capacity - cargoAmount(d));
+            if (n) {
+              d.cargo[k] = n;
+              ref.output[k] -= n;
+            }
+          }
+          route.phase = "warehouse";
+          d.status = "Результат → склад";
+        }
         continue;
       }
       if (d.transit) {
@@ -292,7 +355,12 @@ export function advanceAutomation(save: Save, now: number) {
             from: d.planet,
             to: dest,
             started: t,
-            ends: t + 8000 + Math.abs(i - j) * 1000,
+            ends:
+              t +
+              Math.min(
+                60000,
+                8000 + len(sub(bodyCenter(d.planet), bodyCenter(dest))) * 20,
+              ),
           };
         }
         next();

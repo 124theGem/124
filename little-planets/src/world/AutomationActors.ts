@@ -27,6 +27,48 @@ export class AutomationActors {
           k.box(g, x * 0.65, 0.28, z * 0.65, 0.7, 0.08, 0.7, 0x475a60);
           k.box(g, x * 0.65, 0.35, z * 0.65, 0.45, 0.05, 0.45, 0x86dfd3, true);
         }
+    } else if (kind === "crawler") {
+      k.box(g, 0, 0.55, 0, 1.2, 0.45, 1.55, 0xd1d9c7);
+      k.box(g, 0, 0.9, -0.15, 0.9, 0.4, 0.8, 0x6d8a8d);
+      k.box(g, 0, 1.14, 0.25, 0.75, 0.09, 0.25, 0x74e0e5, true);
+      for (const side of [-1, 1]) {
+        k.box(g, side * 0.72, 0.32, 0, 0.35, 0.5, 1.8, 0x273e4b);
+        for (let i = 0; i < 8; i++) {
+          k.box(
+            g,
+            side * 0.73,
+            0.59,
+            -0.77 + i * 0.22,
+            0.39,
+            0.07,
+            0.15,
+            0x869b9a,
+          );
+          k.box(
+            g,
+            side * 0.73,
+            0.06,
+            -0.77 + i * 0.22,
+            0.39,
+            0.07,
+            0.15,
+            0x869b9a,
+          );
+        }
+        for (let i = 0; i < 4; i++)
+          k.facet(
+            g,
+            side * 0.91,
+            0.3,
+            -0.62 + i * 0.4,
+            0.05,
+            0.19,
+            0.19,
+            0xb8bfb0,
+          );
+      }
+      for (const x of [-0.35, 0.35])
+        k.box(g, x, 0.9, 0.6, 0.12, 0.5, 0.25, 0xe0c291);
     } else if (kind === "hunter") {
       // Broad armoured torso, twin shoulder launchers, piston legs and arm cannons.
       k.box(g, 0, 1.65, 0, 1.35, 1.1, 0.85, 0x66727b);
@@ -74,12 +116,24 @@ export class AutomationActors {
     const present = new Set<string>();
     for (const d of save.automation.devices) {
       if (d.planet !== save.planet && !d.transit) continue;
+      // A civil warehouse already has its architectural model in SphereWorld.
+      if (
+        d.kind === "warehouse" &&
+        save.worlds[d.planet].buildings.some(
+          (b) =>
+            b.kind === "warehouse" &&
+            Math.abs(b.x - d.x) < 0.001 &&
+            Math.abs(b.z - d.z) < 0.001,
+        )
+      )
+        continue;
       present.add(d.id);
       let g = this.actors.get(d.id);
       if (!g) {
         g = this.model(d.kind);
         this.actors.set(d.id, g);
         this.motions.set(d.id, new ActorFollower());
+        g.userData.deviceId = d.id;
         this.root.add(g);
       }
       if (d.transit) {
@@ -134,6 +188,18 @@ export class AutomationActors {
         this.actors.delete(id);
         this.motions.delete(id);
       }
+  }
+  pick(ray: T.Ray) {
+    this.root.updateMatrixWorld(true);
+    const caster = new T.Raycaster();
+    caster.ray.copy(ray);
+    const hit = caster.intersectObject(this.root, true)[0];
+    let o: T.Object3D | null = hit?.object ?? null;
+    while (o) {
+      if (o.userData.deviceId) return o.userData.deviceId as string;
+      o = o.parent;
+    }
+    return null;
   }
   get positions() {
     return [...this.actors].map(([id, body]) => ({

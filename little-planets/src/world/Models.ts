@@ -1,3 +1,6 @@
+import { stableHash } from "../../shared/resources";
+import { industrialBuilding, modularShip } from "./IndustrialModels";
+import type { Starship } from "../../shared/ships";
 import { habitat } from "./Habitats";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import * as T from "three";
@@ -211,8 +214,31 @@ export class Models {
     root.scale.setScalar(scale);
     return root;
   }
-  resource(planet: PlanetId, variant: number) {
+  resource(planet: PlanetId, variant: number, resourceId?: string): T.Group {
+    if (resourceId === "wood") return this.resource("home", variant * 2);
+    if (resourceId === "spores") return this.resource("mycelia", variant * 2);
+    if (resourceId === "stone") return this.resource("home", variant * 2 + 1);
     const root = new T.Group();
+    if (resourceId) {
+      const color = new T.Color()
+        .setHSL((stableHash(resourceId) % 360) / 360, 0.24, 0.58)
+        .getHex();
+      for (let i = 0; i < 4; i++) {
+        const a = i * 2.4;
+        this.facet(
+          root,
+          Math.cos(a) * 0.27,
+          0.25 + i * 0.09,
+          Math.sin(a) * 0.27,
+          0.36,
+          0.4 + i * 0.06,
+          0.32,
+          color,
+        );
+      }
+      this.box(root, 0, 0.12, 0, 0.8, 0.15, 0.7, 0x899a8c);
+      return root;
+    }
     if (variant % 2 === 0 && (planet === "listoria" || planet === "home")) {
       this.stem(
         root,
@@ -382,22 +408,13 @@ export class Models {
     }
     return root;
   }
-  building(kind: BuildingKind, planet: PlanetId = "home"): T.Group {
+  building(kind: BuildingKind, planet: PlanetId = "home", level = 1): T.Group {
+    if (["scanner", "planetdrill", "shipyard"].includes(kind))
+      return industrialBuilding(this, kind, planet, level);
     return habitat(this, kind, planet);
   }
-  ship() {
-    const root = new T.Group();
-    this.box(root, 0, 0.8, 0, 1.05, 0.65, 1.8, 0xe8e4d9);
-    this.box(root, 0, 1.2, -0.15, 0.75, 0.4, 0.9, 0xf0e5cf);
-    this.box(root, 0, 1.15, 0.55, 0.65, 0.35, 0.35, 0x69d7ef, true);
-    this.box(root, 0, 0.8, 1.02, 0.65, 0.45, 0.4, 0xe0a453);
-    for (const s of [-1, 1]) {
-      this.box(root, s * 0.8, 0.7, -0.25, 0.65, 0.18, 1.35, 0xdaa25e);
-      this.box(root, s * 0.5, 0.3, -0.5, 0.16, 0.55, 0.2, 0x656774);
-      this.box(root, s * 0.55, 0.12, -0.5, 0.4, 0.12, 0.45, 0xc4b690);
-      this.box(root, s * 0.35, 0.68, -0.96, 0.25, 0.25, 0.24, 0x6ec7eb, true);
-    }
-    return root;
+  ship(design?: Starship) {
+    return modularShip(this, design);
   }
   furniture(kind: FurnitureKind) {
     const root = new T.Group(),

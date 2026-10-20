@@ -1,3 +1,4 @@
+import { ALL_RESOURCE_LABELS, composition, RAW_RESOURCES } from "./resources";
 export const SIZE = 17;
 export const HOME_SIZE = 38;
 export type PlanetId =
@@ -143,7 +144,10 @@ export type BuildingKind =
   | "warehouse"
   | "laboratory"
   | "extractor"
-  | "bioextractor";
+  | "bioextractor"
+  | "planetdrill"
+  | "scanner"
+  | "shipyard";
 export type FurnitureKind =
   | "chair"
   | "table"
@@ -152,16 +156,7 @@ export type FurnitureKind =
   | "cabinet"
   | "fireplace"
   | "rug";
-export const RESOURCE_LABELS: Record<string, string> = {
-  wood: "Древесина",
-  composite: "Композит",
-  alloy: "Звёздный сплав",
-  stone: "Камень",
-  spores: "Споры",
-  crystal: "Кристаллы",
-  obsidian: "Обсидиан",
-  thermal: "Термокристаллы",
-};
+export const RESOURCE_LABELS = ALL_RESOURCE_LABELS;
 export const RESOURCE_ICONS: Record<string, string> = {
   wood: "🪵",
   stone: "🪨",
@@ -264,7 +259,7 @@ for (const id of ["home", "listoria"] as const) {
 }
 // Round experimental worlds were retired. All playable worlds are cubes.
 export const SPHERE_PLANETS: PlanetId[] = [];
-for (let i = 1; i <= 24; i++) {
+for (let i = 1; i <= 1200; i++) {
   const biome = (["listoria", "mycelia", "pyros"] as const)[(i * 7) % 3],
     base = PLANETS[biome],
     id = `wild-${i}` as PlanetId;
@@ -294,14 +289,43 @@ for (let i = 1; i <= 24; i++) {
   };
 }
 for (const p of Object.values(PLANETS))
-  p.sphereTheme =
-    p.id === "home"
+  p.sphereTheme = p.id.startsWith("wild-")
+    ? (
+        [
+          "forest",
+          "fungal",
+          "ice",
+          "desert",
+          "volcanic",
+          "tropical",
+          "alpine",
+          "meadow",
+        ] as const
+      )[Number(p.id.slice(5)) % 8]
+    : p.id === "home"
       ? "meadow"
       : (p.biome ?? p.id) === "mycelia"
         ? "fungal"
         : (p.biome ?? p.id) === "pyros"
           ? "volcanic"
           : "forest";
+export const PLANET_COMPOSITION = Object.fromEntries(
+  Object.values(PLANETS).map((p) => {
+    const primary =
+      p.sphereTheme === "fungal"
+        ? "spores"
+        : p.sphereTheme === "volcanic"
+          ? "obsidian"
+          : p.sphereTheme === "ice"
+            ? "ice"
+            : p.sphereTheme === "desert"
+              ? "silicon"
+              : "wood";
+    const parts = composition(p.id, primary);
+    p.resource = parts.map((r) => r.resource);
+    return [p.id, parts];
+  }),
+) as Record<PlanetId, ReturnType<typeof composition>>;
 export const INITIAL_PLANETS: PlanetId[] = [
   "home",
   "listoria",
@@ -410,11 +434,38 @@ export interface BuildingRecipe {
   cost: Record<string, number>;
   icon: string;
   size: number;
-  zone: "home" | "outpost";
+  zone: "home" | "outpost" | "any";
   rate?: number;
   resources?: readonly string[];
 }
 export const BUILDINGS: Record<BuildingKind, BuildingRecipe> = {
+  planetdrill: {
+    name: "Планетарный поглотитель",
+    description:
+      "Извлекает три ресурса в пропорции скана. Пять уровней. Выход — на местный склад.",
+    cost: { iron: 30, quartz: 20 },
+    icon: "⬡",
+    size: 4,
+    zone: "any",
+  },
+  scanner: {
+    name: "Дальний сканер",
+    description:
+      "Антенная станция на Родной. Десять уровней дальности, ресурсы и окружающие звёздные системы.",
+    cost: { iron: 20, quartz: 15 },
+    icon: "◉",
+    size: 3,
+    zone: "home",
+  },
+  shipyard: {
+    name: "Орбитальная верфь",
+    description:
+      "Исследовательские, боевые и грузовые корабли. Модульная сборка корпуса и крыльев.",
+    cost: { iron: 30, stone: 20 },
+    icon: "✧",
+    size: 4,
+    zone: "home",
+  },
   headquarters: {
     name: "Главный дом",
     description:
@@ -466,7 +517,9 @@ export const BUILDINGS: Record<BuildingKind, BuildingRecipe> = {
     size: 2,
     zone: "outpost",
     rate: 3,
-    resources: ["stone", "crystal", "obsidian", "thermal"],
+    resources: Object.keys(RAW_RESOURCES).filter(
+      (r) => !["wood", "spores", "biomass"].includes(r),
+    ),
   },
   bioextractor: {
     name: "Биомодуль",
@@ -577,7 +630,8 @@ export function ship(p: PlanetId) {
 export function allowedBuildings(p: PlanetId) {
   return (Object.keys(BUILDINGS) as BuildingKind[]).filter(
     (k) =>
-      BUILDINGS[k].zone === (p === "home" ? "home" : "outpost") &&
+      (BUILDINGS[k].zone === "any" ||
+        BUILDINGS[k].zone === (p === "home" ? "home" : "outpost")) &&
       (!BUILDINGS[k].resources ||
         BUILDINGS[k].resources!.some((r) =>
           (PLANETS[p].resource as readonly string[]).includes(r),
@@ -717,7 +771,7 @@ export function nodes(planet: PlanetId) {
       z:
         ((5 + ((i * 13 + ((PLANETS[planet].seed ?? 0) % 47)) % 50)) / 60) *
         planetDepth(planet),
-      resource: PLANETS[planet].resource[i % 2],
+      resource: PLANETS[planet].resource[i % 3],
       variant: i,
     }));
   if (planet === "home") {
@@ -757,7 +811,7 @@ export function nodes(planet: PlanetId) {
     id: `node-${i}`,
     x,
     z,
-    resource: PLANETS[planet].resource[i % 2],
+    resource: PLANETS[planet].resource[i % 3],
     variant: i,
   }));
 }
