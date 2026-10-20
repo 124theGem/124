@@ -186,8 +186,11 @@ function validatePlacement(
   )
     throw new RuleError("Участок занят устройством.");
 }
+// One-time test-world reset; future reloads retain this generation.
+export const WORLD_GENERATION = 2;
 export interface Save {
   version: 6;
+  generation: number;
   planetScale: number;
   prologue: Prologue;
   freeConstruction: boolean;
@@ -559,6 +562,7 @@ export function newGame(
   for (const id of Object.keys(PLANTS)) inventory[`seed:${id}`] = 6;
   return {
     version: 6,
+    generation: WORLD_GENERATION,
     planetScale: 1.2,
     prologue: {
       phase: introduction ? "arrival" : "complete",
@@ -1910,6 +1914,7 @@ const positionSchema = z.object({
 });
 const saveSchema = z.object({
   version: z.literal(6),
+  generation: z.literal(WORLD_GENERATION),
   prologue: z
     .object({
       phase: z.enum([
@@ -2123,8 +2128,13 @@ const saveSchema = z.object({
 });
 export function parseSave(raw: string): Save {
   const data = JSON.parse(raw);
-  // Prototype builds deliberately start a new world; no version-to-version migration.
-  if ([1, 2, 3, 4, 5].includes(data?.version)) return newGame(Date.now(), true);
+  // This release deliberately retires all previous test worlds, once.
+  if (
+    [1, 2, 3, 4, 5].includes(data?.version) ||
+    (data?.version === 6 &&
+      (data.generation === undefined || data.generation < WORLD_GENERATION))
+  )
+    return newGame(Date.now(), true, true);
   const save = saveSchema.parse(data) as Save;
   expandSavedWorlds(save);
   save.inventory["tool:grapple"] ??= 1;

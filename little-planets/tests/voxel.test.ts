@@ -23,7 +23,7 @@ import { Models } from "../src/world/Models";
 import { SphereWorld, spherePoint, sphereUp } from "../src/world/SphereWorld";
 import { newGame } from "../shared/model";
 describe("shared three-dimensional voxel terrain", () => {
-  it("has reproducible discrete levels, broad height variation and exposed cliffs on every cube", () => {
+  it("has reproducible voxel terraces, a gentle home and rugged exploration worlds", () => {
     for (const id of CUBE_PLANETS) {
       setTerrainEdits(id, {});
       const levels = new Set<number>();
@@ -36,7 +36,10 @@ describe("shared three-dimensional voxel terrain", () => {
         expect(h / VOXEL_STEP).toBeCloseTo(Math.round(h / VOXEL_STEP), 8);
         expect(voxelLevel(n, id)).toBe(h);
       }
-      expect(levels.size).toBeGreaterThan(7);
+      if (id === "home") {
+        expect(levels.size).toBeGreaterThanOrEqual(3);
+        expect(Math.max(...levels)).toBeLessThanOrEqual(1.35);
+      } else expect(levels.size).toBeGreaterThan(7);
     }
   });
   it("samples the same planar tops that the rendered triangle mesh intersects, including every cube face", () => {
@@ -92,7 +95,14 @@ describe("shared three-dimensional voxel terrain", () => {
       const heights = Array.from({ length: 30 }, (_, i) =>
         surfaceHeight(offsetPoint(ship(id), -5, -i * 0.25, id), id),
       );
-      expect(Math.max(...heights) - Math.min(...heights)).toBeGreaterThan(0.4);
+      if (id === "home")
+        expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(
+          0.45,
+        );
+      else
+        expect(Math.max(...heights) - Math.min(...heights)).toBeGreaterThan(
+          0.4,
+        );
       expect(heights.every(Number.isFinite)).toBe(true);
     }
   });

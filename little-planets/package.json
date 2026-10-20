@@ -1,6 +1,6 @@
 {
   "name": "little-planets",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -27,7 +27,8 @@
     "test:aurora": "node --import tsx tests/aurora-browser.mjs",
     "test:flightdeck": "node --import tsx tests/flightdeck-browser.mjs",
     "test:outfit": "node --import tsx tests/outfit-browser.mjs",
-    "test:firstlight": "node --import tsx tests/firstlight-browser.mjs"
+    "test:firstlight": "node --import tsx tests/firstlight-browser.mjs",
+    "test:dawn": "FIRSTLIGHT_RESET=1 FIRSTLIGHT_SCOPE=intro node --import tsx tests/firstlight-browser.mjs"
   },
   "dependencies": {
     "three": "^0.180.0",

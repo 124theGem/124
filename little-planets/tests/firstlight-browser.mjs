@@ -1,7 +1,7 @@
 import { chromium } from "@playwright/test";
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
-import { newGame, applyAction } from "../shared/model.ts";
+import { newGame, applyAction, WORLD_GENERATION } from "../shared/model.ts";
 import { PLANETS } from "../shared/catalog.ts";
 import { offsetPoint } from "../shared/voxel.ts";
 import { openSystems, gameState } from "./outfit-helpers.ts";
@@ -27,6 +27,20 @@ async function launch(viewport, save) {
   page.setDefaultTimeout(90000);
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
+  if (!save && process.env.FIRSTLIGHT_RESET) {
+    save = newGame(Date.now(), true);
+    delete save.generation;
+    save.inventory.wood = 9876;
+    save.progression.xp = 5432;
+    save.worlds.home.buildings.push({
+      id: "old-test-building",
+      kind: "scanner",
+      x: 8,
+      z: 7,
+      rotation: 0,
+    });
+    save.automation.devices.push({ id: "obsolete-device" });
+  }
   if (save)
     await page.addInitScript((s) => {
       if (!localStorage.getItem("little-planets-v6"))
@@ -63,7 +77,25 @@ try {
       width: 1100,
       height: 800,
     });
-    assert.equal((await gameState(page)).prologue.phase, "arrival");
+    const start = await gameState(page);
+    assert.equal(start.prologue.phase, "arrival");
+    assert.equal(start.generation, WORLD_GENERATION);
+    assert.equal(start.worlds.home.buildings.length, 1);
+    assert.equal(start.automation.devices.length, 0);
+    assert.equal(start.progression.xp, 0);
+    assert.equal(start.inventory.wood, 90);
+    if (process.env.FIRSTLIGHT_RESET) {
+      const disk = await page.evaluate(() =>
+        JSON.parse(localStorage.getItem("little-planets-v6")),
+      );
+      assert.equal(disk.generation, WORLD_GENERATION);
+      assert.equal(disk.prologue.phase, "arrival");
+      await page.reload();
+      await page.waitForFunction(
+        () => window.__planets?.snapshot().triangles > 1000,
+      );
+      assert.equal((await gameState(page)).cycleEpoch, start.cycleEpoch);
+    }
     assert(await page.locator('[data-hand="grapple"]').isDisabled());
     assert.equal(await page.locator("#first-person").count(), 0);
     await page.waitForTimeout(1500);

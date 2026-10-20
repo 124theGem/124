@@ -43,6 +43,7 @@ export class SphereNature {
     bushes: number;
     stalks: number;
     trees: number;
+    treeCandidates: number;
     caves: number;
     waterfalls: number;
     volcanoes: number;
@@ -54,11 +55,14 @@ export class SphereNature {
     private cleared: readonly string[] = [],
   ) {
     this.root.add(this.staticRoot);
-    this.features = landmarks(id);
+    this.features = landmarks(id).map((f) =>
+      id === "home" ? { ...f, scale: f.scale * 0.4 } : f,
+    );
     this.stats = {
       bushes: 0,
       stalks: 0,
       trees: 0,
+      treeCandidates: 0,
       caves: 0,
       waterfalls: 0,
       volcanoes: 0,
@@ -93,6 +97,10 @@ export class SphereNature {
         continue;
       const density = noise3(n.x * 7, n.y * 7, n.z * 7, seed + 99);
       if (density < 0.38 && i >= 22) continue;
+      if (id === "home" && this.cleared.includes(cellKey(n, id))) continue;
+      this.stats.treeCandidates++;
+      // Halve eligible home trees, including after clearing, without thinning other vegetation.
+      if (id === "home" && this.stats.treeCandidates % 2 === 1) continue;
       let tree: T.Group;
       if (theme === "fungal") {
         tree = kit.plant("moonshroom");
@@ -189,7 +197,7 @@ export class SphereNature {
       anchor = sanctuaryPoint(id);
     this.place(ruin, anchor.x, anchor.z);
 
-    this.staticRoot.add(ruin);
+    if (id !== "home") this.staticRoot.add(ruin);
     // Water collecting at the foot of the ivory escarpment, with reeds and lily pads.
     if (moist) {
       for (let i = 0; i < 18; i++) {

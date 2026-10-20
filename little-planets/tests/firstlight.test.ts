@@ -49,7 +49,7 @@ describe("First Light introduction, optics and gardens", () => {
     expect(s.discovered).toHaveLength(5);
     expect(applyAction(s, { type: "boardShip" }, 1000).flight).not.toBeNull();
   });
-  it("does not replay the intro in an existing save or permit remote quest collection", () => {
+  it("preserves current-generation progress and rejects remote quest collection", () => {
     const old: any = newGame(1000, true);
     delete old.prologue;
     delete old.inventory["tool:cultivator"];

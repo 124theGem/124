@@ -148,6 +148,22 @@ export function naturalVoxelLevel(n: Vec, id: PlanetId) {
     broad = noise3(p.x * 0.13, p.y * 0.13, p.z * 0.13, seed),
     detail = noise3(p.x * 0.38, p.y * 0.38, p.z * 0.38, seed + 13),
     ridge = noise3(p.x * 0.07 + 17, p.y * 0.07 - 9, p.z * 0.07, seed + 51);
+  if (id === "home") {
+    // Gentle, broad terraces on all six faces; keep the shared level cube edges.
+    const uv = clearingCoordinates(n, id),
+      clearing = uv.front > 0.6 && Math.hypot(uv.x, uv.z) < 10,
+      height = clearing
+        ? 0.9
+        : 0.45 + Math.max(0, broad - 0.3) * 1.5 + detail * 0.35;
+    return Math.max(
+      VOXEL_STEP,
+      Math.min(
+        1.35,
+        edge * VOXEL_STEP,
+        Math.round(height / VOXEL_STEP) * VOXEL_STEP,
+      ),
+    );
+  }
   let height =
     0.45 +
     Math.max(0, broad - 0.22) * 6.4 +

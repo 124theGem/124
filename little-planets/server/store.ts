@@ -1,7 +1,13 @@
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { newGame, parseSave, applyAction, type Save } from "../shared/model";
+import {
+  newGame,
+  parseSave,
+  applyAction,
+  type Save,
+  WORLD_GENERATION,
+} from "../shared/model";
 export class Conflict extends Error {
   constructor(readonly state: Save) {
     super("Сохранение изменилось в другой вкладке");
@@ -25,6 +31,7 @@ export class Store {
       const raw = JSON.parse(row.state);
       const needsDefaults =
         raw.version !== 6 ||
+        raw.generation !== WORLD_GENERATION ||
         raw.prologue === undefined ||
         raw.planetScale === undefined ||
         raw.inventory?.["tool:cultivator"] === undefined ||

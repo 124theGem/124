@@ -251,6 +251,53 @@ describe("SQLite persistence and authenticated API", () => {
   });
 });
 
+describe("authenticated New Dawn reset", () => {
+  it("returns the introduction for an existing Telegram identity and preserves subsequent quest actions", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "planets-reset-api-")),
+      file = join(dir, "world.sqlite");
+    const init = new Store(file);
+    init.close();
+    const retired: any = newGame(1000, true);
+    delete retired.generation;
+    retired.inventory.wood = 9876;
+    retired.revision = 42;
+    const db = new DatabaseSync(file);
+    db.prepare("INSERT INTO saves VALUES(?,?)").run(
+      "303",
+      JSON.stringify(retired),
+    );
+    db.close();
+    const app = await createApp({ botToken: token, databasePath: file });
+    const headers = { authorization: `tma ${signed(303)}` };
+    try {
+      const first = await app.inject({ url: "/api/state", headers });
+      expect(first.statusCode).toBe(200);
+      expect(first.json().state.prologue.phase).toBe("arrival");
+      expect(first.json().state.inventory.wood).toBe(90);
+      const step = await app.inject({
+        method: "POST",
+        url: "/api/action",
+        headers,
+        payload: { revision: 0, action: { type: "story", step: "begin" } },
+      });
+      expect(step.statusCode).toBe(200);
+      expect(step.json().state.prologue.phase).toBe("plants");
+      const stale = await app.inject({
+        method: "POST",
+        url: "/api/action",
+        headers,
+        payload: { revision: 42, action: { type: "move", x: 8, z: 13 } },
+      });
+      expect(stale.statusCode).toBe(409);
+      const again = await app.inject({ url: "/api/state", headers });
+      expect(again.json().state).toEqual(step.json().state);
+    } finally {
+      await app.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("additive Cubeworks v6 migration", () => {
   it("persists added defaults exactly once without changing the player progress", () => {
     const dir = mkdtempSync(join(tmpdir(), "planets-v6-")),

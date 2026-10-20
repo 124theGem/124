@@ -42,6 +42,8 @@ export class Persistence {
       if (saved) {
         try {
           this.state = parseSave(saved);
+          // Persist the reset before the player clicks anything, so it runs only once.
+          localStorage.setItem("little-planets-v6", JSON.stringify(this.state));
         } catch {
           localStorage.setItem("little-planets-recovery", saved);
           throw new Error(
