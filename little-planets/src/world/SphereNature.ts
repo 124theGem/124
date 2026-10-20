@@ -22,6 +22,7 @@ import {
   offsetPoint,
   clearingCoordinates,
   noise3,
+  cellKey,
 } from "../../shared/voxel";
 import { sanctuary } from "./Sanctuary";
 export class SphereNature {
@@ -50,6 +51,7 @@ export class SphereNature {
   constructor(
     private kit: Models,
     readonly id: PlanetId,
+    private cleared: readonly string[] = [],
   ) {
     this.root.add(this.staticRoot);
     this.features = landmarks(id);
@@ -248,6 +250,12 @@ export class SphereNature {
       flow.position.copy(position);
       flow.quaternion.copy(rotation);
     }
+    for (const child of [...this.staticRoot.children])
+      if (
+        child.userData.groundCell &&
+        this.cleared.includes(child.userData.groundCell)
+      )
+        child.removeFromParent();
     kit.batch(this.staticRoot);
     this.smoke = new T.InstancedMesh(
       this.smokeGeo,
@@ -259,6 +267,10 @@ export class SphereNature {
     this.root.add(this.smoke);
   }
   private place(object: T.Group, x: number, z: number) {
+    object.userData.groundCell = cellKey(
+      sphereNormal({ x, z }, this.id),
+      this.id,
+    );
     const n = sphereNormal({ x, z }, this.id),
       up = new T.Vector3(n.x, n.y, n.z);
     const q = surfacePoint({ x, z }, this.id);

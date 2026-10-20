@@ -1,3 +1,4 @@
+import { ActorFollower } from "./Motion";
 import { spherePoint, sphereUp } from "./SphereWorld";
 import * as T from "three";
 import { Models } from "./Models";
@@ -30,6 +31,8 @@ export class Life {
   private animals: Animal[] = [];
   private batches: T.InstancedMesh[] = [];
   private phase = 0;
+  private followers: ActorFollower[] = [];
+  private rotations: T.Quaternion[] = [];
   constructor(
     private kit: Models,
     private planet: PlanetId,
@@ -53,6 +56,8 @@ export class Life {
           ((i * 11 + n * 7 + 3) %
             Math.max(1, Math.floor(planetDepth(planet) - 4)));
       }
+      this.followers.push(new ActorFollower());
+      this.rotations.push(new T.Quaternion());
       const animal: Animal = {
           x,
           z,
@@ -175,10 +180,13 @@ export class Life {
         }
       }
       position.copy(
-        spherePoint(
-          a,
-          0.05 + Math.abs(Math.sin(time * 5 + i)) * 0.08,
-          this.planet,
+        this.followers[i].update(
+          spherePoint(
+            a,
+            0.05 + Math.abs(Math.sin(time * 5 + i)) * 0.08,
+            this.planet,
+          ),
+          dt,
         ),
       );
       rotation.setFromUnitVectors(
@@ -188,7 +196,8 @@ export class Life {
       rotation.multiply(
         new T.Quaternion().setFromAxisAngle(T.Object3D.DEFAULT_UP, a.heading),
       );
-      matrix.compose(position, rotation, new T.Vector3(1, 1, 1));
+      this.rotations[i].slerp(rotation, 1 - Math.exp(-5 * dt));
+      matrix.compose(position, this.rotations[i], new T.Vector3(1, 1, 1));
       for (const part of a.parts)
         this.batches[part.bucket].setMatrixAt(
           part.index,

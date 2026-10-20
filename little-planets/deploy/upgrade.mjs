@@ -44,7 +44,7 @@ if (conf.HOST !== "127.0.0.1" || conf.PORT !== "8003")
 if (!conf.BOT_TOKEN)
   fail("BOT_TOKEN is missing in the existing .env. No changes made.");
 const database = conf.DATABASE_PATH;
-const archive = join(source, "releases/little-planets-cubeworks-v6.tar.gz"),
+const archive = join(source, "releases/little-planets-journey-v7.tar.gz"),
   expected = readFileSync(`${archive}.sha256`, "utf8").trim().split(/\s+/)[0];
 if (
   createHash("sha256").update(readFileSync(archive)).digest("hex") !== expected

@@ -33,13 +33,16 @@ export class AutomationPanel {
   private draft?: Program;
   private source?: { id: string; port: "next" | "otherwise" };
   private serial = 0;
+  private drafts = new Map<string, Program>();
+  private writes = Promise.resolve();
+  private editVersion = 0;
   constructor(
     private ui: UI,
     private state: () => Save,
     private act: (a: Action) => Promise<void>,
   ) {}
   open() {
-    this.draft = undefined;
+    this.draft = this.drafts.get(this.selected);
     this.render();
   }
   private render() {
@@ -80,7 +83,7 @@ export class AutomationPanel {
         (b) =>
           (b.onclick = () => {
             this.selected = b.dataset.device!;
-            this.draft = undefined;
+            this.draft = this.drafts.get(this.selected);
             this.render();
           }),
       );
@@ -162,6 +165,7 @@ export class AutomationPanel {
       return;
     }
     this.draft ??= structuredClone(selected.program);
+    this.drafts.set(selected.id, this.draft);
     detail.insertAdjacentHTML(
       "beforeend",
       `<h3>Программа из блоков</h3><p>Перетащите блок за заголовок. Нажмите выход «Далее» или «Нет», затем «Вход» другого блока для соединения. Ромб проверки направляет груз ≥ порога по выходу «Далее». Начальный блок отмечен ★. Циклы выполняются по шагам.</p><div class="graph-tools"><select id="add-op">${Object.entries(
@@ -187,20 +191,15 @@ export class AutomationPanel {
         x: 40 + (this.draft!.nodes.length % 4) * 270,
         y: 80 + Math.floor(this.draft!.nodes.length / 4) * 300,
       });
+      if (!this.draft!.entry) this.draft!.entry = id;
       this.graph();
+      this.changed();
     });
-    this.ui.button(
-      "save-program",
-      () =>
-        void this.run({
-          type: "program",
-          id: selected.id,
-          program: this.draft!,
-        }),
-    );
+    this.ui.button("save-program", () => this.changed());
     this.ui.button("reset-program", () => {
       this.draft = defaultProgram(selected.kind, selected.planet);
       this.graph();
+      this.changed();
     });
     this.graph();
   }
@@ -235,6 +234,7 @@ export class AutomationPanel {
             else if (f === "resource")
               n.resource = input.value as ProgramNode["resource"];
             else n.planet = input.value;
+            this.changed();
           }),
       );
       const header = el.querySelector("header")!;
@@ -255,6 +255,7 @@ export class AutomationPanel {
         };
         header.onpointerup = () => {
           header.onpointermove = null;
+          this.changed();
         };
       };
     });
@@ -280,6 +281,7 @@ export class AutomationPanel {
           this.ui.el("graph-message").textContent =
             "Блоки соединены. Сохраните программу.";
           this.wires();
+          this.changed();
         }),
     );
     root.querySelectorAll<HTMLButtonElement>("[data-entry]").forEach(
@@ -287,20 +289,21 @@ export class AutomationPanel {
         (b.onclick = () => {
           draft.entry = b.dataset.entry!;
           this.graph();
+          this.changed();
         }),
     );
     root.querySelectorAll<HTMLButtonElement>("[data-delete]").forEach(
       (b) =>
         (b.onclick = () => {
-          if (draft.nodes.length === 1) return;
           const id = b.dataset.delete!;
           draft.nodes = draft.nodes.filter((n) => n.id !== id);
-          if (draft.entry === id) draft.entry = draft.nodes[0].id;
+          if (draft.entry === id) draft.entry = draft.nodes[0]?.id ?? "";
           for (const n of draft.nodes) {
             if (n.next === id) n.next = n.id;
             if (n.otherwise === id) n.otherwise = n.id;
           }
           this.graph();
+          this.changed();
         }),
     );
     this.wires();
@@ -359,6 +362,32 @@ export class AutomationPanel {
         Object.entries(s.worlds[d.planet].stock)
           .map(([r, n]) => `${RESOURCE_LABELS[r] ?? r}: ${n}`)
           .join(" · ") || "Пусто";
+  }
+  private changed() {
+    if (!this.draft) return;
+    const id = this.selected,
+      program = structuredClone(this.draft),
+      version = ++this.editVersion;
+    this.drafts.set(id, structuredClone(program));
+    const message = this.ui.el("graph-message");
+    if (message) message.textContent = "Сохранение…";
+    this.writes = this.writes
+      .catch(() => {})
+      .then(async () => {
+        try {
+          await this.act({ type: "program", id, program });
+          if (version === this.editVersion) {
+            const el = this.ui.el("graph-message");
+            if (el) el.textContent = "Все изменения сохранены";
+          }
+        } catch (error) {
+          const el = this.ui.el("graph-message");
+          if (el) el.textContent = "Не сохранено: " + (error as Error).message;
+          this.ui.toast(
+            "Не удалось сохранить программу: " + (error as Error).message,
+          );
+        }
+      });
   }
   private async run(action: Action) {
     try {

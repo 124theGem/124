@@ -594,6 +594,8 @@ export function itemInfo(id: string): {
   icon: string;
   group: string;
 } {
+  if (id === "tool:grapple")
+    return { name: "Гарпун", icon: "↗", group: "Инструменты" };
   if (id === "tool:pickaxe")
     return { name: "Кирка", icon: "⛏", group: "Инструменты" };
   const [prefix, value] = id.split(":");

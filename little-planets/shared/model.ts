@@ -1,3 +1,11 @@
+import { prepareFoundation, foundationCells } from "./construction";
+import {
+  gainExperience,
+  freshProgression,
+  skillPoints,
+  type Progression,
+} from "./progression";
+import { beginGrapple, type GrappleState } from "./grapple";
 import {
   advanceAutomation,
   programSchema,
@@ -98,10 +106,16 @@ export interface PlanetState {
   enemies: Enemy[];
   lastSimAt: number;
   terrain: TerrainEdits;
+  cleared: string[];
+  clearedNodes: string[];
   stock: Record<string, number>;
 }
 export interface Save {
   version: 6;
+  hand: "pickaxe" | "grapple" | "sword" | "spear" | "blaster" | "none";
+  progression: Progression;
+  grapple: GrappleState | null;
+  cycleEpoch: number;
   automation: Automation;
   lastMine: number;
   flight: FlightState | null;
@@ -137,6 +151,21 @@ const pilotInput = z
   })
   .strict();
 export const ActionSchema = z.discriminatedUnion("type", [
+  z
+    .object({
+      type: z.literal("hand"),
+      item: z.enum(["pickaxe", "grapple", "sword", "spear", "blaster", "none"]),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("spendSkill"),
+      skill: z.enum(["farming", "mining", "combat"]),
+    })
+    .strict(),
+  z.object({ type: z.literal("grappleStart"), planet }).strict(),
+  z.object({ type: z.literal("grappleTick") }).strict(),
+  z.object({ type: z.literal("grappleCancel") }).strict(),
   z
     .object({
       type: z.literal("terrain"),
@@ -243,8 +272,8 @@ export const ActionSchema = z.discriminatedUnion("type", [
         "extractor",
         "bioextractor",
       ]),
-      x: cell,
-      z: cell,
+      x: z.number().finite().min(0).max(224),
+      z: z.number().finite().min(0).max(224),
       rotation: z.union([z.literal(0), z.literal(1)]),
       resource: z.string().max(20).optional(),
     })
@@ -303,10 +332,13 @@ export function newGame(now = Date.now()): Save {
       enemies: spawnEnemies(p),
       lastSimAt: now,
       terrain: {},
+      cleared: [],
+      clearedNodes: [],
       stock: {},
     };
   const inventory: Record<string, number> = {
     "tool:pickaxe": 1,
+    "tool:grapple": 1,
     wood: 90,
     stone: 75,
     crystal: 20,
@@ -317,6 +349,10 @@ export function newGame(now = Date.now()): Save {
   for (const id of Object.keys(PLANTS)) inventory[`seed:${id}`] = 6;
   return {
     version: 6,
+    hand: "pickaxe",
+    progression: freshProgression(),
+    grapple: null,
+    cycleEpoch: now,
     automation: { devices: [], lastTick: now, serial: 0 },
     lastMine: 0,
     flight: null,
@@ -353,7 +389,10 @@ export function ready(crop: Crop, now: number) {
   return now - crop.plantedAt >= PLANTS[crop.plant].seconds * 1000;
 }
 export function nodeReady(state: PlanetState, id: string, now: number) {
-  return state.depleted[id] === undefined || now - state.depleted[id] >= 20000;
+  return (
+    !state.clearedNodes.includes(id) &&
+    (state.depleted[id] === undefined || now - state.depleted[id] >= 20000)
+  );
 }
 export function buildingAt(state: PlanetState, x: number, z: number) {
   return state.buildings.find(
@@ -365,9 +404,9 @@ export function buildingAt(state: PlanetState, x: number, z: number) {
   );
 }
 export function buildingCenter(b: Building) {
-  const offset = (BUILDINGS[b.kind].size - 1) / 2;
-  return { x: b.x + offset, z: b.z + offset };
+  return { x: b.x, z: b.z };
 }
+
 export function roomItems(save: Save) {
   return save.inside ? (save.interiors[save.inside] ?? []) : [];
 }
@@ -494,35 +533,33 @@ export function canBuild(
   kind: BuildingKind = "house",
   now = Date.now(),
 ): boolean {
-  if (save.inside || !Number.isInteger(x) || !Number.isInteger(z)) return false;
+  if (save.inside || !Number.isFinite(x) || !Number.isFinite(z)) return false;
   const b = BUILDINGS[kind];
   if (!b || b.zone !== (save.planet === "home" ? "home" : "outpost"))
     return false;
   if (b.zone === "outpost" && !moduleResources(save.planet, kind).length)
     return false;
-  const event = worldEvent(save, save.planet, now),
-    pad = ship(save.planet),
-    size = planetSize(save.planet);
-  for (let dx = 0; dx < b.size; dx++)
-    for (let dz = 0; dz < b.size; dz++) {
-      const cx = x + dx,
-        cz = z + dz;
-      if (
-        cx < 1 ||
-        cz < 1 ||
-        cx >= size - 1 ||
-        cz >= planetDepth(save.planet) - 1 ||
-        waterCell(cx, cz) ||
-        buildingAt(save.worlds[save.planet], cx, cz) ||
-        beds(save.planet).some((p) => p.x === cx && p.z === cz) ||
-        nodes(save.planet).some((n) => n.x === cx && n.z === cz) ||
-        (Math.abs(cx - pad.x) <= 2 && Math.abs(cz - pad.z) <= 2) ||
-        Math.hypot(cx - save.position.x, cz - save.position.z) < 0.9 ||
-        (event?.type === "meteor" &&
-          Math.hypot(cx - event.x, cz - event.z) < 1.5)
-      )
-        return false;
-    }
+  if (
+    x < 0 ||
+    z < 0 ||
+    x >= planetSize(save.planet) ||
+    z >= planetDepth(save.planet)
+  )
+    return false;
+  if (
+    surfaceDistance({ x, z }, ship(save.planet), save.planet) <
+    2.5 + b.size / 2
+  )
+    return false;
+  if (
+    save.worlds[save.planet].buildings.some(
+      (existing) =>
+        surfaceDistance({ x, z }, existing, save.planet) <
+        (b.size + BUILDINGS[existing.kind].size) / 2 + 0.4,
+    )
+  )
+    return false;
+
   return true;
 }
 export function canPlaceFurniture(
@@ -599,6 +636,8 @@ export function applyAction(
   const action = ActionSchema.parse(raw),
     save = structuredClone(original),
     world = save.worlds[save.planet];
+  if (save.grapple && !["grappleTick", "grappleCancel"].includes(action.type))
+    throw new RuleError("Завершите поездку по тросу.");
   if (save.flight && !["pilot", "course", "land"].includes(action.type))
     throw new RuleError("Сначала завершите полёт и посадку.");
   advanceAutomation(save, now);
@@ -616,11 +655,74 @@ export function applyAction(
       "takeFurniture",
       "exit",
       "equip",
+      "hand",
+      "spendSkill",
       "combatTick",
     ].includes(action.type)
   )
     throw new RuleError("Сначала выйдите из дома.");
   switch (action.type) {
+    case "hand": {
+      if (action.item === "pickaxe" || action.item === "grapple") {
+        if (!(save.inventory[`tool:${action.item}`] > 0))
+          throw new RuleError("Предмета нет в рюкзаке.");
+        save.equipment.weapon = null;
+      } else if (action.item !== "none") {
+        if (!(save.inventory[`gear:${action.item}`] > 0))
+          throw new RuleError("Сначала создайте оружие.");
+        save.equipment.weapon = action.item;
+      } else save.equipment.weapon = null;
+      save.hand = action.item;
+      break;
+    }
+    case "spendSkill": {
+      if (skillPoints(save.progression) <= 0)
+        throw new RuleError("Нет свободных очков.");
+      if (save.progression.skills[action.skill] >= 5)
+        throw new RuleError("Навык уже максимальный.");
+      save.progression.skills[action.skill]++;
+      break;
+    }
+    case "grappleStart": {
+      const target = action.planet as PlanetId;
+      if (
+        save.inside ||
+        save.flight ||
+        save.grapple ||
+        target === save.planet ||
+        !save.discovered.includes(target)
+      )
+        throw new RuleError("Выберите другую открытую планету с поверхности.");
+      if (!save.inventory["tool:grapple"]) throw new RuleError("Нужен гарпун.");
+      save.hand = "grapple";
+      save.equipment.weapon = null;
+      save.grapple = beginGrapple(
+        save.planet,
+        target,
+        save.position,
+        save.discovered,
+        now,
+      );
+      break;
+    }
+    case "grappleTick": {
+      if (!save.grapple) throw new RuleError("Трос не натянут.");
+      if (now >= save.grapple.endsAt) {
+        save.planet = save.grapple.target;
+        save.position = offsetPoint(ship(save.planet), -1, 0, save.planet);
+        save.grapple = null;
+        save.worlds[save.planet].lastSimAt = now;
+        gainExperience(save, 15);
+      }
+      break;
+    }
+    case "grappleCancel": {
+      if (!save.grapple) throw new RuleError("Трос не натянут.");
+      save.position = { ...save.grapple.originPosition };
+      save.grapple = null;
+      break;
+    }
+
     case "terrain": {
       if (save.flight || save.inside)
         throw new RuleError("Выйдите на поверхность.");
@@ -654,6 +756,7 @@ export function applyAction(
           world.terrain,
         );
         save.inventory[resource] = (save.inventory[resource] ?? 0) + 1;
+        if (!blocks[String(level)]) gainExperience(save, 2);
         removed.add(level);
         delete blocks[String(level)];
       } else {
@@ -719,6 +822,8 @@ export function applyAction(
       )
         throw new RuleError("Здесь уже есть станция.");
       charge(save, DEVICE_COSTS[action.kind]);
+      if (action.kind === "warehouse" || action.kind === "refinery")
+        prepareFoundation(world, save.position, save.planet, 3);
       const program = defaultProgram(action.kind, save.planet);
       save.automation.devices.push({
         id: `device-${++save.automation.serial}`,
@@ -750,6 +855,7 @@ export function applyAction(
         throw new RuleError("Неизвестная планета в программе.");
       d.program = action.program;
       d.pc = action.program.entry;
+      if (!action.program.nodes.length) d.status = "Программа пуста";
       d.cooldown = 0;
       break;
     }
@@ -829,6 +935,8 @@ export function applyAction(
           throw new RuleError("Сначала создайте подходящую экипировку.");
       }
       save.equipment[action.slot] = action.item;
+      if (action.slot === "weapon")
+        save.hand = (action.item as Save["hand"]) ?? "pickaxe";
       break;
     }
     case "scan": {
@@ -852,11 +960,15 @@ export function applyAction(
       if (now - save.lastAttack < (weapon?.cooldown ?? 650))
         throw new RuleError("Оружие ещё не готово.");
       nearby(save, enemy.x, enemy.z, weapon?.range ?? 1.9);
-      enemy.hp = Math.max(0, enemy.hp - (weapon?.damage ?? 5));
+      enemy.hp = Math.max(
+        0,
+        enemy.hp - (weapon?.damage ?? 5) - save.progression.skills.combat * 2,
+      );
       save.lastAttack = now;
       if (!enemy.hp) {
         enemy.defeatedAt = now;
         save.kills++;
+        gainExperience(save, 25);
         const resource =
           PLANETS[save.planet].resource[world.enemies.indexOf(enemy) % 2];
         save.inventory[resource] = (save.inventory[resource] ?? 0) + 5;
@@ -898,11 +1010,15 @@ export function applyAction(
       if (!crop || !ready(crop, now))
         throw new RuleError("Урожай ещё не созрел.");
       for (const [item, n] of [
-        [`crop:${crop.plant}`, 3],
+        [
+          `crop:${crop.plant}`,
+          3 + Math.floor(save.progression.skills.farming / 2),
+        ],
         [`seed:${crop.plant}`, 2],
       ] as const)
         save.inventory[item] = (save.inventory[item] ?? 0) + n;
       delete world.crops[k];
+      gainExperience(save, 12);
       break;
     }
     case "mine": {
@@ -911,8 +1027,10 @@ export function applyAction(
       nearby(save, n.x, n.z);
       if (!nodeReady(world, n.id, now))
         throw new RuleError("Ресурс восстанавливается.");
-      save.inventory[n.resource] = (save.inventory[n.resource] ?? 0) + 3;
+      save.inventory[n.resource] =
+        (save.inventory[n.resource] ?? 0) + 3 + save.progression.skills.mining;
       world.depleted[n.id] = now;
+      gainExperience(save, 3);
       break;
     }
     case "craft": {
@@ -971,7 +1089,9 @@ export function applyAction(
         rotation: action.rotation,
         ...(resource ? { resource, collectedAt: now } : {}),
       };
+      prepareFoundation(world, b, save.planet, recipe.size + 1);
       world.buildings.push(b);
+      gainExperience(save, 12);
       if (b.kind === "headquarters") save.interiors[b.id] = [];
       break;
     }
@@ -1098,8 +1218,8 @@ const bSchema = z.object({
     "extractor",
     "bioextractor",
   ]),
-  x: cell,
-  z: cell,
+  x: z.number().finite().min(0).max(224),
+  z: z.number().finite().min(0).max(224),
   rotation: z.number().int().min(0).max(1),
   resource: z.string().optional(),
   collectedAt: z.number().finite().optional(),
@@ -1140,6 +1260,8 @@ const worldSchema = z.object({
     }),
   ),
   lastSimAt: z.number().finite(),
+  cleared: z.array(z.string()).default([]),
+  clearedNodes: z.array(z.string()).default([]),
   terrain: z.record(
     z.string(),
     z.object({
@@ -1159,6 +1281,46 @@ const positionSchema = z.object({
 });
 const saveSchema = z.object({
   version: z.literal(6),
+  hand: z
+    .enum(["pickaxe", "grapple", "sword", "spear", "blaster", "none"])
+    .default("pickaxe"),
+  progression: z
+    .object({
+      xp: z.number().int().min(0).max(1000000000),
+      skills: z.object({
+        farming: z.number().int().min(0).max(5),
+        mining: z.number().int().min(0).max(5),
+        combat: z.number().int().min(0).max(5),
+      }),
+    })
+    .default(freshProgression),
+  cycleEpoch: z
+    .number()
+    .finite()
+    .default(() => Date.now()),
+  grapple: z
+    .object({
+      origin: planet,
+      target: planet,
+      originPosition: z.object({
+        x: z.number().finite(),
+        z: z.number().finite(),
+      }),
+      route: z
+        .array(
+          z.object({
+            x: z.number().finite(),
+            y: z.number().finite(),
+            z: z.number().finite(),
+          }),
+        )
+        .min(2),
+      startedAt: z.number().finite(),
+      endsAt: z.number().finite(),
+      duration: z.number().positive(),
+    })
+    .nullable()
+    .default(null),
   lastMine: z.number().finite(),
   automation: z.object({
     lastTick: z.number().finite(),
@@ -1261,6 +1423,9 @@ export function parseSave(raw: string): Save {
   // Prototype builds deliberately start a new world; no version-to-version migration.
   if ([1, 2, 3, 4, 5].includes(data?.version)) return newGame();
   const save = saveSchema.parse(data) as Save;
+  save.inventory["tool:grapple"] ??= 1;
+  if (data.hand === undefined)
+    save.hand = (save.equipment.weapon as Save["hand"]) ?? "pickaxe";
   for (const p of Object.keys(PLANETS) as PlanetId[])
     if (!save.worlds[p]) throw new Error("Отсутствует планета");
   if (
@@ -1269,6 +1434,13 @@ export function parseSave(raw: string): Save {
       !save.discovered.includes(save.flight.target))
   )
     throw new Error("Повреждённый полёт");
+  if (
+    save.grapple &&
+    (save.grapple.origin !== save.planet ||
+      !save.discovered.includes(save.grapple.target) ||
+      save.flight)
+  )
+    throw new Error("Повреждённый трос");
   if (!save.discovered.includes(save.planet))
     throw new Error("Планета не открыта");
   for (const p of Object.keys(PLANETS) as PlanetId[])
@@ -1385,7 +1557,13 @@ export function advanceEnemies(save: Save, now: number): boolean {
         e.z = e.homeZ;
         e.lastAttack = now;
       }
-  if (save.flight || save.inside || !PLANETS[save.planet].hostile) return false;
+  if (
+    save.grapple ||
+    save.flight ||
+    save.inside ||
+    !PLANETS[save.planet].hostile
+  )
+    return false;
   const dt = Math.max(0, Math.min(1.5, (now - world.lastSimAt) / 1000));
   world.lastSimAt = now;
   for (const [i, e] of world.enemies.entries()) {
@@ -1431,7 +1609,7 @@ export function advanceEnemies(save: Save, now: number): boolean {
       save.health = 100;
       save.deaths++;
       save.planet = "home";
-      save.position = { x: 18, z: 21 };
+      save.position = offsetPoint(ship("home"), -1, 0, "home");
       save.inside = null;
       save.outsidePosition = null;
       return true;

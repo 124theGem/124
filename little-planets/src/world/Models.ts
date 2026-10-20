@@ -1,3 +1,4 @@
+import { habitat } from "./Habitats";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import * as T from "three";
 import {
@@ -381,122 +382,8 @@ export class Models {
     }
     return root;
   }
-  building(kind: BuildingKind, planet: PlanetId = "listoria"): T.Group {
-    if (kind === "headquarters" || kind === "laboratory") {
-      const root = this.building(
-        kind === "headquarters" ? "house" : "warehouse",
-        planet,
-      );
-      root.scale.set(1.5, 1.15, 1.5);
-      if (kind === "headquarters") {
-        this.box(root, -0.6, 2.7, 0.2, 0.055, 0.9, 0.055, 0xb7c6c5);
-        this.box(root, -0.37, 2.95, 0.2, 0.45, 0.3, 0.055, 0xe5ba6e);
-        this.box(root, 0, 1.52, 1.03, 0.6, 0.2, 0.05, 0xf0d694, true);
-      } else {
-        this.box(root, 0, 2.18, 0, 1, 0.6, 1, 0x9bd6df, false, 0.6);
-        this.box(root, 0.6, 2.65, -0.3, 0.05, 1, 0.05, 0xd8e7e3);
-        const dish = this.box(root, 0.6, 3.08, -0.3, 0.7, 0.1, 0.4, 0xb4d9e8);
-        dish.rotation.z = 0.4;
-        this.box(root, 0, 1.1, 1, 0.65, 0.42, 0.04, 0x91cce8, true);
-      }
-      return root;
-    }
-    if (kind === "extractor" || kind === "bioextractor") {
-      const root = new T.Group(),
-        bio = kind === "bioextractor";
-      this.box(root, 0, 0.12, 0, 1.9, 0.24, 1.9, 0x7c8f9c);
-      for (const side of [-1, 1])
-        this.box(root, side * 0.7, 0.9, -0.5, 0.15, 1.5, 0.18, 0xd9c294);
-      this.box(root, 0, 1.6, -0.5, 1.7, 0.16, 0.2, 0xe8bc72);
-      this.box(root, 0, 0.7, 0, 0.8, 1.2, 0.85, bio ? 0x78aa91 : 0x849cae);
-      this.box(root, 0, 1.45, 0, 0.65, 0.3, 0.65, 0xdbc09a);
-      this.box(
-        root,
-        0.52,
-        0.9,
-        0.48,
-        0.15,
-        0.55,
-        0.4,
-        bio ? 0x8fe3a0 : 0x81d9ef,
-        true,
-      );
-      for (let i = 0; i < 5; i++)
-        this.box(root, 0, 0.17 + i * 0.2, 0.05, 0.24, 0.12, 0.24, 0xb1c3ca);
-      for (const side of [-1, 1])
-        this.box(root, side * 0.7, 0.25, 0.5, 0.45, 0.22, 0.55, 0x546779);
-      if (bio) {
-        const sprout = this.plant("glowbush");
-        sprout.position.set(0, 1.5, 0);
-        root.add(sprout);
-      } else this.box(root, 0, 1.86, -0.5, 0.4, 0.13, 0.4, 0xf0aa5b, true);
-      return root;
-    }
-
-    const root = new T.Group(),
-      wood =
-        planet === "pyros"
-          ? 0x797076
-          : planet === "mycelia"
-            ? 0x8b74a0
-            : 0xd4c8a6,
-      roof =
-        planet === "pyros"
-          ? 0x66616c
-          : planet === "mycelia"
-            ? 0x7762a1
-            : 0xa28e69;
-    this.box(root, 0, 0.12, 0, 2.1, 0.24, 2.1, 0x8c8c82);
-    if (kind === "greenhouse") {
-      this.box(root, 0, 0.95, 0, 1.9, 1.6, 1.9, 0x8cdcd1, false, 0.28);
-      for (const x of [-0.95, 0, 0.95])
-        for (const z of [-0.95, 0.95])
-          this.box(root, x, 0.98, z, 0.06, 1.7, 0.06, 0xe5dcb9);
-      for (const y of [0.28, 1.75])
-        this.box(root, 0, y, 0, 2, 0.06, 2, 0xd7d1b6, false, y > 1 ? 0.45 : 1);
-      for (const x of [-0.6, 0, 0.6]) {
-        const plant = this.plant("sunflower");
-        plant.position.set(x, 0.25, 0.25);
-        root.add(plant);
-      }
-      this.box(root, 0, 1.9, 0, 1.35, 0.18, 2, 0x9bdbcc, false, 0.4);
-    } else {
-      this.box(root, 0, 0.95, 0, 1.85, 1.5, 1.85, wood);
-      for (let i = 0; i < 6; i++)
-        this.box(root, 0, 0.33 + i * 0.24, 0.94, 1.9, 0.035, 0.035, 0xa27958);
-      if (kind === "house") {
-        for (let i = 0; i < 6; i++)
-          this.box(
-            root,
-            0,
-            1.77 + i * 0.16,
-            0,
-            2.4 - i * 0.32,
-            0.18,
-            2.4,
-            roof,
-          );
-        this.box(root, 0.65, 2.28, -0.5, 0.28, 0.9, 0.32, 0xb39d82);
-        this.box(root, 0.65, 2.76, -0.5, 0.4, 0.12, 0.42, 0xd7c6aa);
-      } else this.box(root, 0, 1.8, 0, 2.2, 0.22, 2.2, roof);
-      this.box(root, 0, 0.72, 0.955, 0.45, 1, 0.07, 0x715340);
-      this.box(root, 0.15, 0.76, 1, 0.05, 0.05, 0.04, 0xf6d08b, true);
-      for (const x of [-0.6, 0.6]) {
-        this.box(root, x, 1.12, 0.96, 0.45, 0.48, 0.05, 0x674a44);
-        this.box(root, x, 1.12, 1, 0.32, 0.34, 0.035, 0xffd18c, true);
-        this.box(root, x, 1.12, 1.025, 0.025, 0.36, 0.02, 0xc5aa80);
-      }
-      this.box(root, 0, 0.16, 1.16, 0.75, 0.15, 0.35, 0xb4aa8e);
-      if (kind === "warehouse")
-        for (const [x, z] of [
-          [-0.7, 1.15],
-          [0.7, 1.15],
-        ]) {
-          this.box(root, x, 0.38, z, 0.5, 0.5, 0.45, 0xb79160);
-          this.box(root, x, 0.4, z + 0.24, 0.43, 0.05, 0.03, 0x7e644b);
-        }
-    }
-    return root;
+  building(kind: BuildingKind, planet: PlanetId = "home"): T.Group {
+    return habitat(this, kind, planet);
   }
   ship() {
     const root = new T.Group();

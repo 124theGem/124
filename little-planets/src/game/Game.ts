@@ -1,3 +1,8 @@
+import { SurfaceFollower } from "../world/Motion";
+import { FirstPersonHands } from "../world/FirstPersonHands";
+import { ZiplineScene } from "../world/ZiplineScene";
+import { dayCycle } from "../../shared/daylight";
+import { cubeVisualUp } from "../../shared/sphere";
 import { Occlusion } from "../world/Occlusion";
 import { AutomationActors } from "../world/AutomationActors";
 import { AutomationPanel } from "../ui/AutomationPanel";
@@ -99,6 +104,17 @@ export class Game {
   private terrainMode: "dig" | "place" = "dig";
   private terrainMaterial: "stone" | "wood" | "obsidian" = "stone";
   private buildOnCube?: BuildingKind;
+  private firstPerson = false;
+  private lookPitch = 0;
+  private visualUp = new T.Vector3(0, 1, 0);
+  private renderForward = new T.Vector3(0, 0, 1);
+  private surfaceMotion = new SurfaceFollower();
+  private firstHands!: FirstPersonHands;
+  private zipline?: ZiplineScene;
+  private ziplinePoll = 0;
+  private ziplinePending = false;
+  private ambient = new T.HemisphereLight(0xdce8df, 0x374335, 1.05);
+  private lantern = new T.PointLight(0xffe8bd, 0, 12, 1.5);
   private scene = new T.Scene();
   private sky = new StarSky();
   private space?: SpaceScene;
@@ -110,7 +126,8 @@ export class Game {
     antialias: true,
     powerPreference: "high-performance",
   });
-  private camera = new T.OrthographicCamera(-13, 13, 10, -10, 0.1, 300);
+  private camera: T.OrthographicCamera | T.PerspectiveCamera =
+    new T.OrthographicCamera(-13, 13, 10, -10, 0.1, 300);
   private kit = new Models();
   private avatar = new Astronaut(this.kit);
   private view!: Planet | Interior | SphereWorld;
@@ -182,7 +199,10 @@ export class Game {
     document.querySelector("#app")!.append(this.renderer.domElement);
     this.ui = new UI(store.local);
     this.input = new Input();
-    this.scene.add(new T.HemisphereLight(0xdce8df, 0x374335, 1.05));
+    this.scene.add(this.ambient, this.lantern);
+    this.firstHands = new FirstPersonHands(this.kit);
+    this.firstHands.root.visible = false;
+    this.scene.add(this.firstHands.root);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(
       devicePixelRatio < 1 ? 1024 : 2048,
@@ -235,6 +255,20 @@ export class Game {
     this.ui.onCraftMenu = () => menu(() => this.ui.craft(store.state));
     this.ui.onOpenRecipe = (id) =>
       menu(() => this.ui.craft(store.state, "Мебель", id));
+    this.ui.onFirstPerson = () => this.toggleFirstPerson();
+    this.ui.onHand = (hand) => void this.chooseHand(hand);
+    this.ui.onUnderfoot = () => void this.placeUnderfoot();
+    this.ui.onSkills = () => menu(() => this.ui.skills(this.store.state));
+    this.ui.onSpendSkill = async (skill) => {
+      try {
+        await this.store.action({ type: "spendSkill", skill });
+        this.ui.skills(this.store.state);
+      } catch (e) {
+        this.ui.toast((e as Error).message);
+      }
+    };
+    this.ui.onGrapple = (id) => void this.startGrapple(id);
+    this.ui.button("zipline-cancel", () => void this.finishZipline(true));
     this.ui.onPlant = () => this.selectNearestBed();
     this.ui.onAttack = () => void this.attack();
     this.ui.onScan = () => void this.scan();
@@ -248,6 +282,11 @@ export class Game {
     this.ui.onBuild = () => this.startBuild();
     this.ui.onCamera = () => {
       if (this.mode === "build" || this.flying) return;
+      if (this.firstPerson) {
+        this.toggleFirstPerson();
+        this.mode = "planet";
+        return;
+      }
       this.mode = this.mode === "planet" ? "explore" : "planet";
     };
     this.ui.onSettings = () =>
@@ -282,6 +321,12 @@ export class Game {
     this.ui.onContextClose = () => this.clearSelection();
     this.ui.onGalaxy = () => {
       if (store.state.inside) return;
+      if (store.state.hand === "grapple") {
+        this.ui.travelMode = "grapple";
+        menu(() => this.ui.galaxy(store.state));
+        return;
+      }
+      this.ui.travelMode = "ship";
       this.approach({ ...ship(store.state.planet), type: "ship" }, () => {
         this.ui.hideContext();
         this.ui.galaxy(store.state);
@@ -344,6 +389,32 @@ export class Game {
     window.addEventListener(
       "keydown",
       (e) => {
+        if (
+          !this.ui.modalOpen &&
+          !(
+            e.target instanceof HTMLInputElement ||
+            e.target instanceof HTMLSelectElement
+          )
+        ) {
+          if (e.code === "KeyF") {
+            e.preventDefault();
+            this.toggleFirstPerson();
+          }
+          if (/^Digit[1-6]$/.test(e.code)) {
+            const hand = (
+              [
+                "pickaxe",
+                "grapple",
+                "sword",
+                "spear",
+                "blaster",
+                "none",
+              ] as const
+            )[Number(e.code.at(-1)) - 1];
+            void this.chooseHand(hand);
+          }
+          if (e.code === "KeyB") void this.placeUnderfoot();
+        }
         if (e.code === "Space" && !this.ui.modalOpen) {
           e.preventDefault();
           void this.attack();
@@ -402,6 +473,7 @@ export class Game {
     );
     this.resize();
     if (store.state.flight) this.enterSpace();
+    if (store.state.grapple) this.enterZipline();
     this.renderer.setAnimationLoop(this.frame);
     if (new URLSearchParams(location.search).has("debug"))
       Object.defineProperty(window, "__planets", {
@@ -452,6 +524,19 @@ export class Game {
               .applyQuaternion(this.avatar.root.quaternion)
               .toArray(),
             sphereForward: this.sphereForward.toArray(),
+            firstPerson: this.firstPerson,
+            hand: store.state.hand,
+            zipline: store.state.grapple,
+            ziplineRider: this.zipline?.rider.position.toArray(),
+            ziplineCameraDistance: this.zipline?.followDistance,
+            machines: this.machines.positions,
+            enemies: this.enemies?.positions ?? [],
+            daylight: dayCycle(
+              store.state.cycleEpoch,
+              store.now(),
+              this.visualUp,
+            ),
+            visualUp: this.visualUp.toArray(),
             sky: {
               ...this.sky.stats,
               origin: this.sky.root.position.toArray(),
@@ -484,6 +569,117 @@ export class Game {
         },
       });
     this.ui.toast("Нажмите ☰ для меню. Приятного путешествия!");
+  }
+  private toggleFirstPerson() {
+    if (this.flying || this.busy) return;
+    this.firstPerson = !this.firstPerson;
+    this.art?.dispose();
+    this.camera = this.firstPerson
+      ? new T.PerspectiveCamera(70, innerWidth / innerHeight, 0.035, 400)
+      : new T.OrthographicCamera(-13, 13, 10, -10, 0.1, 300);
+    this.art = new ArtRenderer(this.renderer, this.scene, this.camera);
+    this.ui.el("crosshair").classList.toggle("hidden", !this.firstPerson);
+    this.ui
+      .el("first-person")
+      .setAttribute("aria-pressed", String(this.firstPerson));
+    this.updateCamera(1, true);
+  }
+  private async chooseHand(hand: import("../../shared/model").Save["hand"]) {
+    if (this.flying || this.busy) return;
+    try {
+      await this.store.action({ type: "hand", item: hand });
+      this.avatar.equip(
+        this.store.state.equipment.weapon,
+        this.store.state.equipment.armor,
+        this.store.state.hand,
+      );
+      this.ui.update(this.store.state, this.store.now());
+      if (hand === "pickaxe") {
+        this.terrainMode = "dig";
+        this.buildOnCube = undefined;
+      }
+      if (hand === "grapple") {
+        this.ui.travelMode = "grapple";
+        this.ui.galaxy(this.store.state);
+      }
+    } catch (error) {
+      this.ui.toast((error as Error).message);
+    }
+  }
+  private async placeUnderfoot() {
+    if (this.busy || this.flying || this.store.state.inside) return;
+    await this.perform(
+      {
+        type: "terrain",
+        mode: "place",
+        material: this.terrainMaterial,
+        x: this.position.x,
+        z: this.position.z,
+      },
+      "tool",
+      "Блок установлен под ногами.",
+    );
+  }
+  private async startGrapple(target: PlanetId) {
+    if (this.busy || this.flying) return;
+    this.busy = true;
+    try {
+      await this.flushMove();
+      await this.store.action({ type: "grappleStart", planet: target });
+      this.ui.close();
+      this.enterZipline();
+    } catch (error) {
+      this.ui.toast((error as Error).message);
+    } finally {
+      this.busy = false;
+    }
+  }
+  private enterZipline() {
+    const g = this.store.state.grapple;
+    if (!g) return;
+    this.zipline = new ZiplineScene(this.kit, g, this.store.state);
+    this.flying = true;
+    this.input.clear();
+    this.ui.root.classList.add("in-zipline");
+    this.ui.el("zipline-hud").classList.remove("hidden");
+    this.ui.el("zipline-target").textContent =
+      `Трос → ${PLANETS[g.target].name}`;
+    this.ziplinePoll = 0;
+  }
+  private ziplineFrame(dt: number, time: number) {
+    const progress = this.zipline!.update(this.store.now(), dt);
+    (this.ui.el("zipline-progress") as HTMLProgressElement).value = progress;
+    this.renderer.render(this.zipline!.scene, this.zipline!.camera);
+    if (time - this.ziplinePoll > 500 && !this.ziplinePending) {
+      this.ziplinePoll = time;
+      void this.finishZipline(false);
+    }
+  }
+  private async finishZipline(cancel: boolean) {
+    if (this.ziplinePending || !this.store.state.grapple) return;
+    this.ziplinePending = true;
+    try {
+      await this.store.action({
+        type: cancel ? "grappleCancel" : "grappleTick",
+      });
+      if (!this.store.state.grapple) {
+        this.zipline?.dispose();
+        this.zipline = undefined;
+        this.flying = false;
+        this.ui.root.classList.remove("in-zipline");
+        this.ui.el("zipline-hud").classList.add("hidden");
+        this.loadScene();
+        this.ui.toast(
+          cancel
+            ? "Возвращение к точке гарпуна."
+            : "Вы приехали на другую планету.",
+        );
+      }
+    } catch (e) {
+      this.ui.el("save-status").textContent = (e as Error).message;
+    } finally {
+      this.ziplinePending = false;
+    }
   }
   private async scan() {
     if (this.busy) return;
@@ -570,30 +766,43 @@ export class Game {
   }
   private updateSphereCamera(dt: number, instant = false) {
     const aspect = innerWidth / innerHeight,
-      n = this.sphereUp(this.position),
-      forward = this.sphereForward
-        .clone()
-        .addScaledVector(n, -this.sphereForward.dot(n))
-        .normalize();
-    this.sphereForward.copy(forward);
+      n = this.visualUp,
+      forward = this.renderForward.clone().projectOnPlane(n).normalize(),
+      blend = instant ? 1 : 1 - Math.exp(-7 * dt),
+      feet = this.avatar.root.position;
+    if (this.camera instanceof T.PerspectiveCamera) {
+      const eye = feet.clone().addScaledVector(n, 1.12),
+        look = forward
+          .clone()
+          .negate()
+          .multiplyScalar(Math.cos(this.lookPitch))
+          .addScaledVector(n, Math.sin(this.lookPitch));
+      this.camera.position.copy(eye);
+      this.camera.up.copy(n);
+      this.camera.aspect = aspect;
+      this.camera.updateProjectionMatrix();
+      this.target.copy(eye).add(look);
+      this.camera.lookAt(this.target);
+      this.camera.updateMatrixWorld();
+      return;
+    }
     const overview = this.mode === "planet",
       target = overview
         ? new T.Vector3()
-        : this.spherePoint(this.position, 2.3).addScaledVector(forward, -2.5),
+        : feet.clone().addScaledVector(n, 2.3).addScaledVector(forward, -2.5),
       position = overview
         ? n
             .clone()
             .multiplyScalar(sphereRadius(this.store.state.planet) + 44)
             .addScaledVector(forward, 22)
-        : this.spherePoint(this.position, 13.5).addScaledVector(forward, 14),
-      blend = instant ? 1 : 1 - Math.exp(-7 * dt);
-    this.target.copy(target);
+        : feet.clone().addScaledVector(n, 13.5).addScaledVector(forward, 14);
+    this.target.lerp(target, blend);
+    this.camera.up.copy(n);
+    this.camera.position.lerp(position, blend);
     if (this.scene.fog instanceof T.Fog) {
       this.scene.fog.near = overview ? 85 : 28;
       this.scene.fog.far = overview ? 180 : 100;
     }
-    this.camera.up.lerp(n, blend).normalize();
-    this.camera.position.lerp(position, blend);
     const half =
       (overview ? (sphereRadius(this.store.state.planet) + 11) * 1.08 : 8.2) *
       this.zoom *
@@ -604,16 +813,18 @@ export class Game {
     this.camera.top = this.cameraHalf;
     this.camera.bottom = -this.cameraHalf;
     this.camera.updateProjectionMatrix();
-    const desired = this.camera.clone();
-    desired.lookAt(target);
-    this.camera.quaternion.slerp(desired.quaternion, blend);
+    this.camera.lookAt(this.target);
     this.camera.updateMatrixWorld();
   }
   private moveSphere(dt: number) {
     if (this.busy || this.ui.modalOpen || this.flying) return false;
     const input = this.input.read(),
       up = this.sphereUp(this.position),
-      right = new T.Vector3().crossVectors(up, this.sphereForward).normalize();
+      controlForward = this.renderForward
+        .clone()
+        .projectOnPlane(up)
+        .normalize(),
+      right = new T.Vector3().crossVectors(up, controlForward).normalize();
     let direction = new T.Vector3();
     if (Math.hypot(input.x, input.z) > 0.08) {
       this.sphereDestination = undefined;
@@ -621,7 +832,7 @@ export class Game {
       this.clearSelection();
       direction
         .addScaledVector(right, input.x)
-        .addScaledVector(this.sphereForward, input.z);
+        .addScaledVector(controlForward, input.z);
       this.mode = "explore";
     } else if (this.sphereDestination) {
       const raw = sphereNormal(this.sphereDestination, this.store.state.planet);
@@ -677,6 +888,7 @@ export class Game {
   private resize = () => {
     this.renderer.setSize(innerWidth, innerHeight);
     this.space?.resize();
+    this.zipline?.resize();
     this.art?.resize();
     if (!this.flying) this.updateCamera(1, true);
   };
@@ -684,6 +896,26 @@ export class Game {
     if (this.flying) return;
     if (!this.store.state.inside && isSphere(this.store.state.planet)) {
       this.updateSphereCamera(dt, instant);
+      return;
+    }
+    if (this.camera instanceof T.PerspectiveCamera) {
+      this.camera.position
+        .copy(this.avatar.root.position)
+        .add(new T.Vector3(0, 1.12, 0));
+      this.camera.up.set(0, 1, 0);
+      this.camera.aspect = innerWidth / innerHeight;
+      this.camera.lookAt(
+        this.camera.position
+          .clone()
+          .add(
+            new T.Vector3(
+              -Math.sin(this.theta) * Math.cos(this.lookPitch),
+              Math.sin(this.lookPitch),
+              -Math.cos(this.theta) * Math.cos(this.lookPitch),
+            ),
+          ),
+      );
+      this.camera.updateProjectionMatrix();
       return;
     }
     this.camera.up.set(0, 1, 0);
@@ -755,7 +987,8 @@ export class Game {
       (e) => {
         const previous = pointers.get(e.pointerId);
         if (!previous) return;
-        const delta = e.clientX - previous.x;
+        const delta = e.clientX - previous.x,
+          deltaY = e.clientY - previous.y;
         pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
         if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > 7)
           moved = true;
@@ -771,6 +1004,15 @@ export class Game {
           distance = next;
         } else if (moved && !this.flying) {
           this.theta -= delta * 0.007;
+          if (this.firstPerson)
+            this.lookPitch = T.MathUtils.clamp(
+              this.lookPitch - deltaY * 0.005,
+              -1.3,
+              1.3,
+            );
+          this.renderForward
+            .applyAxisAngle(this.visualUp, -delta * 0.007)
+            .normalize();
           if (!this.store.state.inside && isSphere(this.store.state.planet))
             this.sphereForward
               .applyAxisAngle(this.sphereUp(this.position), -delta * 0.007)
@@ -824,7 +1066,11 @@ export class Game {
       let selected: Selection = { ...point, type: "ground" };
       const pad = ship(this.store.state.planet),
         node = nodes(this.store.state.planet).find(
-          (n) => surfaceDistance(point, n, this.store.state.planet) < 1.1,
+          (n) =>
+            !this.store.state.worlds[
+              this.store.state.planet
+            ].clearedNodes.includes(n.id) &&
+            surfaceDistance(point, n, this.store.state.planet) < 1.1,
         );
       const building = this.store.state.worlds[
         this.store.state.planet
@@ -954,6 +1200,14 @@ export class Game {
     this.clearSelection();
     this.selected = s;
     this.sphereDestination = undefined;
+    if (
+      !this.store.state.inside &&
+      surfaceDistance(this.position, s, this.store.state.planet) < 1.45
+    ) {
+      this.arrived = undefined;
+      done();
+      return;
+    }
     if (!this.store.state.inside && isSphere(this.store.state.planet)) {
       this.sphereDestination = { x: s.x, z: s.z };
       this.arrived = done;
@@ -1100,8 +1354,8 @@ export class Game {
           {
             type: "build",
             kind: this.buildOnCube,
-            x: Math.round(s.x),
-            z: Math.round(s.z),
+            x: s.x,
+            z: s.z,
             rotation: 0,
           },
           "tool",
@@ -1220,6 +1474,7 @@ export class Game {
       this.avatar.equip(
         this.store.state.equipment.weapon,
         this.store.state.equipment.armor,
+        this.store.state.hand,
       );
       if (action.type === "attack") {
         const e = this.store.state.worlds[this.store.state.planet].enemies.find(
@@ -1545,8 +1800,26 @@ export class Game {
     if (state.inside || !isSphere(state.planet))
       this.avatar.root.quaternion.identity();
     this.position = { ...state.position };
+    const rawUp = state.inside
+      ? { x: 0, y: 1, z: 0 }
+      : cubeVisualUp(this.position, state.planet);
+    this.visualUp.set(rawUp.x, rawUp.y, rawUp.z);
+    this.renderForward
+      .copy(this.sphereForward)
+      .projectOnPlane(this.visualUp)
+      .normalize();
+    this.surfaceMotion.reset(
+      state.inside
+        ? new T.Vector3(this.position.x, 0.07, this.position.z)
+        : this.spherePoint(this.position, 0.06),
+    );
+    this.avatar.root.position.copy(this.surfaceMotion.position);
     this.sphereDestination = undefined;
-    this.avatar.equip(state.equipment.weapon, state.equipment.armor);
+    this.avatar.equip(
+      state.equipment.weapon,
+      state.equipment.armor,
+      state.hand,
+    );
     this.clearSelection();
     this.path = [];
     this.arrived = undefined;
@@ -1807,6 +2080,10 @@ export class Game {
     const raw = this.previousTime ? (time - this.previousTime) / 1000 : 0,
       dt = Math.min(0.08, raw);
     this.previousTime = time;
+    if (this.zipline) {
+      this.ziplineFrame(dt, time);
+      return;
+    }
     if (this.space) {
       this.spaceFrame(dt, time);
       return;
@@ -1874,17 +2151,27 @@ export class Game {
       if (moving) this.avatar.root.rotation.y = Math.atan2(input.x, input.z);
     }
     if (!this.store.state.inside && isSphere(this.store.state.planet)) {
-      const up = this.sphereUp(this.position),
-        heading = this.sphereHeading
-          .clone()
-          .addScaledVector(up, -this.sphereHeading.dot(up))
-          .normalize(),
+      const visual = cubeVisualUp(this.position, this.store.state.planet),
+        up = new T.Vector3(visual.x, visual.y, visual.z),
+        transport = new T.Quaternion().setFromUnitVectors(this.visualUp, up);
+      this.renderForward
+        .applyQuaternion(transport)
+        .projectOnPlane(up)
+        .normalize();
+      this.visualUp.copy(up);
+      const heading = this.sphereHeading.clone().projectOnPlane(up).normalize(),
         right = new T.Vector3().crossVectors(up, heading).normalize();
-      this.avatar.root.position.copy(this.spherePoint(this.position, 0.06));
+      this.avatar.root.position.copy(
+        this.surfaceMotion.update(
+          this.spherePoint(this.position, 0.06),
+          this.sphereUp(this.position),
+          dt,
+        ),
+      );
       const rotation = new T.Quaternion().setFromRotationMatrix(
         new T.Matrix4().makeBasis(right, up, heading),
       );
-      this.avatar.root.quaternion.slerp(rotation, 1 - Math.exp(-10 * dt));
+      this.avatar.root.quaternion.slerp(rotation, 1 - Math.exp(-12 * dt));
     } else {
       this.avatar.root.position.set(
         this.position.x,
@@ -1901,24 +2188,40 @@ export class Game {
     }
     this.avatar.update(time / 1000, dt, moving);
     this.updateCamera(dt);
-    this.sun.position.set(
-      this.target.x - 8,
-      this.target.y + 26,
-      this.target.z + 16,
-    );
-    if (!this.store.state.inside && isSphere(this.store.state.planet))
-      this.sun.position
-        .copy(this.avatar.root.position)
-        .addScaledVector(this.sphereUp(this.position), 30)
-        .addScaledVector(this.sphereForward, 10)
-        .addScaledVector(
-          new T.Vector3().crossVectors(
-            this.sphereUp(this.position),
-            this.sphereForward,
-          ),
-          -17,
-        );
-    this.sun.target.position.copy(this.target);
+    const cycle = dayCycle(
+        this.store.state.cycleEpoch,
+        this.store.now(),
+        this.visualUp,
+      ),
+      dir = new T.Vector3(
+        cycle.direction.x,
+        cycle.direction.y,
+        cycle.direction.z,
+      );
+    this.sun.position.copy(this.avatar.root.position).addScaledVector(dir, 38);
+    this.sun.target.position.copy(this.avatar.root.position);
+    this.sun.intensity = 0.35 + cycle.daylight * 2.8;
+    this.ambient.intensity = 0.38 + cycle.daylight * 0.8;
+    this.ambient.color.setHex(cycle.daylight > 0.5 ? 0xdce8df : 0x819ebf);
+    this.lantern.position
+      .copy(this.avatar.root.position)
+      .addScaledVector(this.visualUp, 1.2);
+    this.lantern.intensity = (1 - cycle.daylight) * 6;
+    if (!this.store.state.inside)
+      this.scene.background = new T.Color(0x061426).lerp(
+        new T.Color(0x9cbcaf),
+        cycle.daylight * 0.65,
+      );
+    this.ui.el("day-clock").textContent = `${cycle.label} · ${cycle.clock}`;
+    this.avatar.root.visible = !this.firstPerson;
+    this.firstHands.root.visible = this.firstPerson;
+    if (this.firstPerson)
+      this.firstHands.update(
+        this.store.state.hand,
+        this.camera,
+        time / 1000,
+        moving,
+      );
     this.view.animate(time / 1000);
     this.life?.update(this.store.state, time / 1000, dt);
     this.enemies?.update(this.store.state, time / 1000, dt);
@@ -1991,6 +2294,8 @@ export class Game {
     this.machines.dispose();
     this.occlusion.dispose();
     this.art?.dispose();
+    this.zipline?.dispose();
+    this.firstHands.dispose();
     this.sky.dispose();
     this.space?.dispose();
     this.telegram.dispose();

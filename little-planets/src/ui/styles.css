@@ -2488,3 +2488,173 @@ button:hover {
     0 0 0 3px #edcd82,
     0 4px 18px #0005;
 }
+.handbar {
+  position: absolute;
+  bottom: calc(var(--bottom) + 14px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 5px;
+  pointer-events: auto;
+  padding: 6px;
+  border: 1px solid #b2c7af55;
+  border-radius: 15px;
+  background: #213c37d9;
+  backdrop-filter: blur(12px);
+}
+.handbar button {
+  position: relative;
+  width: 42px;
+  height: 44px;
+  padding: 4px;
+  min-height: 0;
+  color: #f2ecd6;
+  background: #365449;
+  border: 1px solid #91ac8d66;
+  border-radius: 9px;
+}
+.handbar button[aria-pressed="true"] {
+  background: #dcc38d;
+  color: #253e32;
+  outline: 2px solid #f1deb1;
+}
+.handbar button:disabled {
+  opacity: 0.3;
+}
+.handbar button small {
+  position: absolute;
+  top: 1px;
+  left: 4px;
+  font-size: 8px;
+}
+.handbar button span {
+  font-size: 21px;
+}
+.underfoot {
+  position: absolute;
+  bottom: 78px;
+  right: 20px;
+  pointer-events: auto;
+  background: #345348dc;
+  color: #f1e8cc;
+  border: 1px solid #b9c4a5;
+  border-radius: 12px;
+  padding: 9px;
+}
+.progress-hud {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 79px;
+  width: 220px;
+  pointer-events: auto;
+  text-align: center;
+  font-size: 10px;
+  color: #e7efda;
+  text-shadow: 0 1px 3px #132a25;
+}
+.progress-hud button {
+  font-size: 10px;
+  min-height: 20px;
+  padding: 2px 7px;
+  background: #28473ce6;
+  color: #f1e8cc;
+  border-radius: 8px;
+}
+.progress-hud > div {
+  height: 3px;
+  background: #1d3c32;
+  margin: 4px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.progress-hud i {
+  height: 100%;
+  display: block;
+  background: #ebcd7c;
+}
+.crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 22px;
+  color: white;
+  text-shadow: 0 0 3px #234;
+  pointer-events: none;
+}
+.zipline-hud {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(90vw, 430px);
+  text-align: center;
+  background: #203f3ee0;
+  border: 1px solid #a8c2b4;
+  border-radius: 16px;
+  color: #f0e7ce;
+  padding: 15px;
+  pointer-events: auto;
+}
+.zipline-hud progress {
+  width: 90%;
+  accent-color: #d8c18d;
+}
+.in-zipline .topbar,
+.in-zipline .minimap,
+.in-zipline .bottom,
+.in-zipline #joystick,
+.in-zipline .handbar,
+.in-zipline .underfoot,
+.in-zipline .progress-hud,
+.in-zipline .keyboard,
+.in-zipline #attack,
+.in-zipline #crosshair {
+  display: none !important;
+}
+.in-flight .handbar,
+.in-flight .underfoot,
+.in-flight .progress-hud,
+.in-flight #crosshair {
+  display: none !important;
+}
+.travel-selector {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 12px 0;
+}
+.travel-selector select {
+  padding: 9px;
+  border-radius: 9px;
+  color: #274c3d;
+  background: #eee9d5;
+}
+@media (max-width: 600px) {
+  .handbar {
+    bottom: calc(var(--bottom) + 10px);
+    gap: 3px;
+    padding: 4px;
+  }
+  .handbar button {
+    width: 31px;
+    height: 38px;
+  }
+  .progress-hud {
+    bottom: 65px;
+    width: 190px;
+  }
+  .underfoot {
+    right: 12px;
+    bottom: 120px;
+    font-size: 10px;
+  }
+  .top-buttons {
+    gap: 3px;
+  }
+  .top-buttons button {
+    width: 29px;
+    min-width: 29px;
+  }
+}

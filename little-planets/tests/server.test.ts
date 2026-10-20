@@ -1,3 +1,4 @@
+import { newGame } from "../shared/model";
 import { ship } from "../shared/catalog";
 import { describe, it, expect } from "vitest";
 import { DatabaseSync } from "node:sqlite";
@@ -232,6 +233,57 @@ describe("SQLite persistence and authenticated API", () => {
       expect(malformed.statusCode).toBe(400);
     } finally {
       await app.close();
+    }
+  });
+});
+
+describe("additive Cubeworks v6 migration", () => {
+  it("persists added defaults exactly once without changing the player progress", () => {
+    const dir = mkdtempSync(join(tmpdir(), "planets-v6-")),
+      file = join(dir, "state.sqlite");
+    let store = new Store(file);
+    store.close();
+    const old: any = newGame(1000);
+    old.revision = 42;
+    old.inventory.wood = 37;
+    delete old.hand;
+    delete old.progression;
+    delete old.grapple;
+    delete old.cycleEpoch;
+    delete old.inventory["tool:grapple"];
+    for (const w of Object.values(old.worlds) as any[]) {
+      delete w.cleared;
+      delete w.clearedNodes;
+    }
+    const db = new DatabaseSync(file);
+    db.prepare("INSERT INTO saves(user_id,state) VALUES(?,?)").run(
+      "12",
+      JSON.stringify(old),
+    );
+    db.close();
+    try {
+      store = new Store(file);
+      const first = store.get(12);
+      store.close();
+      store = new Store(file);
+      const second = store.get(12);
+      expect(second).toEqual(first);
+      expect(second.revision).toBe(42);
+      expect(second.inventory.wood).toBe(37);
+      expect(second.inventory["tool:grapple"]).toBe(1);
+      const check = new DatabaseSync(file);
+      try {
+        const row = check
+          .prepare("SELECT state FROM saves WHERE user_id=?")
+          .get("12") as { state: string };
+        expect(JSON.parse(row.state).cycleEpoch).toBe(first.cycleEpoch);
+        expect(JSON.parse(row.state).progression.xp).toBe(0);
+      } finally {
+        check.close();
+      }
+    } finally {
+      store.close();
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 });

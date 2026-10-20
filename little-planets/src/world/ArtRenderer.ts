@@ -25,7 +25,7 @@ export class ArtRenderer {
   constructor(
     private renderer: T.WebGLRenderer,
     scene: T.Scene,
-    private camera: T.OrthographicCamera,
+    private camera: T.OrthographicCamera | T.PerspectiveCamera,
   ) {
     this.floatTargets = renderer.extensions.has("EXT_color_buffer_float");
     this.composer = new EffectComposer(
@@ -53,8 +53,10 @@ export class ArtRenderer {
     this.ao.kernelRadius = 1.35;
     this.ao.minDistance = 0.0008;
     this.ao.maxDistance = 0.035;
-    this.ao.ssaoMaterial.defines.PERSPECTIVE_CAMERA = 0;
-    this.ao.depthRenderMaterial.defines.PERSPECTIVE_CAMERA = 0;
+    this.ao.ssaoMaterial.defines.PERSPECTIVE_CAMERA =
+      camera instanceof T.PerspectiveCamera ? 1 : 0;
+    this.ao.depthRenderMaterial.defines.PERSPECTIVE_CAMERA =
+      camera instanceof T.PerspectiveCamera ? 1 : 0;
     const setSize = this.ao.setSize.bind(this.ao);
     this.ao.setSize = (w, h) =>
       setSize(

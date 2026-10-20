@@ -1,3 +1,4 @@
+import { ActorFollower } from "./Motion";
 import * as T from "three";
 import { Models } from "./Models";
 import { spherePoint, sphereUp } from "./SphereWorld";
@@ -7,23 +8,18 @@ import type { DeviceKind } from "../../shared/automation";
 export class AutomationActors {
   readonly root = new T.Group();
   private actors = new Map<string, T.Group>();
+  private motions = new Map<string, ActorFollower>();
+  private previousTime = 0;
   constructor(private kit: Models) {}
   private model(kind: DeviceKind) {
     const g = new T.Group(),
       k = this.kit;
-    if (kind === "warehouse") {
-      k.box(g, 0, 0.8, 0, 2.6, 1.6, 2, 0xcfc8ae);
-      k.box(g, 0, 1.7, 0, 2.9, 0.25, 2.3, 0x719168);
-      k.box(g, 0, 0.6, 1.02, 1.1, 1.15, 0.05, 0x5b7168);
-      k.box(g, 0, 1.3, 1.07, 0.7, 0.14, 0.08, 0xf1cd85, true);
-    } else if (kind === "refinery") {
-      k.box(g, 0, 0.35, 0, 2.8, 0.7, 2.3, 0xbfbba8);
-      for (const x of [-0.8, 0.8]) {
-        k.box(g, x, 1.15, 0, 0.7, 1.5, 1, 0x789b91);
-        k.box(g, x, 1.2, 0.52, 0.45, 0.65, 0.05, 0x91e6c4, true);
-      }
-      k.box(g, 0, 1, 0, 0.6, 1.2, 0.8, 0x655f66);
-    } else if (kind === "drone") {
+    if (kind === "warehouse" || kind === "refinery")
+      return k.building(
+        kind === "warehouse" ? "warehouse" : "laboratory",
+        "home",
+      );
+    if (kind === "drone") {
       k.box(g, 0, 0.25, 0, 0.9, 0.45, 0.9, 0xe4d7b5);
       k.box(g, 0, -0.2, 0, 0.65, 0.4, 0.65, 0x718c7d);
       for (const x of [-1, 1])
@@ -71,6 +67,10 @@ export class AutomationActors {
     return g;
   }
   update(save: Save, time: number) {
+    const dt = this.previousTime
+      ? Math.min(0.1, time - this.previousTime)
+      : 0.016;
+    this.previousTime = time;
     const present = new Set<string>();
     for (const d of save.automation.devices) {
       if (d.planet !== save.planet && !d.transit) continue;
@@ -79,6 +79,7 @@ export class AutomationActors {
       if (!g) {
         g = this.model(d.kind);
         this.actors.set(d.id, g);
+        this.motions.set(d.id, new ActorFollower());
         this.root.add(g);
       }
       if (d.transit) {
@@ -98,19 +99,31 @@ export class AutomationActors {
           a.y + (b.y - a.y) * t - c.y,
           a.z + (b.z - a.z) * t - c.z,
         );
+        this.motions.get(d.id)!.update(g.position, dt, true);
         continue;
       }
-      g.position.copy(
-        spherePoint(
+      const target = spherePoint(
           d,
           d.kind === "drone" ? 2.6 + Math.sin(time * 3) * 0.12 : 0.05,
           d.planet,
         ),
-      );
-      g.quaternion.setFromUnitVectors(
+        motion = this.motions.get(d.id)!;
+      const previous = g.position.clone();
+      g.position.copy(motion.update(target, dt));
+      const up = sphereUp(d, d.planet),
+        travel = g.position.clone().sub(previous).projectOnPlane(up);
+      let rotation = new T.Quaternion().setFromUnitVectors(
         T.Object3D.DEFAULT_UP,
-        sphereUp(d, d.planet),
+        up,
       );
+      if (travel.lengthSq() > 0.000001) {
+        const heading = travel.normalize(),
+          right = new T.Vector3().crossVectors(up, heading).normalize();
+        rotation.setFromRotationMatrix(
+          new T.Matrix4().makeBasis(right, up, heading),
+        );
+      }
+      g.quaternion.slerp(rotation, 1 - Math.exp(-6 * dt));
     }
     for (const [id, g] of this.actors)
       if (!present.has(id)) {
@@ -119,7 +132,14 @@ export class AutomationActors {
         });
         g.removeFromParent();
         this.actors.delete(id);
+        this.motions.delete(id);
       }
+  }
+  get positions() {
+    return [...this.actors].map(([id, body]) => ({
+      id,
+      position: body.position.toArray(),
+    }));
   }
   dispose() {
     this.root.traverse((o) => {

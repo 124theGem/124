@@ -77,3 +77,21 @@ export function cubeUp(n: Vec): Vec {
       ? { x: 0, y: Math.sign(n.y), z: 0 }
       : { x: 0, y: 0, z: Math.sign(n.z) };
 }
+
+/** A position-dependent visual gravity field: an edge has two equal normals, a vertex three.
+ * It stops exactly where the player stops instead of finishing a time-triggered 90° turn. */
+export function cubeVisualUp(p: Point, id: PlanetId = "home", margin = 2): Vec {
+  const n = sphereNormal(p, id),
+    r = sphereRadius(id),
+    scale = r / Math.max(Math.abs(n.x), Math.abs(n.y), Math.abs(n.z));
+  const weight = (v: number) => {
+    const t = Math.max(
+      0,
+      Math.min(1, (Math.abs(v * scale) - (r - margin)) / margin),
+    );
+    return Math.sign(v) * t * t * (3 - 2 * t);
+  };
+  const q = { x: weight(n.x), y: weight(n.y), z: weight(n.z) },
+    length = Math.hypot(q.x, q.y, q.z);
+  return { x: q.x / length, y: q.y / length, z: q.z / length };
+}

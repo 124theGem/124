@@ -23,6 +23,7 @@ import {
   surfaceCoordinates,
   cubeNormal,
   setTerrainEdits,
+  cellKey,
   surfaceRadius,
   MAX_TERRAIN_HEIGHT,
 } from "../../shared/voxel";
@@ -43,7 +44,8 @@ export class SphereWorld {
   readonly ship: T.Group;
   readonly id: PlanetId;
   readonly tiles: number;
-  readonly nature: SphereNature;
+  nature: SphereNature;
+  private clearingKey = "";
   private geometry: T.BufferGeometry;
   private baseGeometry: T.BoxGeometry;
   private ground: T.Mesh;
@@ -93,7 +95,8 @@ export class SphereWorld {
       this.resources,
       this.structures,
     );
-    this.nature = new SphereNature(kit, this.id);
+    this.nature = new SphereNature(kit, this.id, save.worlds[this.id].cleared);
+    this.clearingKey = JSON.stringify(save.worlds[this.id].cleared);
     this.root.add(this.nature.root);
     const pad = ship(this.id),
       base = new T.Group();
@@ -134,6 +137,17 @@ export class SphereWorld {
   }
   rebuild(save: Save, now: number) {
     setTerrainEdits(this.id, save.worlds[this.id].terrain);
+    const clearingKey = JSON.stringify(save.worlds[this.id].cleared);
+    if (clearingKey !== this.clearingKey) {
+      this.clearingKey = clearingKey;
+      this.nature.dispose();
+      this.nature = new SphereNature(
+        this.kit,
+        this.id,
+        save.worlds[this.id].cleared,
+      );
+      this.root.add(this.nature.root);
+    }
     const terrainKey = JSON.stringify(save.worlds[this.id].terrain);
     if (terrainKey !== this.terrainKey) {
       this.terrainKey = terrainKey;
@@ -193,7 +207,13 @@ export class SphereWorld {
     });
     this.resources.clear();
     for (const n of ns) {
-      if (!nodeReady(save.worlds[this.id], n.id, now)) continue;
+      if (
+        !nodeReady(save.worlds[this.id], n.id, now) ||
+        save.worlds[this.id].cleared.includes(
+          cellKey(sphereNormal(n, this.id), this.id),
+        )
+      )
+        continue;
       const model = this.kit.resource(biomeOf(this.id), n.variant);
       model.position.copy(spherePoint(n, 0, this.id));
       model.quaternion.setFromUnitVectors(

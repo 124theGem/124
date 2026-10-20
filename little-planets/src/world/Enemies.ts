@@ -1,3 +1,4 @@
+import { ActorFollower } from "./Motion";
 import * as T from "three";
 import { Models } from "./Models";
 import { spherePoint, sphereUp } from "./SphereWorld";
@@ -10,6 +11,7 @@ export class Enemies {
     { body: T.Group; bar: T.Mesh; barBack: T.Mesh; hp: number }
   >();
   private effects: T.Group[] = [];
+  private motions = new Map<string, ActorFollower>();
   constructor(
     private kit: Models,
     save: Save,
@@ -53,6 +55,7 @@ export class Enemies {
       const back = kit.box(body, 0, 2, 0, 1, 0.07, 0.07, 0x3c384c),
         bar = kit.box(body, 0, 2.01, 0.01, 1, 0.065, 0.08, 0xefab87, true);
       this.root.add(body);
+      this.motions.set(e.id, new ActorFollower());
       this.actors.set(e.id, { body, bar, barBack: back, hp: e.hp });
     }
   }
@@ -61,16 +64,24 @@ export class Enemies {
       const a = this.actors.get(e.id);
       if (!a) continue;
       a.body.visible = e.hp > 0;
-      if (!a.body.visible) continue;
+      if (!a.body.visible) {
+        a.hp = e.hp;
+        continue;
+      }
       const target = spherePoint(
         e,
         e.kind === "drone" ? 0.8 : 0.05,
         save.planet,
       );
-      a.body.position.lerp(target, Math.min(1, dt * 10));
-      a.body.quaternion.setFromUnitVectors(
-        T.Object3D.DEFAULT_UP,
-        sphereUp(e, save.planet),
+      a.body.position.copy(
+        this.motions.get(e.id)!.update(target, dt, a.hp <= 0),
+      );
+      a.body.quaternion.slerp(
+        new T.Quaternion().setFromUnitVectors(
+          T.Object3D.DEFAULT_UP,
+          sphereUp(e, save.planet),
+        ),
+        1 - Math.exp(-5 * dt),
       );
       a.bar.scale.x = e.hp / e.maxHp;
       a.bar.position.x = -(1 - e.hp / e.maxHp) * 0.5;
@@ -108,6 +119,13 @@ export class Enemies {
       }
     }
     return nearest?.id;
+  }
+  get positions() {
+    return [...this.actors].map(([id, a]) => ({
+      id,
+      visible: a.body.visible,
+      position: a.body.position.toArray(),
+    }));
   }
   dispose() {
     this.root.traverse((o) => {

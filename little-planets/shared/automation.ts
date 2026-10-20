@@ -1,3 +1,4 @@
+import { gainExperience } from "./progression";
 import { z } from "zod";
 import { PLANETS, nodes, ship, type PlanetId } from "./catalog";
 import {
@@ -33,11 +34,19 @@ export const programNodeSchema = z
   .strict();
 export const programSchema = z
   .object({
-    entry: z.string().min(1).max(40),
-    nodes: z.array(programNodeSchema).min(1).max(40),
+    entry: z.string().max(40),
+    nodes: z.array(programNodeSchema).max(40),
   })
   .strict()
   .superRefine((p, ctx) => {
+    if (!p.nodes.length) {
+      if (p.entry)
+        ctx.addIssue({
+          code: "custom",
+          message: "Пустая программа не имеет входа.",
+        });
+      return;
+    }
     const ids = new Set(p.nodes.map((n) => n.id));
     if (
       ids.size !== p.nodes.length ||
@@ -231,8 +240,9 @@ export function advanceAutomation(save: Save, now: number) {
       }
       const n = d.program.nodes.find((n) => n.id === d.pc);
       if (!n) {
-        d.enabled = false;
-        d.status = "Ошибка программы";
+        d.status = d.program.nodes.length
+          ? "Ошибка программы"
+          : "Программа пуста";
         continue;
       }
       const next = () => {
@@ -328,6 +338,7 @@ export function advanceAutomation(save: Save, now: number) {
             .filter(
               (p) =>
                 p.resource === n.resource &&
+                !world.clearedNodes.includes(p.id) &&
                 (world.depleted[p.id] === undefined ||
                   t - world.depleted[p.id] >= 20000),
             )
@@ -370,6 +381,7 @@ export function advanceAutomation(save: Save, now: number) {
         if (!enemy.hp) {
           enemy.defeatedAt = t;
           save.kills++;
+          gainExperience(save, 25);
           d.cargo.crystal = (d.cargo.crystal ?? 0) + 2;
           next();
         }

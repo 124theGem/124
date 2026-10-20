@@ -1,3 +1,9 @@
+import {
+  SKILLS,
+  experienceLevel,
+  levelFloor,
+  skillPoints,
+} from "../../shared/progression";
 import { landingInfo, type FlightState } from "../../shared/space";
 import { illustration } from "./Illustrations";
 import {
@@ -54,6 +60,13 @@ const costs = (cost: Record<string, number>, save: Save) =>
 export class UI {
   readonly root = document.createElement("div");
   onAutomation = () => {};
+  onFirstPerson = () => {};
+  onHand = (hand: Save["hand"]) => {};
+  onUnderfoot = () => {};
+  onGrapple = (planet: PlanetId) => {};
+  onSkills = () => {};
+  onSpendSkill = (skill: keyof typeof SKILLS) => {};
+  travelMode: "ship" | "grapple" = "ship";
   onInventory = () => {};
   onScan = () => {};
   onSpaceAuto = () => {};
@@ -93,17 +106,20 @@ export class UI {
   constructor(readonly local: boolean) {
     this.root.className = "hud";
     this.root.innerHTML = `
- <header class="topbar"><div class="identity"><div class="avatar">🧑‍🚀</div><div><div class="brand">LITTLE PLANETS <span>✦ CUBEWORKS</span></div><strong id="planet-name">Родная</strong><small id="planet-tag"></small></div></div><div class="top-buttons"><button id="view" title="Камера" aria-label="Переключить камеру">🌐</button><button id="audio-toggle" title="Звук" aria-label="Включить или выключить звук">♫</button><button id="settings" title="Настройки" aria-label="Настройки">⚙</button></div></header>
+ <header class="topbar"><div class="identity"><div class="avatar">🧑‍🚀</div><div><div class="brand">LITTLE PLANETS <span>✦ CUBEWORKS</span></div><strong id="planet-name">Родная</strong><small id="planet-tag"></small></div></div><div class="top-buttons"><button id="first-person" title="Вид от первого лица" aria-label="Вид от первого лица">◉</button><button id="view" title="Камера" aria-label="Переключить камеру">🌐</button><button id="audio-toggle" title="Звук" aria-label="Включить или выключить звук">♫</button><button id="settings" title="Настройки" aria-label="Настройки">⚙</button></div></header>
  <aside class="minimap"><canvas id="minimap" width="240" height="240" aria-label="Мини-карта планеты"></canvas></aside>
  <div id="combat-hud" class="combat-hud hidden"><span>♥ <b id="health-value">100</b></span><div class="health-track"><i id="health-fill"></i></div><small id="equipped-label"></small></div><button id="attack" class="attack-button hidden" aria-label="Атаковать">⚔<small>Атака</small></button>
  <div id="event-banner" class="event-banner hidden" role="status"></div><div id="context" class="context panel hidden"></div><div id="build-panel" class="build-panel panel hidden"></div>
  <div class="bottom"><nav id="menu-items" class="hidden" aria-label="Меню игры"><button id="inventory"><span>🎒</span>Рюкзак</button><button id="craft"><span>🛠️</span>Крафт</button><button id="plant"><span>🌱</span>Сад</button><button id="build"><span>🏗️</span>Строить</button><button id="automation"><span>🤖</span>Автоматика</button><button id="galaxy"><span>🚀</span>Планеты</button><button id="menu-settings"><span>⚙️</span>Настройки</button></nav><button id="menu-toggle" aria-label="Открыть меню" aria-expanded="false"><span>☰</span><small>Меню</small></button><span class="save-status" id="save-status">${local ? "Локальный мир" : "Telegram"} · сохранено</span></div>
  <div id="joystick" aria-label="Джойстик движения"><span></span></div><div class="keyboard">WASD · движение <b> / </b> колесо · масштаб <b> / </b> потяните · поворот</div>
- <div id="toast" role="status"></div><div id="modal" class="modal hidden"><section class="sheet"><button class="close" id="close-modal" aria-label="Закрыть окно">×</button><div id="modal-content"></div></section></div>
+ <div id="handbar" class="handbar" aria-label="Предмет в руках"></div><button id="underfoot" class="underfoot">▣ Под себя</button><div id="progress-hud" class="progress-hud"><button id="skills-button"></button><div><i id="xp-fill"></i></div><small id="day-clock"></small></div><div id="crosshair" class="crosshair hidden">+</div><section id="zipline-hud" class="zipline-hud hidden"><h3 id="zipline-target"></h3><progress id="zipline-progress" max="1"></progress><p>Держимся за перекладину · перелёт по тросу</p><button id="zipline-cancel">Вернуться на исходную планету</button></section><div id="toast" role="status"></div><div id="modal" class="modal hidden"><section class="sheet"><button class="close" id="close-modal" aria-label="Закрыть окно">×</button><div id="modal-content"></div></section></div>
  <section id="space-hud" class="space-hud hidden"><header><span class="eyebrow">КОСМИЧЕСКИЙ ПОЛЁТ</span><h3 id="space-target"></h3><div class="flight-readings"><span><small>ДО МАЯКА</small><b id="flight-distance"></b></span><span><small>СКОРОСТЬ</small><b id="flight-speed"></b></span></div><p id="flight-help"></p></header><div class="flight-actions"><button id="space-auto">Автопилот</button><button id="space-course">Выбрать курс</button><button id="space-land" class="primary" disabled>Посадка</button></div><div class="flight-thrust"><button id="flight-up" aria-label="Поднять нос">↑</button><button id="flight-down" aria-label="Опустить нос">↓</button><button id="flight-brake">Тормоз</button><button id="flight-boost">Ускорение</button></div><div class="flight-hint">W/S · тяга &nbsp; A/D · поворот &nbsp; Q/E · высота &nbsp; пробел · тормоз</div><div id="flight-reticle" class="flight-reticle">◇</div></section>
  <div id="flight" class="flight hidden"><span>🚀</span><h2 id="flight-title"></h2><p>Ваш маленький мир всегда ждёт возвращения</p></div>`;
     document.querySelector("#app")!.append(this.root);
     for (const [id, callback] of [
+      ["first-person", () => this.onFirstPerson()],
+      ["skills-button", () => this.onSkills()],
+      ["underfoot", () => this.onUnderfoot()],
       ["inventory", () => this.onInventory()],
       ["automation", () => this.onAutomation()],
       ["plant", () => this.onPlant()],
@@ -178,6 +194,52 @@ export class UI {
   }
   update(save: Save, now: number) {
     const p = PLANETS[save.planet];
+    const level = experienceLevel(save.progression.xp),
+      floor = levelFloor(level),
+      next = levelFloor(level + 1);
+    this.el("skills-button").textContent =
+      `Ур. ${level} · ${save.progression.xp - floor}/${next - floor} XP${skillPoints(save.progression) ? " · +" + skillPoints(save.progression) : ""}`;
+    this.el("xp-fill").style.width =
+      `${(100 * (save.progression.xp - floor)) / (next - floor)}%`;
+    const hands: {
+      id: Save["hand"];
+      name: string;
+      icon: string;
+      available: boolean;
+    }[] = [
+      { id: "pickaxe", name: "Кирка", icon: "⛏", available: true },
+      { id: "grapple", name: "Гарпун", icon: "↗", available: true },
+      ...(["sword", "spear", "blaster"] as const).map((id) => ({
+        id,
+        name: GEAR[id].name,
+        icon: GEAR[id].icon,
+        available: (save.inventory[`gear:${id}`] ?? 0) > 0,
+      })),
+      { id: "none", name: "Руки", icon: "✋", available: true },
+    ];
+    const signature = hands
+      .map((h) => `${h.id}:${h.available}:${save.hand === h.id}`)
+      .join("");
+    if (this.el("handbar").dataset.signature !== signature) {
+      this.el("handbar").dataset.signature = signature;
+      this.el("handbar").innerHTML = hands
+        .map(
+          (h, i) =>
+            `<button data-hand="${h.id}" title="${h.name}${h.available ? "" : " · сначала создайте"}" aria-label="${h.name}" aria-pressed="${save.hand === h.id}" ${h.available ? "" : "disabled"}><small>${i + 1}</small><span>${h.icon}</span></button>`,
+        )
+        .join("");
+      this.el("handbar")
+        .querySelectorAll<HTMLButtonElement>("[data-hand]")
+        .forEach(
+          (b) =>
+            (b.onclick = () => this.onHand(b.dataset.hand as Save["hand"])),
+        );
+    }
+    this.el("underfoot").classList.toggle(
+      "hidden",
+      !!save.inside || !!save.flight || !!save.grapple,
+    );
+
     this.el("planet-name").textContent = save.inside ? "Главный дом" : p.name;
     this.el("planet-tag").textContent = save.inside
       ? "Уют начинается с вас"
@@ -512,10 +574,16 @@ export class UI {
       .map((id) => PLANETS[id])
       .filter((p) => p.name.toLowerCase().includes(query.toLowerCase()));
     this.show(
-      `<span class="eyebrow">ЗВЁЗДНЫЙ АТЛАС</span><h2>За пределами знакомого</h2><div class="planet-search"><input id="planet-search" type="search" placeholder="Найти планету по названию…" value="${escape(query)}" aria-label="Название планеты"><button id="scan-planets" class="primary">✦ Найти случайную планету</button></div><p class="atlas-note">Сканер открывает новые экспедиционные миры. ${save.discovered.filter((p) => p.startsWith("wild-")).length} / 24 найдено.</p>${save.lastDiscovery ? `<p class="discovery-note">✦ Открыта ${PLANETS[save.lastDiscovery].name}</p>` : ""}<div class="planet-cards">${planets.map((p) => `<button data-planet="${p.id}" ${p.id === save.planet && !save.flight ? "disabled" : ""} style="--planet:${p.color}"><div class="mini-planet">${p.icon}</div><strong>${p.name}</strong><small>${p.description}</small><em>Куб · 6 граней ${planetSize(p.id)} × ${planetSize(p.id)} · ${p.hostile ? "⚔ Противники" : p.id === "home" ? "База" : "Мирная"}</em><b>${save.flight ? (p.id === save.flight.target ? "Текущий курс" : "Задать курс ↗") : p.id === save.planet ? "Вы здесь" : "Отправиться ↗"}</b></button>`).join("") || "<p>Такая планета пока не найдена. Воспользуйтесь сканером.</p>"}</div>`,
+      `<span class="eyebrow">ЗВЁЗДНЫЙ АТЛАС</span><h2>За пределами знакомого</h2><label class="travel-selector">Способ путешествия <select id="travel-mode"><option value="ship" ${this.travelMode === "ship" ? "selected" : ""}>Корабль</option><option value="grapple" ${this.travelMode === "grapple" ? "selected" : ""}>Гарпун и трос</option></select></label><div class="planet-search"><input id="planet-search" type="search" placeholder="Найти планету по названию…" value="${escape(query)}" aria-label="Название планеты"><button id="scan-planets" class="primary">✦ Найти случайную планету</button></div><p class="atlas-note">Сканер открывает новые экспедиционные миры. ${save.discovered.filter((p) => p.startsWith("wild-")).length} / 24 найдено.</p>${save.lastDiscovery ? `<p class="discovery-note">✦ Открыта ${PLANETS[save.lastDiscovery].name}</p>` : ""}<div class="planet-cards">${planets.map((p) => `<button data-planet="${p.id}" ${p.id === save.planet && !save.flight ? "disabled" : ""} style="--planet:${p.color}"><div class="mini-planet">${p.icon}</div><strong>${p.name}</strong><small>${p.description}</small><em>Куб · 6 граней ${planetSize(p.id)} × ${planetSize(p.id)} · ${p.hostile ? "⚔ Противники" : p.id === "home" ? "База" : "Мирная"}</em><b>${save.flight ? (p.id === save.flight.target ? "Текущий курс" : "Задать курс ↗") : p.id === save.planet ? "Вы здесь" : "Отправиться ↗"}</b></button>`).join("") || "<p>Такая планета пока не найдена. Воспользуйтесь сканером.</p>"}</div>`,
     );
     (this.el("scan-planets") as HTMLButtonElement).disabled = !!save.flight;
     this.button("scan-planets", () => this.onScan());
+    (this.el("travel-mode") as HTMLSelectElement).onchange = () => {
+      this.travelMode = (this.el("travel-mode") as HTMLSelectElement).value as
+        | "ship"
+        | "grapple";
+      this.galaxy(save, query);
+    };
     const input = this.el("planet-search") as HTMLInputElement;
     input.oninput = () => {
       const cursor = input.selectionStart;
@@ -527,7 +595,30 @@ export class UI {
     this.root
       .querySelectorAll<HTMLButtonElement>("[data-planet]")
       .forEach(
-        (b) => (b.onclick = () => this.onTravel(b.dataset.planet as PlanetId)),
+        (b) =>
+          (b.onclick = () =>
+            this.travelMode === "grapple"
+              ? this.onGrapple(b.dataset.planet as PlanetId)
+              : this.onTravel(b.dataset.planet as PlanetId)),
+      );
+  }
+  skills(save: Save) {
+    this.panel(
+      `<span class="eyebrow">ПРОГРЕСС ПУТЕШЕСТВЕННИКА</span><h2>Уровень ${experienceLevel(save.progression.xp)}</h2><p>Опыт: ${save.progression.xp}. Свободных очков: ${skillPoints(save.progression)}. Урожай +12 XP, победа +25, сбор +3, природный блок +2, постройка +12.</p><div class="device-palette">${Object.entries(
+        SKILLS,
+      )
+        .map(
+          ([id, name]) =>
+            `<button data-skill="${id}" ${skillPoints(save.progression) <= 0 || save.progression.skills[id as keyof typeof SKILLS] >= 5 ? "disabled" : ""}>${name} · ${save.progression.skills[id as keyof typeof SKILLS]}/5<small>${id === "farming" ? "+1 урожай за каждые два ранга" : id === "mining" ? "+1 материал источника за ранг" : "+2 урона за ранг"}</small></button>`,
+        )
+        .join("")}</div>`,
+    );
+    this.el("modal-content")
+      .querySelectorAll<HTMLButtonElement>("[data-skill]")
+      .forEach(
+        (b) =>
+          (b.onclick = () =>
+            this.onSpendSkill(b.dataset.skill as keyof typeof SKILLS)),
       );
   }
   settings(
