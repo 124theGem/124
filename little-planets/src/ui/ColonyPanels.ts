@@ -1,3 +1,4 @@
+import { hudIcon } from "./Glyphs";
 import { UI } from "./UI";
 import {
   BUILDINGS,
@@ -77,7 +78,7 @@ export class ColonyPanels {
       limit = b.kind === "scanner" ? 10 : b.kind === "planetdrill" ? 5 : 1,
       level = b.level ?? 1;
     this.ui.panel(
-      `<span class="eyebrow">УПРАВЛЕНИЕ ОБЪЕКТОМ · ${esc(PLANETS[save.planet].name)}</span><h2>${def.name}</h2><div class="facility-summary"><div class="facility-symbol">${def.icon}</div><div><strong>${limit > 1 ? `УРОВЕНЬ ${level} / ${limit}` : "ОБЪЕКТ В СЕТИ"}</strong><p>${def.description}</p></div></div>${b.kind === "scanner" ? `<div class="metric-strip"><span>Дальность<b>${scannerRange(level)}</b></span><span>Исследовано<b>${save.scans.length}</b></span><span>Созвездий<b>61</b></span></div><button id="facility-map" class="primary">Открыть карту сканирования</button>` : ""}${b.kind === "planetdrill" ? `<div class="metric-strip"><span>Выход / сек<b>${level * level * 2}</b></span><span>Всего добыто<b id="drill-produced">${b.produced ?? 0}</b></span><span>Высота<b>${[0, 5.8, 8, 12, 17, 23][level]} м</b></span></div><h3>Спектр извлечения</h3><div class="scan-resources">${PLANET_COMPOSITION[save.planet].map((r) => `<div><span>${RESOURCE_LABELS[r.resource]}</span><b>${r.percent}%</b><i style="width:${r.percent}%;--bar:#7de3d2"></i></div>`).join("")}</div><h3>Местный склад / резерв станции</h3><div class="resource-chips" id="drill-stock">${resources(world.stock)}${resources(b.buffer ?? {})}</div><button id="facility-logistics">Склад и логистика</button>` : ""}${limit > 1 ? `<div class="upgrade-track">${Array.from({ length: limit }, (_, i) => `<i class="${i < level ? "filled" : ""}"></i>`).join("")}</div><button id="facility-upgrade" ${level >= limit ? "disabled" : ""}>${level >= limit ? "Максимальный уровень" : `Улучшить до ${level + 1} · ${save.freeConstruction ? "0 ресурсов · TEST" : resources(upgradeCost(b))}`}</button>` : ""}${b.kind === "headquarters" ? '<button id="facility-enter" class="primary">Войти в главный дом</button>' : ""}${b.resource ? `<p>Готово к сбору: ${moduleAmount(save, b, Date.now())} ${RESOURCE_LABELS[b.resource]}</p><button id="facility-collect">Забрать ресурсы</button>` : ""}${b.kind === "warehouse" ? `<h3>Запасы планеты</h3><div class="resource-chips">${resources(world.stock)}</div><button id="facility-logistics">Открыть склад</button>` : ""}${b.kind === "laboratory" ? '<button id="facility-craft">Открыть производственные чертежи</button>' : ""}${b.kind === "greenhouse" ? "<p>Теплица обеспечивает укрытие для сада. Для посадки выберите грядку рядом с персонажем.</p>" : ""}${b.kind === "house" ? "<p>Жилой модуль колонии. Каменные стены, автономное питание и живая крыша.</p>" : ""}`,
+      `<span class="eyebrow">УПРАВЛЕНИЕ ОБЪЕКТОМ · ${esc(PLANETS[save.planet].name)}</span><h2>${def.name}</h2><div class="facility-summary"><div class="facility-symbol">${hudIcon(b.kind)}</div><div><strong>${limit > 1 ? `УРОВЕНЬ ${level} / ${limit}` : "ОБЪЕКТ В СЕТИ"}</strong><p>${def.description}</p></div></div>${b.kind === "scanner" ? `<div class="metric-strip"><span>Дальность<b>${scannerRange(level)}</b></span><span>Исследовано<b>${save.scans.length}</b></span><span>Созвездий<b>61</b></span></div><button id="facility-map" class="primary">Открыть карту сканирования</button>` : ""}${b.kind === "planetdrill" ? `<div class="metric-strip"><span>Выход / сек<b>${level * level * 2}</b></span><span>Всего добыто<b id="drill-produced">${b.produced ?? 0}</b></span><span>Высота<b>${[0, 5.8, 8, 12, 17, 23][level]} м</b></span></div><h3>Спектр извлечения</h3><div class="scan-resources">${PLANET_COMPOSITION[save.planet].map((r) => `<div><span>${RESOURCE_LABELS[r.resource]}</span><b>${r.percent}%</b><i style="width:${r.percent}%;--bar:#7de3d2"></i></div>`).join("")}</div><h3>Местный склад / резерв станции</h3><div class="resource-chips" id="drill-stock">${resources(world.stock)}${resources(b.buffer ?? {})}</div><button id="facility-logistics">Склад и логистика</button>` : ""}${limit > 1 ? `<div class="upgrade-track">${Array.from({ length: limit }, (_, i) => `<i class="${i < level ? "filled" : ""}"></i>`).join("")}</div><button id="facility-upgrade" ${level >= limit ? "disabled" : ""}>${level >= limit ? "Максимальный уровень" : `Улучшить до ${level + 1} · ${save.freeConstruction ? "0 ресурсов · TEST" : resources(upgradeCost(b))}`}</button>` : ""}${b.kind === "headquarters" ? '<button id="facility-enter" class="primary">Войти в главный дом</button>' : ""}${b.resource ? `<p>Готово к сбору: ${moduleAmount(save, b, Date.now())} ${RESOURCE_LABELS[b.resource]}</p><button id="facility-collect">Забрать ресурсы</button>` : ""}${b.kind === "warehouse" ? `<h3>Запасы планеты</h3><div class="resource-chips">${resources(world.stock)}</div><button id="facility-logistics">Открыть склад</button>` : ""}${b.kind === "laboratory" ? '<button id="facility-craft">Открыть производственные чертежи</button>' : ""}${b.kind === "greenhouse" ? "<p>Теплица обеспечивает укрытие для сада. Для посадки выберите грядку рядом с персонажем.</p>" : ""}${b.kind === "house" ? "<p>Жилой модуль колонии. Каменные стены, автономное питание и живая крыша.</p>" : ""}`,
     );
     if (limit > 1 && level < limit)
       this.ui.button(
@@ -175,14 +176,13 @@ export class ColonyPanels {
         .join(
           "",
         )}</select></label><p>${save.freeConstruction ? "ТЕСТОВЫЙ ДОПУСК · стоимость 0" : resources(shipCost(design))}</p><button type="button" id="create-ship" class="primary">Создать и выбрать корабль</button></form></div><h3>Личный ангар</h3><div class="fleet-list">${save.fleet.map((s) => `<button data-select-ship="${esc(s.id)}" ${s.id === active.id ? "disabled" : ""}><strong>${esc(s.name)}</strong><small>${SHIP_CLASS_NAMES[s.class]} · MK ${s.model} · ${s.id === active.id ? "АКТИВЕН" : "ВЫБРАТЬ"}</small></button>`).join("")}</div>`,
+      "shipyard",
     );
     const read = () => ({
       name: (this.ui.el("ship-name") as HTMLInputElement).value || "Без имени",
       class: (this.ui.el("ship-class") as HTMLSelectElement).value as ShipClass,
       model: Number((this.ui.el("ship-model") as HTMLSelectElement).value) as
-        | 1
-        | 2
-        | 3,
+        1 | 2 | 3,
       hull: (this.ui.el("ship-hull") as HTMLSelectElement)
         .value as Starship["hull"],
       wings: (this.ui.el("ship-wings") as HTMLSelectElement)
@@ -244,6 +244,7 @@ export class ColonyPanels {
         .join(
           "",
         )}</section></div><h3>Зоны доступа в паспорте</h3><div class="access-zones">${s.discovered.map((p) => `<span>${esc(constellationName(p))} / ${esc(PLANETS[p].name)} <b>${PLANETS[p].hostile ? "ОПАСНАЯ ЗОНА" : "ДОПУСК ПОДТВЕРЖДЁН"}</b></span>`).join("")}</div>`,
+      "profile",
     );
   }
 }

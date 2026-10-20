@@ -1,3 +1,4 @@
+import { ALL_RESOURCE_LABELS } from "../../shared/resources";
 const shapes: Record<string, string> = {
   wood: '<path fill="#966344" d="M7 8 24 4l4 17-17 5z"/><path fill="#c89966" d="M7 8 11 26l8-3-4-17z"/><ellipse cx="19" cy="22" rx="10" ry="6" fill="#e6bc86"/><ellipse cx="19" cy="22" rx="6" ry="3.4" fill="none" stroke="#a67449" stroke-width="1.4"/><path d="m6 12 3 9m9-13 2 7" stroke="#654b3c" stroke-width="2"/>',
   stone:
@@ -12,7 +13,39 @@ const shapes: Record<string, string> = {
     '<path fill="#ef8851" d="M16 2q2 8 7 11l1-6q12 16 1 23H9Q-1 20 10 10l-1 9q7-4 7-17"/><path fill="#ffca72" d="M17 13q-1 6 4 7 3 8-4 10-8-1-6-8 6-3 6-9"/><path fill="#fff0b4" d="m17 23 2 6h-4z"/>',
 };
 export function resourceIcon(id: string) {
-  const shape = shapes[id];
+  let shape = shapes[id];
+  if (!shape && ALL_RESOURCE_LABELS[id]) {
+    const symbol: Record<string, string> = {
+      iron: "Fe",
+      quartz: "Si",
+      copper: "Cu",
+      silicon: "Si",
+      carbon: "C",
+      titanium: "Ti",
+      cobalt: "Co",
+      nickel: "Ni",
+      aluminium: "Al",
+      lithium: "Li",
+      uranium: "U",
+      gold: "Au",
+      silver: "Ag",
+      platinum: "Pt",
+      ice: "H₂O",
+      hydrogen: "H",
+      helium: "He",
+      sulfur: "S",
+      salt: "Na",
+      amber: "Am",
+      biomass: "Bio",
+      iridium: "Ir",
+      osmium: "Os",
+      xenon: "Xe",
+    };
+    let hash = 0;
+    for (const c of id) hash = (hash * 31 + c.charCodeAt(0)) >>> 0;
+    const hue = 140 + (hash % 160);
+    shape = `<path d="M16 2 28 9v14l-12 7L4 23V9Z" fill="hsl(${hue} 27% 24%)" stroke="hsl(${hue} 46% 68%)"/><path d="M8 10V8l8-4 8 4v2M8 22v2l8 4 8-4v-2" fill="none" stroke="hsl(${hue} 46% 68%)" opacity=".5"/><text x="16" y="20" text-anchor="middle" font-family="monospace" font-size="${(symbol[id] ?? id.slice(0, 2)).length > 2 ? 8 : 11}" fill="hsl(${hue} 48% 83%)">${symbol[id] ?? id.slice(0, 2).toUpperCase()}</text>`;
+  }
   return shape
     ? `<svg class="item-art" viewBox="0 0 32 32" aria-hidden="true">${shape}</svg>`
     : "";

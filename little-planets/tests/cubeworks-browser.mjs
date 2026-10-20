@@ -45,7 +45,8 @@ try {
         errors.push(m.text());
     });
     const fixture = newGame(Date.now());
-    fixture.position = sphereCoordinates(cubeNormal(4, 0.1, 0.2), "home");
+    // Excavate exposed ground: the ship model now correctly intercepts clicks on its hull.
+    fixture.position = sphereCoordinates(cubeNormal(4, -0.5, -0.5), "home");
     await page.addInitScript((s) => {
       if (!localStorage.getItem("little-planets-v6"))
         localStorage.setItem("little-planets-v6", s);

@@ -1,3 +1,4 @@
+import { hudIcon } from "./Glyphs";
 import {
   DEVICE_NAMES,
   DEVICE_COSTS,
@@ -20,13 +21,13 @@ const e = (s: string) =>
       ]!,
   );
 const ops: Record<ProgramNode["op"], string> = {
-  mine: "⛏ Добывать",
-  cargo: "◇ Загрузка ≥ %",
-  unload: "▣ На склад / выгрузить",
-  load: "▣ Загрузить со склада",
-  travel: "🚀 Лететь на планету",
-  hunt: "⚔ Найти и уничтожить",
-  wait: "◷ Подождать 1 сек.",
+  mine: "Добывать",
+  cargo: "Загрузка ≥ %",
+  unload: "На склад / выгрузить",
+  load: "Загрузить со склада",
+  travel: "Лететь на планету",
+  hunt: "Найти и уничтожить",
+  wait: "Подождать 1 сек.",
 };
 export class AutomationPanel {
   private selected = "";
@@ -56,7 +57,7 @@ export class AutomationPanel {
       )
         .map(
           (k) =>
-            `<button data-deploy="${k}">${DEVICE_NAMES[k]}<small>${
+            `<button data-deploy="${k}">${hudIcon(k)}${DEVICE_NAMES[k]}<small>${
               s.freeConstruction
                 ? "0 ресурсов · TEST"
                 : Object.entries(DEVICE_COSTS[k])
@@ -67,6 +68,7 @@ export class AutomationPanel {
         .join(
           "",
         )}</div><div class="device-list">${devices.map((d) => `<button data-device="${d.id}" class="${d.id === this.selected ? "active" : ""}">${DEVICE_NAMES[d.kind]} · ${e(d.id)}<small>${PLANETS[d.planet].name} · ${e(d.status)} · груз ${cargoAmount(d)}/${d.capacity}</small></button>`).join("") || "<p>Создайте склад и первого сборщика.</p>"}</div><div id="device-detail"></div>`,
+      "automation",
     );
     this.ui
       .el("modal-content")

@@ -8,7 +8,7 @@ const dir = mkdtempSync(join(tmpdir(), "planets-runtime-"));
 try {
   execFileSync("tar", [
     "-xzf",
-    resolve("releases/little-planets-aurora-v8.tar.gz"),
+    resolve("releases/little-planets-flightdeck-v9.tar.gz"),
     "-C",
     dir,
   ]);

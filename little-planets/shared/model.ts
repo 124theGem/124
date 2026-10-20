@@ -286,6 +286,7 @@ export const ActionSchema = z.discriminatedUnion("type", [
     .strict(),
   z.object({ type: z.literal("course"), planet }).strict(),
   z.object({ type: z.literal("land") }).strict(),
+  z.object({ type: z.literal("boardShip") }).strict(),
   z.object({ type: z.literal("scan") }).strict(),
   z
     .object({
@@ -1352,18 +1353,17 @@ export function applyAction(
       b.collectedAt = now;
       break;
     }
+    case "boardShip":
     case "travel": {
+      const target =
+        action.type === "boardShip" ? save.planet : (action.planet as PlanetId);
       const pad = ship(save.planet);
       nearby(save, pad.x, pad.z, 3);
-      if (!save.discovered.includes(action.planet as PlanetId))
+      if (!save.discovered.includes(target))
         throw new RuleError("Сначала найдите эту планету сканером.");
-      if (save.planet === action.planet) throw new RuleError("Вы уже здесь.");
-      save.flight = beginFlight(
-        save.planet,
-        action.planet as PlanetId,
-        save.discovered,
-        now,
-      );
+      if (action.type === "travel" && save.planet === target)
+        throw new RuleError("Вы уже здесь.");
+      save.flight = beginFlight(save.planet, target, save.discovered, now);
       save.flight.topSpeed = SHIP_STATS(
         save.fleet.find((s) => s.id === save.activeShip)!,
       ).speed;

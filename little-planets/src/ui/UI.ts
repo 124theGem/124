@@ -1,3 +1,5 @@
+import { hudIcon } from "./Glyphs";
+import { SHIP_CLASS_NAMES, SHIP_STATS } from "../../shared/ships";
 import { GalaxyMap } from "./GalaxyMap";
 import {
   SKILLS,
@@ -50,7 +52,11 @@ const escape = (s: string) =>
       ]!,
   );
 const art = (id: string) =>
-  resourceIcon(id) || `<span class="emoji-art">${itemInfo(id).icon}</span>`;
+  resourceIcon(id) ||
+  hudIcon(
+    /^(seed|crop):/.test(id) ? "garden" : (id.split(":")[1] ?? id),
+    "item-art",
+  );
 const costs = (cost: Record<string, number>, save: Save) =>
   save.freeConstruction
     ? `<span class="cost testing-cost">0 · TEST PILOT</span>`
@@ -63,6 +69,8 @@ const costs = (cost: Record<string, number>, save: Save) =>
 export class UI {
   readonly root = document.createElement("div");
   onAutomation = () => {};
+  onBoardShip = () => {};
+  onCancelPlacement = () => {};
   onProfile = () => {};
   onScanPlanet = (id: PlanetId) => {};
   private galaxyMap?: GalaxyMap;
@@ -112,17 +120,51 @@ export class UI {
   constructor(readonly local: boolean) {
     this.root.className = "hud";
     this.root.innerHTML = `
- <header class="topbar"><div class="identity"><button id="profile" class="avatar" aria-label="Профиль и космический паспорт">◈</button><div><div class="brand">LITTLE PLANETS <span>✦ AURORA NETWORK</span></div><strong id="planet-name">Родная</strong><small id="planet-tag"></small></div></div><div class="top-buttons"><button id="first-person" title="Вид от первого лица" aria-label="Вид от первого лица">◉</button><button id="view" title="Камера" aria-label="Переключить камеру">🌐</button><button id="audio-toggle" title="Звук" aria-label="Включить или выключить звук">♫</button><button id="settings" title="Настройки" aria-label="Настройки">⚙</button></div></header>
- <aside class="minimap"><canvas id="minimap" width="240" height="240" aria-label="Мини-карта планеты"></canvas></aside>
- <div id="combat-hud" class="combat-hud hidden"><span>♥ <b id="health-value">100</b></span><div class="health-track"><i id="health-fill"></i></div><small id="equipped-label"></small></div><button id="attack" class="attack-button hidden" aria-label="Атаковать">⚔<small>Атака</small></button>
+ <header class="topbar"><div class="identity"><button id="profile" class="avatar" aria-label="Профиль и космический паспорт">${hudIcon("profile")}</button><div><div class="brand">LITTLE PLANETS <span>AURORA / EXPLORER</span></div><strong id="planet-name">Родная</strong><small id="planet-tag"></small></div></div><div class="top-buttons"><button id="first-person" title="Вид от первого лица" aria-label="Вид от первого лица">${hudIcon("view")}</button><button id="view" title="Камера" aria-label="Переключить камеру">${hudIcon("planet")}</button><button id="audio-toggle" title="Звук" aria-label="Включить или выключить звук">${hudIcon("audio")}</button><button id="settings" title="Настройки" aria-label="Настройки">${hudIcon("settings")}</button></div></header>
+ <aside class="minimap"><div class="radar-heading"><i></i>НАВИГАЦИЯ<span>LOCAL</span></div><canvas id="minimap" width="240" height="240" aria-label="Мини-карта планеты"></canvas></aside>
+ <div id="combat-hud" class="combat-hud hidden"><span>${hudIcon("health")}<b id="health-value">100</b><small>ЦЕЛОСТНОСТЬ</small></span><div class="health-track"><i id="health-fill"></i></div><small id="equipped-label"></small></div><button id="attack" class="attack-button hidden" aria-label="Атаковать">${hudIcon("blaster")}<small>Атака</small></button>
  <div id="event-banner" class="event-banner hidden" role="status"></div><div id="context" class="context panel hidden"></div><div id="build-panel" class="build-panel panel hidden"></div>
- <div class="bottom"><nav id="menu-items" class="hidden" aria-label="Меню игры"><button id="inventory"><span>🎒</span>Рюкзак</button><button id="craft"><span>🛠️</span>Крафт</button><button id="plant"><span>🌱</span>Сад</button><button id="build"><span>🏗️</span>Строить</button><button id="automation"><span>🤖</span>Автоматика</button><button id="galaxy"><span>🚀</span>Планеты</button><button id="menu-settings"><span>⚙️</span>Настройки</button></nav><button id="menu-toggle" aria-label="Открыть меню" aria-expanded="false"><span>☰</span><small>Меню</small></button><span class="save-status" id="save-status">${local ? "Локальный мир" : "Telegram"} · сохранено</span></div>
- <div id="joystick" aria-label="Джойстик движения"><span></span></div><div class="keyboard">WASD · движение <b> / </b> колесо · масштаб <b> / </b> потяните · поворот</div>
- <div id="handbar" class="handbar" aria-label="Предмет в руках"></div><button id="underfoot" class="underfoot">▣ Под себя</button><div id="progress-hud" class="progress-hud"><button id="skills-button"></button><div><i id="xp-fill"></i></div><small id="day-clock"></small></div><div id="crosshair" class="crosshair hidden">+</div><section id="zipline-hud" class="zipline-hud hidden"><h3 id="zipline-target"></h3><progress id="zipline-progress" max="1"></progress><p>Держимся за перекладину · перелёт по тросу</p><button id="zipline-cancel">Вернуться на исходную планету</button></section><div id="toast" role="status"></div><div id="modal" class="modal hidden"><section class="sheet"><button class="close" id="close-modal" aria-label="Закрыть окно">×</button><div id="modal-content"></div></section></div>
- <section id="space-hud" class="space-hud hidden"><header><span class="eyebrow">КОСМИЧЕСКИЙ ПОЛЁТ</span><h3 id="space-target"></h3><div class="flight-readings"><span><small>ДО МАЯКА</small><b id="flight-distance"></b></span><span><small>СКОРОСТЬ</small><b id="flight-speed"></b></span></div><p id="flight-help"></p></header><div class="flight-actions"><button id="space-auto">Автопилот</button><button id="space-course">Выбрать курс</button><button id="space-land" class="primary" disabled>Посадка</button></div><div class="flight-thrust"><button id="flight-up" aria-label="Поднять нос">↑</button><button id="flight-down" aria-label="Опустить нос">↓</button><button id="flight-brake">Тормоз</button><button id="flight-boost">Ускорение</button></div><div class="flight-hint">W/S · тяга &nbsp; A/D · поворот &nbsp; Q/E · высота &nbsp; пробел · тормоз</div><div id="flight-reticle" class="flight-reticle">◇</div></section>
- <div id="flight" class="flight hidden"><span>🚀</span><h2 id="flight-title"></h2><p>Ваш маленький мир всегда ждёт возвращения</p></div>`;
+ <div class="bottom"><nav id="menu-items" class="hidden" aria-label="Меню игры"><div class="nav-heading">СИСТЕМЫ КОЛОНИИ<span>01 — 07</span></div>${[
+   ["inventory", "inventory", "Инвентарь", "Снаряжение и ресурсы"],
+   ["craft", "craft", "Производство", "Чертежи и оборудование"],
+   ["plant", "garden", "Биолаборатория", "Выращивание растений"],
+   ["build", "build", "Строительство", "Архитектор колонии"],
+   ["automation", "automation", "Автоматизация", "Роботы и маршруты"],
+   ["galaxy", "galaxy", "Звёздная карта", "Планеты и навигация"],
+   ["menu-settings", "settings", "Настройки", "Управление системами"],
+ ]
+   .map(
+     ([id, icon, title, desc], i) =>
+       `<button id="${id}"><span>${hudIcon(icon)}</span><strong>${title}<small>${desc}</small></strong><em>0${i + 1}</em></button>`,
+   )
+   .join(
+     "",
+   )}</nav><button id="menu-toggle" aria-label="Открыть меню" aria-expanded="false"><span>${hudIcon("menu")}</span><small>Системы</small></button><span class="save-status" id="save-status">${local ? "LOCAL" : "ONLINE"} · сохранено</span></div>
+ <div id="joystick" aria-label="Джойстик движения"><span></span></div><div class="keyboard"><kbd>W A S D</kbd> движение <span>·</span> перетащите для обзора</div>
+ <div id="placement-mode" class="placement-mode hidden"><span>${hudIcon("build")}</span><div><small>РАЗМЕЩЕНИЕ</small><strong id="placement-name"></strong></div><button id="cancel-placement" aria-label="Завершить размещение">${hudIcon("close")}</button></div>
+ <div id="handbar" class="handbar" aria-label="Предмет в руках"></div><button id="underfoot" class="underfoot" title="Поставить блок под собой">${hudIcon("block")}<span>Под себя</span></button><div id="progress-hud" class="progress-hud"><button id="skills-button"></button><div><i id="xp-fill"></i></div><small id="day-clock"></small></div><div id="crosshair" class="crosshair hidden">+</div>
+ <section id="zipline-hud" class="zipline-hud hidden"><span class="eyebrow">ГАРПУН / МЕЖПЛАНЕТНЫЙ ТРОС</span><h3 id="zipline-target"></h3><progress id="zipline-progress" max="1"></progress><p>Держимся за перекладину · перелёт по тросу</p><button id="zipline-cancel">Вернуться на исходную планету</button></section><div id="toast" role="status"></div>
+ <div id="modal" class="modal hidden"><section class="sheet" role="dialog" aria-modal="true" aria-labelledby="window-title"><header class="window-header"><div class="window-brand">${hudIcon("galaxy")}<span>AURORA<strong>КОМАНДНЫЙ ИНТЕРФЕЙС</strong></span></div><div class="window-breadcrumb"><span>СИСТЕМЫ</span><b id="window-title">Колония</b></div><button class="close" id="close-modal" aria-label="Закрыть окно">${hudIcon("close")}</button></header><nav class="window-nav" aria-label="Разделы командного интерфейса">${[
+   ["profile", "profile", "Паспорт"],
+   ["inventory", "inventory", "Инвентарь"],
+   ["craft", "craft", "Производство"],
+   ["construction", "build", "Строительство"],
+   ["automation", "automation", "Автоматизация"],
+   ["galaxy", "galaxy", "Навигация"],
+   ["settings", "settings", "Настройки"],
+ ]
+   .map(
+     ([id, icon, name]) =>
+       `<button data-window-nav="${id}" title="${name}">${hudIcon(icon)}<span>${name}</span></button>`,
+   )
+   .join(
+     "",
+   )}<div class="window-nav-status"><i></i>COLONY NETWORK</div></nav><div id="modal-content"></div><footer class="window-footer"><span><i></i><b id="window-save">Прогресс сохранён</b></span><small>ESC / ЗАКРЫТЬ</small></footer></section></div>
+ <section id="space-hud" class="space-hud hidden"><header><span class="eyebrow">КОСМИЧЕСКИЙ ПОЛЁТ / CABIN</span><h3 id="space-target"></h3><div class="flight-readings"><span><small>ДО МАЯКА</small><b id="flight-distance"></b></span><span><small>СКОРОСТЬ</small><b id="flight-speed"></b></span></div><p id="flight-help"></p></header><div class="flight-actions"><button id="space-auto">Автопилот</button><button id="space-course">Выбрать курс</button><button id="space-land" class="primary" disabled>Посадка</button></div><div class="flight-thrust"><button id="flight-up" aria-label="Поднять нос">↑</button><button id="flight-down" aria-label="Опустить нос">↓</button><button id="flight-brake">Тормоз</button><button id="flight-boost">Ускорение</button></div><div class="flight-hint"><kbd>W / S</kbd> тяга <kbd>A / D</kbd> поворот <kbd>Q / E</kbd> тангаж <kbd>SPACE</kbd> тормоз</div><div id="flight-reticle" class="flight-reticle">◇</div></section>
+ <div id="flight" class="flight hidden">${hudIcon("ship")}<h2 id="flight-title"></h2><p>Подготовка бортовых систем</p></div>`;
     document.querySelector("#app")!.append(this.root);
     for (const [id, callback] of [
+      ["cancel-placement", () => this.onCancelPlacement()],
       ["profile", () => this.onProfile()],
       ["first-person", () => this.onFirstPerson()],
       ["skills-button", () => this.onSkills()],
@@ -164,6 +206,19 @@ export class UI {
         button.addEventListener(event, () => hold(false));
     }
     this.button("menu-toggle", () => this.toggleMenu());
+    const navigate: Record<string, () => void> = {
+      profile: () => this.onProfile(),
+      inventory: () => this.onInventory(),
+      craft: () => this.onCraftMenu(),
+      construction: () => this.onBuild(),
+      automation: () => this.onAutomation(),
+      galaxy: () => this.onGalaxy(),
+      settings: () => this.onSettings(),
+    };
+    this.root
+      .querySelectorAll<HTMLButtonElement>("[data-window-nav]")
+      .forEach((b) => (b.onclick = () => navigate[b.dataset.windowNav!]()));
+
     this.el("modal").addEventListener("click", (e) => {
       if (e.target === this.el("modal")) this.close();
     });
@@ -233,7 +288,7 @@ export class UI {
       this.el("handbar").innerHTML = hands
         .map(
           (h, i) =>
-            `<button data-hand="${h.id}" title="${h.name}${h.available ? "" : " · сначала создайте"}" aria-label="${h.name}" aria-pressed="${save.hand === h.id}" ${h.available ? "" : "disabled"}><small>${i + 1}</small><span>${h.icon}</span></button>`,
+            `<button data-hand="${h.id}" title="${h.name}${h.available ? "" : " · сначала создайте"}" aria-label="${h.name}" aria-pressed="${save.hand === h.id}" ${h.available ? "" : "disabled"}><small>${i + 1}</small><span>${hudIcon(h.id)}</span></button>`,
         )
         .join("");
       this.el("handbar")
@@ -250,7 +305,7 @@ export class UI {
 
     this.el("planet-name").textContent = save.inside ? "Главный дом" : p.name;
     this.el("planet-tag").textContent = save.inside
-      ? "Уют начинается с вас"
+      ? "Жилой сектор / интерьер"
       : save.planet === "home"
         ? "Родная планета · база"
         : "Исследовательская планета · добыча";
@@ -258,7 +313,9 @@ export class UI {
     this.el("galaxy").classList.toggle("hidden", !!save.inside);
     this.el("build").classList.remove("hidden");
     this.el("build").innerHTML =
-      `<span>${save.inside ? "🪑" : "🏗️"}</span>${save.inside ? "Мебель" : "Строить"}`;
+      `<span>${hudIcon("build")}</span><strong>${save.inside ? "Мебель" : "Строительство"}<small>Архитектор колонии</small></strong><em>04</em>`;
+    this.el("window-save").textContent =
+      `Сохранено · ${new Date(save.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
     const combat = !!PLANETS[save.planet].hostile && !save.inside;
     this.el("combat-hud").classList.toggle("hidden", !combat);
     this.el("attack").classList.toggle("hidden", !combat);
@@ -388,9 +445,9 @@ export class UI {
     const expanded = open ?? this.el("menu-items").classList.contains("hidden");
     this.el("menu-items").classList.toggle("hidden", !expanded);
     this.el("menu-toggle").setAttribute("aria-expanded", String(expanded));
-    this.el("menu-toggle").querySelector("span")!.textContent = expanded
-      ? "×"
-      : "☰";
+    this.el("menu-toggle").querySelector("span")!.innerHTML = hudIcon(
+      expanded ? "close" : "menu",
+    );
   }
   get modalOpen() {
     return !this.el("modal").classList.contains("hidden");
@@ -404,11 +461,33 @@ export class UI {
     this.el("modal").classList.add("hidden");
     this.activeModal = null;
   }
-  panel(html: string) {
+  panel(html: string, section = "facility") {
     this.activeModal = null;
-    this.show(html);
+    this.show(html, section);
   }
-  private show(html: string) {
+  private show(html: string, section = this.activeModal ?? "facility") {
+    this.root.dataset.window = section;
+    const titles: Record<string, string> = {
+      inventory: "Инвентарь",
+      craft: "Производство",
+      galaxy: "Навигация",
+      construction: "Архитектор",
+      automation: "Автоматизация",
+      profile: "Паспорт",
+      shipyard: "Верфь",
+      ship: "Корабль",
+      facility: "Объект колонии",
+      settings: "Настройки",
+      seeds: "Биолаборатория",
+      skills: "Прогресс",
+    };
+    this.el("window-title").textContent = titles[section] ?? "Колония";
+    this.root
+      .querySelectorAll<HTMLElement>("[data-window-nav]")
+      .forEach((b) =>
+        b.setAttribute("aria-current", String(b.dataset.windowNav === section)),
+      );
+
     this.galaxyMap?.dispose();
     this.galaxyMap = undefined;
     this.el("modal-content").innerHTML = html;
@@ -423,15 +502,13 @@ export class UI {
     this.activeModal = "inventory";
     this.inventoryGroup = group;
     this.selectedItem = selected;
-    const items = Object.entries(save.inventory).filter(
-        ([id, n]) => n > 0 || !!RESOURCE_LABELS[id],
-      ),
+    const items = Object.entries(save.inventory).filter(([, n]) => n > 0),
       shown = items.filter(
         ([id]) => group === "Все" || itemInfo(id).group === group,
       );
     const info = selected ? itemInfo(selected) : null;
     this.show(
-      `<span class="eyebrow">ЛИЧНЫЙ ИНВЕНТАРЬ</span><h2>Рюкзак путешественника</h2><div class="equipment-row"><div><small>ОРУЖИЕ</small><strong>${save.equipment.weapon ? GEAR[save.equipment.weapon].name : "Не надето"}</strong>${save.equipment.weapon ? '<button id="unequip-weapon">Снять</button>' : ""}</div><div><small>БРОНЯ</small><strong>${save.equipment.armor ? GEAR[save.equipment.armor].name : "Не надета"}</strong>${save.equipment.armor ? '<button id="unequip-armor">Снять</button>' : ""}</div><span>♥ ${save.health} / 100<br>Побед: ${save.kills}</span></div><div class="tabs">${["Все", "Ресурсы", "Семена", "Урожай", "Постройки", "Мебель", "Экипировка"].map((g) => `<button data-inventory-tab="${g}" class="${g === group ? "active" : ""}">${g}</button>`).join("")}</div><div class="bag-layout"><div class="slots">${shown.map(([id, n]) => `<button class="slot ${id === selected ? "selected" : ""}" data-item="${escape(id)}" aria-label="${escape(itemInfo(id).name)}: ${n}" title="${escape(itemInfo(id).name)}">${art(id)}${id.startsWith("gear:") && Object.values(save.equipment).includes(id.split(":")[1] as GearKind) ? '<i class="equipped-mark">✓</i>' : ""}<b>${n}</b><small>${escape(itemInfo(id).name)}</small></button>`).join("")}${'<div class="slot empty"></div>'.repeat(Math.max(0, 24 - shown.length))}</div><aside class="item-detail">${info ? `${selected.startsWith("gear:") ? illustration(selected) : art(selected)}<small>${info.group}</small><h3>${escape(info.name)}</h3><p>В рюкзаке: <b>${save.inventory[selected] ?? 0}</b></p>${selected.startsWith("gear:") ? `<p>${GEAR[selected.split(":")[1] as GearKind].description}</p><button id="equip-item" class="primary">Надеть</button>` : selected.startsWith("kit:") || selected.startsWith("furniture:") ? '<button id="place-item" class="primary">Разместить</button>' : '<p class="muted">Ресурсы расходуются по рецептам. Семена сажаются в свободную грядку своего биома.</p>'}` : '<span class="bag-icon">🎒</span><h3>Всё под рукой</h3><p>Выберите предмет, чтобы увидеть его название и действие.</p>'}</aside></div><footer class="bag-footer">${items.length} типов предметов · общий инвентарь всех планет</footer>`,
+      `<span class="eyebrow">ЛИЧНЫЙ ИНВЕНТАРЬ</span><h2>Снаряжение и ресурсы</h2><div class="equipment-row"><div><small>ОРУЖИЕ</small><strong>${save.equipment.weapon ? GEAR[save.equipment.weapon].name : "Не надето"}</strong>${save.equipment.weapon ? '<button id="unequip-weapon">Снять</button>' : ""}</div><div><small>БРОНЯ</small><strong>${save.equipment.armor ? GEAR[save.equipment.armor].name : "Не надета"}</strong>${save.equipment.armor ? '<button id="unequip-armor">Снять</button>' : ""}</div><span>♥ ${save.health} / 100<br>Побед: ${save.kills}</span></div><div class="tabs">${["Все", "Ресурсы", "Семена", "Урожай", "Постройки", "Мебель", "Экипировка"].map((g) => `<button data-inventory-tab="${g}" class="${g === group ? "active" : ""}">${g}</button>`).join("")}</div><div class="bag-layout"><div class="slots">${shown.map(([id, n]) => `<button class="slot ${id === selected ? "selected" : ""}" data-item="${escape(id)}" aria-label="${escape(itemInfo(id).name)}: ${n}" title="${escape(itemInfo(id).name)}">${art(id)}${id.startsWith("gear:") && Object.values(save.equipment).includes(id.split(":")[1] as GearKind) ? '<i class="equipped-mark">✓</i>' : ""}<b>${n}</b><small>${escape(itemInfo(id).name)}</small></button>`).join("")}${'<div class="slot empty"></div>'.repeat(Math.max(0, 24 - shown.length))}</div><aside class="item-detail">${info ? `${selected.startsWith("gear:") ? illustration(selected) : art(selected)}<small>${info.group}</small><h3>${escape(info.name)}</h3><p>В рюкзаке: <b>${save.inventory[selected] ?? 0}</b></p>${selected.startsWith("gear:") ? `<p>${GEAR[selected.split(":")[1] as GearKind].description}</p><button id="equip-item" class="primary">Надеть</button>` : selected.startsWith("kit:") || selected.startsWith("furniture:") ? '<button id="place-item" class="primary">Разместить</button>' : '<p class="muted">Ресурсы расходуются по рецептам. Семена сажаются в свободную грядку своего биома.</p>'}` : `<span class="bag-icon">${hudIcon("inventory")}</span><h3>Всё под рукой</h3><p>Выберите предмет, чтобы увидеть его название и действие.</p>`}</aside></div><footer class="bag-footer">${items.length} типов предметов · общий инвентарь всех планет</footer>`,
     );
     this.root
       .querySelectorAll<HTMLButtonElement>("[data-inventory-tab]")
@@ -463,7 +540,7 @@ export class UI {
       list = all.filter((r) => group === "Все" || r.group === group),
       recipe = all.find((r) => r.id === selected) ?? list[0];
     this.show(
-      `<div class="workshop-heading"><span class="eyebrow">МАСТЕРСКАЯ ПУТЕШЕСТВЕННИКА · ПОЛЕВОЙ КАТАЛОГ</span><h2>Создавайте. Исследуйте. Защищайтесь.</h2><p>От первого стула до кристальной брони — всё начинается здесь.</p></div><div class="tabs">${["Все", "Оружие", "Броня", "База", "Модули", "Мебель", "Семена"].map((g) => `<button data-craft-tab="${g}" class="${g === group ? "active" : ""}">${g}</button>`).join("")}</div><div class="craft-layout"><div class="recipe-grid">${list.map((r) => `<button data-recipe="${r.id}" class="recipe ${r.id === recipe?.id ? "selected" : ""}">${illustration(r.id)}<div class="recipe-caption"><small>${r.group}</small><strong>${r.name}</strong><span>${r.lab ? "Лаборатория" : "Полевой рецепт"} ↗</span></div></button>`).join("")}</div><aside class="recipe-detail">${recipe ? `${illustration(recipe.id)}<span class="eyebrow">${recipe.group} · РЕЦЕПТ</span><h3>${recipe.name}</h3><p>${recipe.description}</p><div class="recipe-cost">${costs(recipe.cost, save)}</div>${recipe.lab && !hasLab(save) ? '<p class="locked">🔬 Сначала постройте лабораторию</p>' : ""}<button id="craft-one" class="primary" ${canAfford(save, recipe.cost) && (!recipe.lab || hasLab(save)) ? "" : "disabled"}>Создать ×1</button><small>Готовый предмет попадёт в рюкзак.</small>` : "<p>Рецептов пока нет.</p>"}</aside></div>`,
+      `<div class="workshop-heading"><span class="eyebrow">МАСТЕРСКАЯ ПУТЕШЕСТВЕННИКА · ПОЛЕВОЙ КАТАЛОГ</span><h2>Производственный каталог</h2><p>Чертежи, оборудование и модули вашей колонии.</p></div><div class="tabs">${["Все", "Оружие", "Броня", "База", "Модули", "Мебель", "Семена"].map((g) => `<button data-craft-tab="${g}" class="${g === group ? "active" : ""}">${g}</button>`).join("")}</div><div class="craft-layout"><div class="recipe-grid">${list.map((r) => `<button data-recipe="${r.id}" class="recipe ${r.id === recipe?.id ? "selected" : ""}">${illustration(r.id)}<div class="recipe-caption"><small>${r.group}</small><strong>${r.name}</strong><span>${r.lab ? "Лаборатория" : "Полевой рецепт"} ↗</span></div></button>`).join("")}</div><aside class="recipe-detail">${recipe ? `${illustration(recipe.id)}<span class="eyebrow">${recipe.group} · РЕЦЕПТ</span><h3>${recipe.name}</h3><p>${recipe.description}</p><div class="recipe-cost">${costs(recipe.cost, save)}</div>${recipe.lab && !hasLab(save) ? '<p class="locked">🔬 Сначала постройте лабораторию</p>' : ""}<button id="craft-one" class="primary" ${canAfford(save, recipe.cost) && (!recipe.lab || hasLab(save)) ? "" : "disabled"}>Создать ×1</button><small>Готовый предмет попадёт в рюкзак.</small>` : "<p>Рецептов пока нет.</p>"}</aside></div>`,
     );
     this.root
       .querySelectorAll<HTMLButtonElement>("[data-craft-tab]")
@@ -485,15 +562,16 @@ export class UI {
   seeds(save: Save) {
     this.activeModal = null;
     this.show(
-      `<span class="eyebrow">СВОБОДНАЯ ГРЯДКА</span><h2>Что посадим?</h2><div class="seed-options">${PLANETS[
+      `<span class="eyebrow">СВОБОДНАЯ ГРЯДКА</span><h2>Посевной модуль</h2><div class="seed-options">${PLANETS[
         save.planet
       ].plants
         .map((id) => {
           const p = PLANTS[id],
             n = save.inventory[`seed:${id}`] ?? 0;
-          return `<button data-seed="${id}" ${n ? "" : "disabled"}><span>${p.icon}</span><strong>${p.name}</strong><small>${p.seconds} сек. · ${n} семян</small><b>Посадить ↗</b></button>`;
+          return `<button data-seed="${id}" ${n ? "" : "disabled"}><span>${art(`seed:${id}`)}</span><strong>${p.name}</strong><small>${p.seconds} сек. · ${n} семян</small><b>Посадить ↗</b></button>`;
         })
         .join("")}</div>`,
+      "seeds",
     );
     this.root
       .querySelectorAll<HTMLButtonElement>("[data-seed]")
@@ -540,7 +618,7 @@ export class UI {
         const r = inside
           ? FURNITURE[id as FurnitureKind]
           : BUILDINGS[id as BuildingKind];
-        return `<button data-placement="${id}" class="${id === kind ? "selected" : ""}"><span>${r.icon}</span><strong>${r.name}</strong><small>${save.inventory[`${inside ? "furniture" : "kit"}:${id}`] ?? 0} готово</small></button>`;
+        return `<button data-placement="${id}" class="${id === kind ? "selected" : ""}"><span>${hudIcon(id)}</span><strong>${r.name}</strong><small>${save.inventory[`${inside ? "furniture" : "kit"}:${id}`] ?? 0} готово</small></button>`;
       })
       .join("")}</div>${
       !inside && BUILDINGS[kind as BuildingKind].zone === "outpost"
@@ -580,10 +658,11 @@ export class UI {
     this.el("build-panel").classList.add("hidden");
   }
   galaxy(save: Save, query = this.galaxyQuery) {
+    if (save.flight) this.travelMode = "ship";
     this.activeModal = "galaxy";
     this.galaxyQuery = query;
     this.show(
-      `<span class="eyebrow">AURORA / STELLAR CARTOGRAPHY</span><h2>Звёздная сеть</h2><label class="travel-selector">Способ путешествия<select id="travel-mode"><option value="ship" ${this.travelMode === "ship" ? "selected" : ""}>Корабль</option><option value="grapple" ${this.travelMode === "grapple" ? "selected" : ""}>Гарпун и трос</option></select></label><div id="galaxy-network"></div>`,
+      `<span class="eyebrow">AURORA / STELLAR CARTOGRAPHY</span><h2>Звёздная сеть</h2><label class="travel-selector">Способ путешествия<select id="travel-mode"><option value="ship" ${this.travelMode === "ship" ? "selected" : ""}>Корабль</option><option value="grapple" ${save.flight ? "disabled" : ""} ${this.travelMode === "grapple" ? "selected" : ""}>Гарпун и трос</option></select></label><div id="galaxy-network"></div>`,
     );
     this.galaxyMap = new GalaxyMap(
       this.el("galaxy-network"),
@@ -594,9 +673,27 @@ export class UI {
     );
     (this.el("travel-mode") as HTMLSelectElement).onchange = () => {
       this.travelMode = (this.el("travel-mode") as HTMLSelectElement).value as
-        | "ship"
-        | "grapple";
+        "ship" | "grapple";
     };
+  }
+  placementMode(title: string | null) {
+    this.el("placement-mode").classList.toggle("hidden", !title);
+    this.el("placement-name").textContent = title ?? "";
+  }
+  shipDock(save: Save) {
+    this.travelMode = "ship";
+    this.hideContext();
+    const ship = save.fleet.find((s) => s.id === save.activeShip)!,
+      stats = SHIP_STATS(ship);
+    this.panel(
+      `<span class="eyebrow">ПОСАДОЧНАЯ ПЛОЩАДКА / БОРТОВЫЕ СИСТЕМЫ</span><h2>${escape(ship.name)}</h2><div class="ship-dock"><div class="dock-vessel">${hudIcon("ship")}<span>MK ${ship.model} / ${SHIP_CLASS_NAMES[ship.class]}</span></div><section><div class="status-tag">ГОТОВ К ВЫЛЕТУ</div><h3>Ваша кабина готова</h3><p>Садитесь за штурвал для ручного полёта или выберите планету назначения на звёздной карте.</p><div class="metric-strip"><span>Класс<b>${SHIP_CLASS_NAMES[ship.class]}</b></span><span>Скорость<b>${stats.speed} м/с</b></span></div><button id="board-ship" class="primary">${hudIcon("ship")}Войти в кабину</button><button id="ship-route">${hudIcon("galaxy")}Выбрать маршрут</button></section></div>`,
+      "ship",
+    );
+    this.button("board-ship", () => this.onBoardShip());
+    this.button("ship-route", () => {
+      this.travelMode = "ship";
+      this.galaxy(save);
+    });
   }
   skills(save: Save) {
     this.panel(
@@ -608,6 +705,7 @@ export class UI {
             `<button data-skill="${id}" ${skillPoints(save.progression) <= 0 || save.progression.skills[id as keyof typeof SKILLS] >= 5 ? "disabled" : ""}>${name} · ${save.progression.skills[id as keyof typeof SKILLS]}/5<small>${id === "farming" ? "+1 урожай за каждые два ранга" : id === "mining" ? "+1 материал источника за ранг" : "+2 урона за ранг"}</small></button>`,
         )
         .join("")}</div>`,
+      "skills",
     );
     this.el("modal-content")
       .querySelectorAll<HTMLButtonElement>("[data-skill]")
@@ -628,7 +726,8 @@ export class UI {
   ) {
     this.activeModal = null;
     this.show(
-      `<span class="eyebrow">НАСТРОЙКИ</span><h2>Ваш маленький космос</h2><p>WASD или джойстик — движение. Нажмите объект для действия. Потяните мир для поворота; колесо или щипок — масштаб.</p><button id="full" class="primary">На весь экран</button><button id="quality" class="secondary">Переключить качество</button><div class="sound-controls"><h3>Звук путешествия</h3><label><input id="music-enabled" type="checkbox" ${audio.music ? "checked" : ""}> Музыка</label><label><input id="effects-enabled" type="checkbox" ${audio.effects ? "checked" : ""}> Звуковые эффекты</label><label>Громкость <input id="sound-volume" type="range" min="0" max="1" step="0.05" value="${audio.volume}"></label><p>Музыка запускается после первого нажатия. В фоне звук приостанавливается.</p></div>`,
+      `<span class="eyebrow">НАСТРОЙКИ</span><h2>Настройки системы</h2><p>WASD или джойстик — движение. Нажмите объект для действия. Потяните мир для поворота; колесо или щипок — масштаб.</p><button id="full" class="primary">На весь экран</button><button id="quality" class="secondary">Переключить качество</button><div class="sound-controls"><h3>Звук путешествия</h3><label><input id="music-enabled" type="checkbox" ${audio.music ? "checked" : ""}> Музыка</label><label><input id="effects-enabled" type="checkbox" ${audio.effects ? "checked" : ""}> Звуковые эффекты</label><label>Громкость <input id="sound-volume" type="range" min="0" max="1" step="0.05" value="${audio.volume}"></label><p>Музыка запускается после первого нажатия. В фоне звук приостанавливается.</p></div>`,
+      "settings",
     );
     this.button("full", fullscreen);
     this.button("quality", quality);

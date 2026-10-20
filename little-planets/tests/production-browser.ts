@@ -111,7 +111,7 @@ try {
   await phone.waitForFunction(() =>
     Boolean(
       document.querySelector("canvas") ||
-        document.querySelector("#error-message"),
+      document.querySelector("#error-message"),
     ),
   );
   if (await phone.locator("#error-message").count())
@@ -121,7 +121,7 @@ try {
   await phone.waitForSelector("canvas.world");
   assert.match(
     (await phone.locator("#save-status").textContent()) ?? "",
-    /Telegram/,
+    /ONLINE.*сохранено/,
   );
   assert.equal(
     await phone.evaluate(() =>

@@ -1,3 +1,5 @@
+import { hudIcon } from "../ui/Glyphs";
+import { illustration } from "../ui/Illustrations";
 import { ColonyPanels } from "../ui/ColonyPanels";
 import { SurfaceFollower } from "../world/Motion";
 import { FirstPersonHands } from "../world/FirstPersonHands";
@@ -340,14 +342,10 @@ export class Game {
     this.ui.onContextClose = () => this.clearSelection();
     this.ui.onGalaxy = () => {
       if (store.state.inside) return;
-      if (store.state.hand === "grapple") {
-        this.ui.travelMode = "grapple";
-        menu(() => this.ui.galaxy(store.state));
-        return;
-      }
       this.ui.travelMode = "ship";
       menu(() => this.ui.galaxy(store.state));
     };
+    this.ui.onBoardShip = () => void this.travel(store.state.planet, true);
     this.ui.onTravel = (p) => void this.travel(p);
     this.ui.onSpaceAuto = () => {
       if (this.busy) return;
@@ -364,7 +362,10 @@ export class Game {
     };
     this.ui.onSpaceLand = () => void this.land();
     this.ui.onSpaceCourse = () => {
-      if (!this.busy) this.ui.galaxy(this.store.state);
+      if (!this.busy) {
+        this.ui.travelMode = "ship";
+        this.ui.galaxy(this.store.state);
+      }
     };
     this.ui.onSelectBuilding = (kind) => {
       this.buildKind = kind;
@@ -380,6 +381,10 @@ export class Game {
       this.updatePreview();
     };
     this.ui.onCancelBuild = () => this.stopBuild();
+    this.ui.onCancelPlacement = () => {
+      this.stopBuild();
+      this.clearSelection();
+    };
     this.ui.onRotateBuild = () => {
       this.rotation = this.rotation ? 0 : 1;
       this.updatePreview();
@@ -437,7 +442,12 @@ export class Game {
         }
         if (e.code === "Escape") {
           if (this.ui.modalOpen) this.ui.close();
-          else if (this.mode === "build") this.stopBuild();
+          else if (
+            this.mode === "build" ||
+            this.buildOnCube ||
+            this.terrainMode === "place"
+          )
+            this.stopBuild();
           else this.clearSelection();
           this.ui.toggleMenu(false);
         }
@@ -541,6 +551,9 @@ export class Game {
               .toArray(),
             sphereForward: this.sphereForward.toArray(),
             firstPerson: this.firstPerson,
+            placement:
+              this.buildOnCube ??
+              (this.terrainMode === "place" ? "block" : null),
             cockpit: !!this.space,
             hand: store.state.hand,
             zipline: store.state.grapple,
@@ -612,8 +625,7 @@ export class Game {
       );
       this.ui.update(this.store.state, this.store.now());
       if (hand === "pickaxe") {
-        this.terrainMode = "dig";
-        this.buildOnCube = undefined;
+        this.stopBuild();
       }
       if (hand === "grapple") {
         this.ui.travelMode = "grapple";
@@ -1079,12 +1091,20 @@ export class Game {
         this.approach({ ...enemy, type: "enemy" }, () => this.showContext());
         return;
       }
-      if (!this.buildOnCube && this.terrainMode !== "place") {
+      if (this.view.pickShip(this.raycaster.ray)) {
+        this.stopBuild();
+        this.approach({ ...ship(this.store.state.planet), type: "ship" }, () =>
+          this.ui.shipDock(this.store.state),
+        );
+        return;
+      }
+      {
         const id = this.view.pickBuilding(this.raycaster.ray),
           b = this.store.state.worlds[this.store.state.planet].buildings.find(
             (b) => b.id === id,
           );
         if (b) {
+          this.stopBuild();
           this.approach({ ...b, type: "building", id: b.id }, () =>
             this.colonyPanels.building(b.id),
           );
@@ -1092,6 +1112,7 @@ export class Game {
         }
         const device = this.machines.pick(this.raycaster.ray);
         if (device) {
+          this.stopBuild();
           this.automationPanel?.open(device);
           return;
         }
@@ -1115,6 +1136,21 @@ export class Game {
       ].buildings.find(
         (b) => surfaceDistance(point, b, this.store.state.planet) < 1.6,
       );
+      if (building) {
+        this.stopBuild();
+        this.approach(
+          { ...buildingCenter(building), type: "building", id: building.id },
+          () => this.colonyPanels.building(building.id),
+        );
+        return;
+      }
+      if (surfaceDistance(point, pad, this.store.state.planet) < 1.5) {
+        this.stopBuild();
+        this.approach({ ...pad, type: "ship" }, () =>
+          this.ui.shipDock(this.store.state),
+        );
+        return;
+      }
       if (this.terrainMode === "place" || this.buildOnCube) {
         this.approach(selected, () => this.showContext());
         return;
@@ -1136,14 +1172,6 @@ export class Game {
           type: "meteor",
           id: String(meteor.id),
         };
-      else if (building)
-        selected = {
-          ...buildingCenter(building),
-          type: "building",
-          id: building.id,
-        };
-      else if (surfaceDistance(point, pad, this.store.state.planet) < 1.5)
-        selected = { ...pad, type: "ship" };
       else if (
         beds(this.store.state.planet).find(
           (b) => surfaceDistance(point, b, this.store.state.planet) < 0.7,
@@ -1234,7 +1262,7 @@ export class Game {
   }
   private approach(s: Selection, done: () => void) {
     if (this.busy || this.flying || this.ui.modalOpen) return;
-    this.stopBuild();
+    this.stopBuild(false);
     this.clearSelection();
     this.selected = s;
     this.sphereDestination = undefined;
@@ -1329,7 +1357,7 @@ export class Game {
       this.ui.context(
         "Корабль",
         "Выберите знакомый мир или найдите случайную планету сканером.",
-        "Полететь",
+        "Открыть корабль",
       );
     else if (s.type === "door")
       this.ui.context("Дверь", "Вернуться на родную планету.", "Выйти");
@@ -1425,8 +1453,10 @@ export class Game {
         );
     } else if (s.type === "node")
       void this.perform({ type: "mine", id: s.id! }, "tool", "+3 ресурса.");
-    else if (s.type === "ship") this.ui.galaxy(state);
-    else if (s.type === "door")
+    else if (s.type === "ship") {
+      this.stopBuild();
+      this.ui.shipDock(state);
+    } else if (s.type === "door")
       void this.perform({ type: "exit" }, "idle", "Вы снова дома, на планете.");
     else if (s.type === "furniture")
       void this.perform(
@@ -1485,6 +1515,7 @@ export class Game {
         oldHealth = this.store.state.health,
         oldKills = this.store.state.kills;
       await this.store.action(action);
+      if (action.type === "build") this.stopBuild();
       if (
         oldInside !== this.store.state.inside ||
         oldPlanet !== this.store.state.planet
@@ -1540,18 +1571,18 @@ export class Game {
   private startBuild(kind?: BuildingKind | FurnitureKind) {
     if (!this.store.state.inside && !this.flying && !this.busy) {
       this.ui.panel(
-        `<span class="eyebrow">ЗЕМЛЯ И ПОСТРОЙКИ</span><h2>Кирка и строительство</h2><p>Выберите действие, закройте окно и нажмите участок рядом с персонажем. На выбранном участке появится кнопка действия.</p><button id="tool-dig">⛏ Кирка: разрушать блоки</button><h3>Установка блоков</h3><div class="device-palette">${(["stone", "wood", "obsidian"] as const).map((r) => `<button data-terrain="${r}">${RESOURCE_LABELS[r]} · ${this.store.state.inventory[r] ?? 0}</button>`).join("")}</div><h3>Постройки</h3><div class="device-palette">${allowedBuildings(
+        `<span class="eyebrow">КОЛОНИАЛЬНАЯ АРХИТЕКТУРА / МОДУЛИ ПОВЕРХНОСТИ</span><h2>Строительство колонии</h2><p>Выберите чертёж и укажите место рядом с персонажем. Площадка выравнивается автоматически. После постройки объект сразу доступен для управления.</p><div class="construction-tools"><button id="tool-dig">${hudIcon("pickaxe")}<div><strong>Кирка</strong><small>Разрушение и добыча блоков</small></div>${hudIcon("arrow")}</button>${(["stone", "wood", "obsidian"] as const).map((r) => `<button data-terrain="${r}">${hudIcon("block")}<div><strong>${RESOURCE_LABELS[r]}</strong><small>Установка блока / в запасе ${this.store.state.inventory[r] ?? 0}</small></div>${hudIcon("arrow")}</button>`).join("")}</div><h3>Модули колонии</h3><div class="construction-grid">${allowedBuildings(
           this.store.state.planet,
         )
           .map(
             (k) =>
-              `<button data-cube-building="${k}">${BUILDINGS[k].name}</button>`,
+              `<button data-cube-building="${k}">${illustration("kit:" + k)}<span class="tag">${this.store.state.freeConstruction ? "TEST / 0 РЕСУРСОВ" : "ЧЕРТЁЖ"}</span><div><strong>${BUILDINGS[k].name}</strong><small>${BUILDINGS[k].description}</small><span>Разместить ${hudIcon("arrow")}</span></div></button>`,
           )
           .join("")}</div>`,
+        "construction",
       );
       this.ui.button("tool-dig", () => {
-        this.terrainMode = "dig";
-        this.buildOnCube = undefined;
+        this.stopBuild();
         this.ui.close();
         this.ui.toast("Выберите блок рядом с собой.");
       });
@@ -1564,6 +1595,9 @@ export class Game {
               this.terrainMode = "place";
               this.terrainMaterial = b.dataset.terrain as "stone";
               this.buildOnCube = undefined;
+              this.ui.placementMode(
+                `Блок: ${RESOURCE_LABELS[this.terrainMaterial]}`,
+              );
               this.ui.close();
               this.ui.toast("Выберите участок для блока.");
             }),
@@ -1575,6 +1609,8 @@ export class Game {
           (b) =>
             (b.onclick = () => {
               this.buildOnCube = b.dataset.cubeBuilding as BuildingKind;
+              this.terrainMode = "dig";
+              this.ui.placementMode(BUILDINGS[this.buildOnCube].name);
               this.ui.close();
               this.ui.toast("Выберите участок для постройки.");
             }),
@@ -1684,7 +1720,12 @@ export class Game {
     this.scene.add(this.preview);
     this.ui.placement(state, this.buildKind, valid, this.buildResource);
   }
-  private stopBuild() {
+  private stopBuild(resetTools = true) {
+    if (resetTools) {
+      this.buildOnCube = undefined;
+      this.terrainMode = "dig";
+      this.ui.placementMode(null);
+    }
     if (this.mode !== "build") return;
     this.mode = "explore";
     if (this.grid) this.grid.visible = false;
@@ -1869,7 +1910,7 @@ export class Game {
     this.pilotCommands = [];
     this.spaceTick = 0;
   }
-  private async travel(planet: PlanetId) {
+  private async travel(planet: PlanetId, boardOnly = false) {
     if (this.space && this.flightState) {
       if (this.busy) return;
       this.busy = true;
@@ -1896,7 +1937,10 @@ export class Game {
     if (surfaceDistance(this.position, pad, this.store.state.planet) > 2.7) {
       this.ui.close();
       this.ui.toast("Подходим к кораблю для вылета.");
-      this.approach({ ...pad, type: "ship" }, () => void this.travel(planet));
+      this.approach(
+        { ...pad, type: "ship" },
+        () => void this.travel(planet, boardOnly),
+      );
       return;
     }
     this.busy = true;
@@ -1905,7 +1949,9 @@ export class Game {
     this.path = [];
     try {
       await this.flushMove();
-      await this.store.action({ type: "travel", planet });
+      await this.store.action(
+        boardOnly ? { type: "boardShip" } : { type: "travel", planet },
+      );
       this.flying = true;
       this.avatar.root.visible = false;
       this.ui.root.classList.add("in-flight");
@@ -2271,7 +2317,11 @@ export class Game {
       this.ui.update(this.store.state, this.store.now());
       this.automationPanel?.refresh();
       this.colonyPanels?.refresh();
-      this.ui.el("audio-toggle").textContent = this.audio.muted ? "🔇" : "♫";
+      const audioButton = this.ui.el("audio-toggle");
+      if (audioButton.dataset.muted !== String(this.audio.muted)) {
+        audioButton.dataset.muted = String(this.audio.muted);
+        audioButton.innerHTML = hudIcon(this.audio.muted ? "muted" : "audio");
+      }
       this.ui.minimap(
         this.store.state,
         this.position,

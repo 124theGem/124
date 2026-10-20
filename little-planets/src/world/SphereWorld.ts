@@ -116,6 +116,19 @@ export class SphereWorld {
     this.root.add(this.ship);
     this.rebuild(save, now);
   }
+  pickShip(ray: T.Ray) {
+    this.root.updateMatrixWorld(true);
+    const caster = new T.Raycaster();
+    caster.ray.copy(ray);
+    const hit = caster.intersectObject(this.ship, true)[0],
+      ground = caster.intersectObject(this.ground, false)[0];
+    const structure = caster.intersectObject(this.structures, true)[0];
+    return (
+      !!hit &&
+      (!ground || hit.distance <= ground.distance + 0.05) &&
+      (!structure || hit.distance <= structure.distance)
+    );
+  }
   pickBuilding(ray: T.Ray) {
     this.root.updateMatrixWorld(true);
     const caster = new T.Raycaster();
