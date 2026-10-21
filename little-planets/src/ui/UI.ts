@@ -1,3 +1,5 @@
+import { graphicsQuality } from "../world/Graphics";
+import { ShipPreview } from "./ShipPreview";
 import { storyText } from "../../shared/prologue";
 import { hudIcon } from "./Glyphs";
 import { SHIP_CLASS_NAMES, SHIP_STATS } from "../../shared/ships";
@@ -80,6 +82,10 @@ export class UI {
   onProfile = () => {};
   onScanPlanet = (id: PlanetId) => {};
   private galaxyMap?: GalaxyMap;
+  private panelCleanup?: () => void;
+  ownPanel(dispose: () => void) {
+    this.panelCleanup = dispose;
+  }
   onObservePlanet = (id: PlanetId) => {};
   onStory = () => {};
   onHand = (hand: Save["hand"]) => {};
@@ -421,6 +427,8 @@ export class UI {
     return !this.el("context").classList.contains("hidden");
   }
   close() {
+    this.panelCleanup?.();
+    this.panelCleanup = undefined;
     this.galaxyMap?.dispose();
     this.galaxyMap = undefined;
     this.el("modal").classList.add("hidden");
@@ -431,6 +439,8 @@ export class UI {
     this.show(html, section);
   }
   private show(html: string, section = this.activeModal ?? "facility") {
+    this.panelCleanup?.();
+    this.panelCleanup = undefined;
     this.root.dataset.window = section;
     const titles: Record<string, string> = {
       inventory: "Инвентарь",
@@ -472,6 +482,9 @@ export class UI {
         ([id]) => group === "Все" || itemInfo(id).group === group,
       );
     const info = selected ? itemInfo(selected) : null;
+    const selectedShip = selected.startsWith("ship:")
+      ? save.fleet.find((s) => s.id === selected.slice(5))
+      : undefined;
     const itemName = (id: string) =>
       id.startsWith("ship:")
         ? (save.fleet.find((s) => s.id === id.slice(5))?.name ??
@@ -479,8 +492,15 @@ export class UI {
         : itemInfo(id).name;
     if (info) info.name = itemName(selected);
     this.show(
-      `<span class="eyebrow">ЛИЧНЫЙ ИНВЕНТАРЬ</span><h2>Снаряжение и ресурсы</h2><div class="equipment-row"><div><small>ОРУЖИЕ</small><strong>${save.equipment.weapon ? GEAR[save.equipment.weapon].name : "Не надето"}</strong>${save.equipment.weapon ? '<button id="unequip-weapon">Снять</button>' : ""}</div><div><small>БРОНЯ</small><strong>${save.equipment.armor ? GEAR[save.equipment.armor].name : "Не надета"}</strong>${save.equipment.armor ? '<button id="unequip-armor">Снять</button>' : ""}</div><span>♥ ${save.health} / 100<br>Побед: ${save.kills}</span></div><div class="tabs">${["Все", "Ресурсы", "Семена", "Урожай", "Постройки", "Мебель", "Экипировка", "Машины", "Корабли"].map((g) => `<button data-inventory-tab="${g}" class="${g === group ? "active" : ""}">${g}</button>`).join("")}</div><div class="bag-layout"><div class="slots">${shown.map(([id, n]) => `<button class="slot ${id === selected ? "selected" : ""}" data-item="${escape(id)}" aria-label="${escape(itemName(id))}: ${n}" title="${escape(itemName(id))}">${art(id)}${id.startsWith("gear:") && Object.values(save.equipment).includes(id.split(":")[1] as GearKind) ? '<i class="equipped-mark">✓</i>' : ""}<b>${n}</b><small>${escape(itemName(id))}</small></button>`).join("")}${'<div class="slot empty"></div>'.repeat(Math.max(0, 24 - shown.length))}</div><aside class="item-detail">${info ? `${selected.startsWith("gear:") ? illustration(selected) : art(selected)}<small>${info.group}</small><h3>${escape(info.name)}</h3><p>В рюкзаке: <b>${save.inventory[selected] ?? 0}</b></p>${selected.startsWith("gear:") ? `<p>${GEAR[selected.split(":")[1] as GearKind].description}</p><button id="equip-item" class="primary">Надеть</button>` : selected.startsWith("kit:") || selected.startsWith("furniture:") || selected.startsWith("device:") || selected.startsWith("ship:") ? `<button id="place-item" class="primary" ${save.inventory[selected] > 0 ? "" : "disabled"}>Разместить</button>` : '<p class="muted">Ресурсы расходуются по рецептам. Семена сажаются в свободную грядку своего биома.</p>'}` : `<span class="bag-icon">${hudIcon("inventory")}</span><h3>Всё под рукой</h3><p>Выберите предмет, чтобы увидеть его название и действие.</p>`}</aside></div><footer class="bag-footer">${items.length} типов предметов · общий инвентарь всех планет</footer>`,
+      `<span class="eyebrow">ЛИЧНЫЙ ИНВЕНТАРЬ</span><h2>Снаряжение и ресурсы</h2><div class="equipment-row"><div><small>ОРУЖИЕ</small><strong>${save.equipment.weapon ? GEAR[save.equipment.weapon].name : "Не надето"}</strong>${save.equipment.weapon ? '<button id="unequip-weapon">Снять</button>' : ""}</div><div><small>БРОНЯ</small><strong>${save.equipment.armor ? GEAR[save.equipment.armor].name : "Не надета"}</strong>${save.equipment.armor ? '<button id="unequip-armor">Снять</button>' : ""}</div><span>♥ ${save.health} / 100<br>Побед: ${save.kills}</span></div><div class="tabs">${["Все", "Ресурсы", "Семена", "Урожай", "Постройки", "Мебель", "Экипировка", "Машины", "Корабли"].map((g) => `<button data-inventory-tab="${g}" class="${g === group ? "active" : ""}">${g}</button>`).join("")}</div><div class="bag-layout"><div class="slots">${shown.map(([id, n]) => `<button class="slot ${id === selected ? "selected" : ""}" data-item="${escape(id)}" aria-label="${escape(itemName(id))}: ${n}" title="${escape(itemName(id))}">${art(id)}${id.startsWith("gear:") && Object.values(save.equipment).includes(id.split(":")[1] as GearKind) ? '<i class="equipped-mark">✓</i>' : ""}<b>${n}</b><small>${escape(itemName(id))}</small></button>`).join("")}${'<div class="slot empty"></div>'.repeat(Math.max(0, 24 - shown.length))}</div><aside class="item-detail">${info ? `${selectedShip ? '<div id="inventory-ship-preview" class="inventory-ship-preview"></div>' : selected.startsWith("gear:") ? illustration(selected) : art(selected)}<small>${info.group}</small><h3>${escape(info.name)}</h3><p>В рюкзаке: <b>${save.inventory[selected] ?? 0}</b></p>${selected.startsWith("gear:") ? `<p>${GEAR[selected.split(":")[1] as GearKind].description}</p><button id="equip-item" class="primary">Надеть</button>` : selected.startsWith("kit:") || selected.startsWith("furniture:") || selected.startsWith("device:") || selected.startsWith("ship:") ? `<button id="place-item" class="primary" ${save.inventory[selected] > 0 ? "" : "disabled"}>Разместить</button>` : '<p class="muted">Ресурсы расходуются по рецептам. Семена сажаются в свободную грядку своего биома.</p>'}` : `<span class="bag-icon">${hudIcon("inventory")}</span><h3>Всё под рукой</h3><p>Выберите предмет, чтобы увидеть его название и действие.</p>`}</aside></div><footer class="bag-footer">${items.length} типов предметов · общий инвентарь всех планет</footer>`,
     );
+    if (selectedShip) {
+      const preview = new ShipPreview(
+        this.el("inventory-ship-preview"),
+        selectedShip,
+      );
+      this.ownPanel(() => preview.dispose());
+    }
     this.root
       .querySelectorAll<HTMLButtonElement>("[data-inventory-tab]")
       .forEach(
@@ -682,9 +702,11 @@ export class UI {
       )!,
       stats = SHIP_STATS(ship);
     this.panel(
-      `<span class="eyebrow">ПОСАДОЧНАЯ ПЛОЩАДКА / БОРТОВЫЕ СИСТЕМЫ</span><h2>${escape(ship.name)}</h2><div class="ship-dock"><div class="dock-vessel">${hudIcon("ship")}<span>MK ${ship.model} / ${SHIP_CLASS_NAMES[ship.class]}</span></div><section><div class="status-tag">ГОТОВ К ВЫЛЕТУ</div><h3>Ваша кабина готова</h3><p>Садитесь за штурвал для ручного полёта или выберите планету назначения на звёздной карте.</p><div class="metric-strip"><span>Класс<b>${SHIP_CLASS_NAMES[ship.class]}</b></span><span>Скорость<b>${stats.speed} м/с</b></span></div><button id="board-ship" class="primary">${hudIcon("ship")}Войти в кабину</button><button id="ship-route">${hudIcon("galaxy")}Выбрать маршрут</button></section></div>`,
+      `<span class="eyebrow">ПОСАДОЧНАЯ ПЛОЩАДКА / БОРТОВЫЕ СИСТЕМЫ</span><h2>${escape(ship.name)}</h2><div class="ship-dock"><div id="dock-vessel-preview" class="dock-vessel dock-vessel-live"></div><section><div class="status-tag">ГОТОВ К ВЫЛЕТУ</div><h3>Ваша кабина готова</h3><p>Садитесь за штурвал для ручного полёта или выберите планету назначения на звёздной карте.</p><div class="metric-strip"><span>Класс<b>${SHIP_CLASS_NAMES[ship.class]}</b></span><span>Скорость<b>${stats.speed} м/с</b></span></div><button id="board-ship" class="primary">${hudIcon("ship")}Войти в кабину</button><button id="ship-route">${hudIcon("galaxy")}Выбрать маршрут</button></section></div>`,
       "ship",
     );
+    const preview = new ShipPreview(this.el("dock-vessel-preview"), ship);
+    this.ownPanel(() => preview.dispose());
     this.button("board-ship", () => this.onBoardShip());
     this.button("ship-route", () => {
       this.travelMode = "ship";
@@ -722,7 +744,7 @@ export class UI {
   ) {
     this.activeModal = null;
     this.show(
-      `<span class="eyebrow">НАСТРОЙКИ</span><h2>Настройки системы</h2><p>WASD или джойстик — движение. Нажмите объект для действия. Потяните мир для поворота; колесо или щипок — масштаб.</p><button id="full" class="primary">На весь экран</button><button id="quality" class="secondary">Переключить качество</button><div class="sound-controls"><h3>Звук путешествия</h3><label><input id="music-enabled" type="checkbox" ${audio.music ? "checked" : ""}> Музыка</label><label><input id="effects-enabled" type="checkbox" ${audio.effects ? "checked" : ""}> Звуковые эффекты</label><label>Громкость <input id="sound-volume" type="range" min="0" max="1" step="0.05" value="${audio.volume}"></label><p>Музыка запускается после первого нажатия. В фоне звук приостанавливается.</p></div>`,
+      `<span class="eyebrow">НАСТРОЙКИ</span><h2>Настройки системы</h2><p>WASD или джойстик — движение. Нажмите объект для действия. Потяните мир для поворота; колесо или щипок — масштаб.</p><button id="full" class="primary">На весь экран</button><button id="quality" class="secondary">Графика: ${{ high: "Высокое", balanced: "Сбалансированное", economy: "Экономное" }[graphicsQuality()]} ↻</button><div class="sound-controls"><h3>Звук путешествия</h3><label><input id="music-enabled" type="checkbox" ${audio.music ? "checked" : ""}> Музыка</label><label><input id="effects-enabled" type="checkbox" ${audio.effects ? "checked" : ""}> Звуковые эффекты</label><label>Громкость <input id="sound-volume" type="range" min="0" max="1" step="0.05" value="${audio.volume}"></label><p>Музыка запускается после первого нажатия. В фоне звук приостанавливается.</p></div>`,
       "settings",
     );
     this.button("full", fullscreen);

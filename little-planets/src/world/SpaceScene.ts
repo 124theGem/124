@@ -1,4 +1,3 @@
-import { cockpit } from "./Cockpit";
 import * as T from "three";
 import { Models } from "./Models";
 import { Planet } from "./Planet";
@@ -114,7 +113,7 @@ export class SpaceScene {
     this.target = save.flight!.target;
     this.ship = kit.ship(save.fleet.find((s) => s.id === save.activeShip));
     this.ship.visible = false;
-    this.cabin = cockpit(kit);
+    this.cabin = kit.cockpit(save.fleet.find((s) => s.id === save.activeShip));
     this.scene.add(this.cabin);
     this.scene.add(this.ship, this.exhaust);
     this.exhaust.frustumCulled = false;
@@ -229,6 +228,8 @@ export class SpaceScene {
   get stats() {
     return {
       cockpit: true,
+      design: this.ship.userData.design,
+      cabinDesign: this.cabin.userData.design,
       bodies: this.proxies.size,
       detailed: [...this.detailed.keys()],
       ship: this.ship.position.toArray(),

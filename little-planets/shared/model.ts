@@ -187,7 +187,7 @@ function validatePlacement(
     throw new RuleError("Участок занят устройством.");
 }
 // One-time test-world reset; future reloads retain this generation.
-export const WORLD_GENERATION = 2;
+export const WORLD_GENERATION = 3;
 export interface Save {
   version: 6;
   generation: number;
@@ -258,6 +258,9 @@ const starshipSchema = z.object({
   hull: z.enum(["needle", "armored", "freighter"]),
   wings: z.enum(["swept", "delta", "twin"]),
   color: z.enum(["ivory", "graphite", "cobalt", "ember", "emerald"]),
+  engine: z.enum(["ion", "plasma", "fusion"]).optional(),
+  module: z.enum(["standard", "survey", "shield", "hold"]).optional(),
+  finish: z.enum(["ceramic", "titanium", "carbon"]).optional(),
 });
 export const ActionSchema = z.discriminatedUnion("type", [
   z

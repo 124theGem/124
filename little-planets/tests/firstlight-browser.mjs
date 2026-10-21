@@ -54,7 +54,7 @@ async function launch(viewport, save) {
   page.on("pageerror", (e) => errors.push(e.message));
   if (!save && process.env.FIRSTLIGHT_RESET) {
     save = newGame(Date.now(), true);
-    delete save.generation;
+    save.generation = 2;
     save.inventory.wood = 9876;
     save.progression.xp = 5432;
     save.worlds.home.buildings.push({

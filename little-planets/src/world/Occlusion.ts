@@ -19,7 +19,16 @@ export class Occlusion {
         let copy = this.owned.get(original);
         if (!copy) {
           copy = original.clone();
+          copy.onBeforeCompile = original.onBeforeCompile;
+          copy.customProgramCacheKey = original.customProgramCacheKey;
           this.owned.set(original, copy);
+          const ownedCopy = copy;
+          const release = () => {
+            ownedCopy.dispose();
+            this.owned.delete(original);
+            original.removeEventListener("dispose", release);
+          };
+          original.addEventListener("dispose", release);
         }
         return copy;
       });
@@ -28,7 +37,10 @@ export class Occlusion {
         if (this.patched.has(m) || !(m instanceof T.MeshStandardMaterial))
           continue;
         this.patched.add(m);
-        m.onBeforeCompile = (shader) => {
+        const baseCompile = m.onBeforeCompile.bind(m),
+          baseKey = m.customProgramCacheKey.bind(m);
+        m.onBeforeCompile = (shader, renderer) => {
+          baseCompile(shader, renderer);
           shader.uniforms.occlusionPlayer = this.player;
           shader.uniforms.occlusionEye = this.eye;
           shader.vertexShader =
@@ -58,7 +70,7 @@ export class Occlusion {
       if(occNoise < occFade*0.86) discard;`,
           );
         };
-        m.customProgramCacheKey = () => "planet-occlusion-v1";
+        m.customProgramCacheKey = () => baseKey() + ":planet-occlusion-v2";
         m.needsUpdate = true;
       }
     });

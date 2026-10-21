@@ -1,4 +1,5 @@
 import "./ui/styles.css";
+import "./ui/horizon.css";
 import { Telegram } from "./platform/Telegram";
 import { Persistence } from "./platform/Persistence";
 import { Game } from "./game/Game";

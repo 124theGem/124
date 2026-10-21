@@ -20,6 +20,7 @@ export function tiledSphere(id: PlanetId, resolution?: number) {
     steps = resolution ?? voxelResolution(id),
     positions: number[] = [],
     normals: number[] = [],
+    uvs: number[] = [],
     colors: number[] = [],
     kinds: number[] = [],
     sides: number[] = [],
@@ -37,6 +38,7 @@ export function tiledSphere(id: PlanetId, resolution?: number) {
     level: number,
     kind = 0,
   ) {
+    uvs.push(0, 0, 1, 0, 1, 1, 0, 1);
     const base = positions.length / 3,
       cross = vertices[1]
         .clone()
@@ -195,6 +197,7 @@ export function tiledSphere(id: PlanetId, resolution?: number) {
   geometry.setAttribute("terrainFace", new T.Uint8BufferAttribute(kinds, 1));
   geometry.setAttribute("cubeSide", new T.Uint8BufferAttribute(sides, 1));
   geometry.setAttribute("blockLevel", new T.Int8BufferAttribute(levels, 1));
+  geometry.setAttribute("uv", new T.Float32BufferAttribute(uvs, 2));
   geometry.setIndex(indices);
   geometry.computeBoundingSphere();
   geometry.userData = { tiles: 6 * steps * steps, walls, minHeight, maxHeight };

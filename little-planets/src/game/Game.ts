@@ -1,3 +1,8 @@
+import {
+  graphicsQuality,
+  studioEnvironment,
+  type GraphicsQuality,
+} from "../world/Graphics";
 import { ObservationScene } from "../world/ObservationScene";
 import {
   STORY_PLANTS,
@@ -126,6 +131,7 @@ export class Game {
   private observation?: ObservationScene;
   private overviewRotation = new T.Quaternion();
   private introStarted = 0;
+  private introElapsed = 0;
   private introRetryAt = 0;
   private introVeil = document.createElement("div");
   private miningAim?: { x: number; y: number };
@@ -201,7 +207,10 @@ export class Game {
     new T.LineBasicMaterial({ color: 0xffdc8c }),
   );
   private art?: ArtRenderer;
-  private lowQuality = false;
+  private quality: GraphicsQuality = graphicsQuality();
+  private lowQuality = this.quality === "economy";
+  private environment?: T.WebGLRenderTarget;
+  private modalRenderAt = 0;
   private adaptiveRatio = Math.min(devicePixelRatio, 1.5);
   private slowTime = 0;
   private flightSamples: {
@@ -221,10 +230,19 @@ export class Game {
     document.querySelector("#app")!.innerHTML = "";
     this.renderer.domElement.className = "world";
     this.renderer.setPixelRatio(this.adaptiveRatio);
-    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.enabled = !this.lowQuality;
     this.renderer.shadowMap.type = T.PCFSoftShadowMap;
     this.renderer.toneMapping = T.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.0;
+    this.environment = studioEnvironment(this.renderer);
+    this.scene.environment = this.environment.texture;
+    this.scene.environmentIntensity = 0.28;
+    this.renderer.setPixelRatio(
+      Math.min(
+        devicePixelRatio,
+        this.quality === "high" ? 1.5 : this.lowQuality ? 0.8 : 1,
+      ),
+    );
     document.querySelector("#app")!.append(this.renderer.domElement);
     this.ui = new UI(store.local);
     this.introVeil.className = "arrival-veil";
@@ -355,14 +373,25 @@ export class Game {
         this.ui.settings(
           telegram.fullscreen,
           () => {
-            this.lowQuality = !this.lowQuality;
+            const levels: GraphicsQuality[] = ["high", "balanced", "economy"];
+            this.quality =
+              levels[(levels.indexOf(this.quality) + 1) % levels.length];
+            localStorage.setItem("little-planets-quality", this.quality);
+            this.lowQuality = this.quality === "economy";
             this.renderer.shadowMap.enabled = !this.lowQuality;
             this.renderer.setPixelRatio(
-              this.lowQuality ? 0.8 : this.adaptiveRatio,
+              Math.min(
+                devicePixelRatio,
+                this.quality === "high" ? 1.5 : this.lowQuality ? 0.8 : 1,
+              ),
             );
-            this.ui.toast(
-              this.lowQuality ? "Экономное качество" : "Полное качество",
-            );
+            const label = {
+              high: "Высокое",
+              balanced: "Сбалансированное",
+              economy: "Экономное",
+            }[this.quality];
+            this.ui.el("quality").textContent = `Графика: ${label} ↻`;
+            this.ui.toast(`Качество графики: ${label}`);
           },
           this.audio.stats,
           (key, value) => this.audio.set(key, value),
@@ -609,9 +638,7 @@ export class Game {
             weather: this.weather.stats,
             playerWorld: this.avatar.root.position.toArray(),
             introduction: {
-              seconds: this.introStarted
-                ? (performance.now() - this.introStarted) / 1000
-                : 0,
+              seconds: this.introElapsed,
               veil: this.introVeil.hidden
                 ? 0
                 : Number(this.introVeil.style.opacity || 1),
@@ -670,6 +697,9 @@ export class Game {
                     tiles: this.view.tiles,
                     features: this.view.nature.features,
                     vegetation: this.view.nature.stats,
+                    wind: this.view.nature.wind.stats,
+                    particles: this.view.nature.particles.stats,
+                    shipDesign: this.view.ship.children[0]?.userData.design,
                     terrain: this.view.terrainStats,
                     groundHeight: surfaceHeight(this.position, this.view.id),
                   }
@@ -717,6 +747,8 @@ export class Game {
       id,
       reveal,
     );
+    this.observation.scene.environment = this.environment?.texture ?? null;
+    this.observation.scene.environmentIntensity = 0.28;
     this.ui.root.classList.add("in-optics");
     const panel = this.ui.el("optics");
     panel.classList.remove("hidden");
@@ -1005,11 +1037,7 @@ export class Game {
             .addScaledVector(
               forward
                 .clone()
-                .applyAxisAngle(
-                  n,
-                  Math.sin((performance.now() - this.introStarted) * 0.00015) *
-                    0.22,
-                ),
+                .applyAxisAngle(n, Math.sin(this.introElapsed * 0.15) * 0.22),
               16,
             )
         : overview
@@ -2349,6 +2377,8 @@ export class Game {
     this.space?.dispose();
     this.flightState = structuredClone(this.store.state.flight);
     this.space = new SpaceScene(this.kit, this.store.state);
+    this.space.scene.environment = this.environment?.texture ?? null;
+    this.space.scene.environmentIntensity = 0.65;
     this.flying = true;
     this.busy = false;
     this.avatar.root.visible = false;
@@ -2618,7 +2648,8 @@ export class Game {
     }
     if (this.store.state.prologue.phase === "arrival" && this.introStarted) {
       this.zoom = 1;
-      const seconds = (time - this.introStarted) / 1000;
+      this.introElapsed += Math.min(raw, 0.15);
+      const seconds = this.introElapsed;
       this.introVeil.style.opacity = String(
         1 - T.MathUtils.smoothstep(seconds, 1, 4.8),
       );
@@ -2768,6 +2799,8 @@ export class Game {
       );
     this.ui.el("day-clock").textContent = `${cycle.label} · ${cycle.clock}`;
     this.avatar.root.visible = true;
+    if (this.view instanceof SphereWorld)
+      this.view.nature.daylight = cycle.daylight;
     this.view.animate(time / 1000);
     this.life?.update(this.store.state, time / 1000, dt);
     this.enemies?.update(this.store.state, time / 1000, dt);
@@ -2840,12 +2873,16 @@ export class Game {
     this.occlusion.patch(this.machines.root);
     if (this.life) this.occlusion.patch(this.life.root);
     this.sky.update(this.camera);
+    if (this.ui.modalOpen && time - this.modalRenderAt < 150) return;
+    this.modalRenderAt = time;
     if (this.art) this.art.render(!this.lowQuality);
     else this.renderer.render(this.scene, this.camera);
   };
   dispose() {
     this.renderer.setAnimationLoop(null);
     this.abort.abort();
+    this.ui.close();
+    this.environment?.dispose();
     this.input.dispose();
     this.audio.dispose();
     this.enemies?.dispose();

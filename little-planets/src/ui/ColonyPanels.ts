@@ -1,3 +1,10 @@
+import { ShipPreview } from "./ShipPreview";
+import {
+  SHIP_ENGINES,
+  SHIP_MODULES,
+  SHIP_FINISHES,
+  shipConfiguration,
+} from "../../shared/ships";
 import { hudIcon } from "./Glyphs";
 import { UI } from "./UI";
 import {
@@ -53,7 +60,9 @@ export class ColonyPanels {
   private async run(action: Action, next: () => void) {
     const buttons = this.ui
       .el("modal-content")
-      .querySelectorAll<HTMLButtonElement>("button");
+      .querySelectorAll<
+        HTMLButtonElement | HTMLInputElement | HTMLSelectElement
+      >("button, input, select");
     buttons.forEach((b) => (b.disabled = true));
     try {
       await this.act(action);
@@ -140,84 +149,166 @@ export class ColonyPanels {
   shipyard(id: string, draft?: Omit<Starship, "id">) {
     const save = this.state(),
       active = save.fleet.find((s) => s.id === save.activeShip)!;
-    const design =
-      draft ??
-      ({
+    const design = shipConfiguration({
+      ...(draft ?? {
         name: "Новый корабль",
         class: "exploration",
         model: 1,
         hull: "needle",
         wings: "swept",
         color: "ivory",
-      } as Omit<Starship, "id">);
-    const stats = SHIP_STATS({ ...design, id: "preview" }),
-      color = "#" + SHIP_COLORS[design.color].toString(16).padStart(6, "0");
+      }),
+      id: "preview",
+    } as Starship);
+    const baseline = SHIP_STATS(active);
+    const options = (items: Record<string, string>, selected: string) =>
+      Object.entries(items)
+        .map(
+          ([v, label]) =>
+            `<option value="${v}" ${v === selected ? "selected" : ""}>${label}</option>`,
+        )
+        .join("");
+    const select = (
+      name: string,
+      label: string,
+      items: Record<string, string>,
+      selected: string,
+    ) =>
+      `<label class="ship-field"><span>${label}</span><select id="ship-${name}">${options(items, selected)}</select></label>`;
+    const names = (items: Record<string, { name: string }>) =>
+      Object.fromEntries(
+        Object.entries(items).map(([id, value]) => [id, value.name]),
+      );
     this.ui.panel(
-      `<span class="eyebrow">МОДУЛЬНАЯ ВЕРФЬ · AURORA SHIPWORKS</span><h2>Конструктор корабля</h2><div class="shipyard-layout"><div class="ship-preview"><svg viewBox="0 0 400 300" aria-label="Проект корабля"><defs><pattern id="ship-grid" width="25" height="25" patternUnits="userSpaceOnUse"><path d="M25 0H0V25" fill="none" stroke="#75bfd71a"/></pattern></defs><rect width="400" height="300" fill="url(#ship-grid)"/><g fill="${color}" stroke="#d4efee" stroke-width="1.5"><path d="${design.wings === "delta" ? "M200 60L345 245L200 205L55 245Z" : design.wings === "twin" ? "M70 95H110V230H290V95H330V250H70Z" : "M200 100L350 220L200 180L50 220Z"}"/><path d="${design.hull === "needle" ? "M200 35L235 180L220 250H180L165 180Z" : design.hull === "armored" ? "M200 40L255 125L245 245H155L145 125Z" : "M180 40H220L260 95V245H140V95Z"}"/></g><path d="M190 85H210L220 125H180Z" fill="#6df2f7"/><g fill="#6df2f7"><rect x="177" y="247" width="15" height="22"/><rect x="208" y="247" width="15" height="22"/></g><text x="20" y="28" fill="#74c5cf" font-size="12">${SHIP_CLASS_NAMES[design.class].toUpperCase()} / MK ${design.model}</text></svg><div class="metric-strip"><span>Скорость<b>${stats.speed}</b></span><span>Трюм<b>${stats.cargo}</b></span><span>Броня<b>${stats.armor}</b></span></div></div><form id="ship-form"><label>Позывной<input id="ship-name" maxlength="40" value="${esc(design.name)}"></label><label>Назначение<select id="ship-class">${Object.entries(
-        SHIP_CLASS_NAMES,
-      )
-        .map(
-          ([id, n]) =>
-            `<option value="${id}" ${id === design.class ? "selected" : ""}>${n}</option>`,
+      `
+      <header class="dock-heading"><div><span class="eyebrow">AURORA INDUSTRIES / ORBITAL DIVISION</span><h2>Ваш следующий горизонт.</h2><p>Модульная верфь <span>№ 07</span> · Родная / Колыбель</p></div><span class="dock-status"><i></i> ВЕРФЬ ГОТОВА</span></header>
+      <div class="shipyard-layout">
+        <aside class="dock-catalog"><span class="eyebrow">01 / НАЗНАЧЕНИЕ</span>${Object.entries(
+          SHIP_CLASS_NAMES,
         )
-        .join(
-          "",
-        )}</select></label><label>Модель<select id="ship-model">${[1, 2, 3].map((n) => `<option ${n === design.model ? "selected" : ""} value="${n}">MK ${n} · ${["", "Базовая", "Усиленная", "Экспедиционная"][n]}</option>`).join("")}</select></label><label>Фюзеляж<select id="ship-hull">${[
-        ["needle", "Стрела"],
-        ["armored", "Бронекапсула"],
-        ["freighter", "Транспортный"],
-      ]
-        .map(
-          ([id, n]) =>
-            `<option value="${id}" ${id === design.hull ? "selected" : ""}>${n}</option>`,
-        )
-        .join("")}</select></label><label>Крылья<select id="ship-wings">${[
-        ["swept", "Стреловидные"],
-        ["delta", "Дельта"],
-        ["twin", "Двойные"],
-      ]
-        .map(
-          ([id, n]) =>
-            `<option value="${id}" ${id === design.wings ? "selected" : ""}>${n}</option>`,
-        )
-        .join(
-          "",
-        )}</select></label><label>Окраска<select id="ship-color">${Object.keys(
-        SHIP_COLORS,
-      )
-        .map(
-          (id) =>
-            `<option value="${id}" ${id === design.color ? "selected" : ""}>${{ ivory: "Светлый камень", graphite: "Графит", cobalt: "Кобальт", ember: "Медь", emerald: "Изумруд" }[id as keyof typeof SHIP_COLORS]}</option>`,
-        )
-        .join(
-          "",
-        )}</select></label><p>${save.freeConstruction ? "ТЕСТОВЫЙ ДОПУСК · стоимость 0" : resources(shipCost(design))}</p><button type="button" id="create-ship" class="primary">Создать в инвентарь</button></form></div><h3>Созданные корабли</h3><div class="fleet-list">${save.fleet.map((s) => `<button data-ship-inventory="${esc(s.id)}"><strong>${esc(s.name)}</strong><small>${SHIP_CLASS_NAMES[s.class]} · MK ${s.model} · ${save.inventory[`ship:${s.id}`] > 0 ? "В ИНВЕНТАРЕ / РАЗМЕСТИТЬ" : "РАЗМЕЩЁН"}</small></button>`).join("")}</div>`,
+          .map(
+            ([kind, label], i) =>
+              `<button type="button" class="ship-class-card ${kind === design.class ? "active" : ""}" data-ship-class="${kind}"><span class="ship-class-number">0${i + 1}</span>${hudIcon(kind === "combat" ? "combat" : kind === "cargo" ? "inventory" : "ship")}<strong>${label}</strong><small>${["Откройте новые миры", "Защитите свои маршруты", "Свяжите колонии"][i]}</small></button>`,
+          )
+          .join(
+            "",
+          )}<div class="dock-note"><span class="eyebrow">ПРОИЗВОДСТВО</span><p>Готовый корабль появится в инвентаре. Разместите его вместе со взлётной площадкой.</p></div></aside>
+        <section class="ship-preview"><div class="preview-heading"><span><i></i> LIVE / 3D ASSEMBLY</span><b id="preview-name">${esc(design.name)}</b></div><div id="ship-stage" class="ship-stage"></div><div class="preview-toolbar"><span>Перетащите для вращения · щипок для масштаба</span><button type="button" id="ship-zoom-out" aria-label="Отдалить корабль">−</button><button type="button" id="ship-zoom-in" aria-label="Приблизить корабль">+</button><button type="button" id="ship-reset-view">Сбросить вид</button></div><div id="ship-metrics" class="ship-metrics"></div></section>
+        <form id="ship-form" class="dock-configuration"><span class="eyebrow">02 / КОНФИГУРАЦИЯ</span><label class="ship-field"><span>Позывной</span><input id="ship-name" maxlength="40" value="${esc(design.name)}" autocomplete="off"></label>
+        ${select("class", "Класс", SHIP_CLASS_NAMES, design.class)}
+        ${select("model", "Платформа", { "1": "MK I · Pathfinder", "2": "MK II · Vanguard", "3": "MK III · Horizon" }, String(design.model))}
+        <div class="dock-divider">КОНСТРУКЦИЯ</div>
+        ${select("hull", "Фюзеляж", { needle: "Стрела / обтекаемый", armored: "Цитадель / бронированный", freighter: "Атлас / транспортный" }, design.hull)}
+        ${select("wings", "Крылья", { swept: "Стреловидные", delta: "Дельта", twin: "Двойной киль" }, design.wings)}
+        ${select("engine", "Силовая установка", names(SHIP_ENGINES), design.engine)}
+        ${select("module", "Функциональный модуль", names(SHIP_MODULES), design.module)}
+        <p id="ship-module-note" class="configuration-note"></p><div class="dock-divider">МАТЕРИАЛЫ И ОКРАСКА</div>
+        ${select("finish", "Покрытие корпуса", names(SHIP_FINISHES), design.finish)}
+        ${select("color", "Палитра", { ivory: "Полярный белый", graphite: "Графит", cobalt: "Кобальт", ember: "Оксид меди", emerald: "Изумруд" }, design.color)}
+        <div class="ship-swatches">${Object.entries(SHIP_COLORS)
+          .map(
+            ([c, value]) =>
+              `<button type="button" data-ship-color="${c}" style="--swatch:#${value.toString(16).padStart(6, "0")}" aria-label="Окраска ${c}" aria-pressed="${design.color === c}"></button>`,
+          )
+          .join("")}</div>
+        <div class="fabrication-order"><span>Стоимость сборки<b>${save.freeConstruction ? "0 ресурсов" : resources(shipCost(design))}</b></span><small>${save.freeConstruction ? "ТЕСТОВЫЙ ДОПУСК / БЕСПЛАТНО" : "Материалы из инвентаря"}</small><button type="button" id="create-ship" class="primary">${hudIcon("ship")} Создать в инвентарь <span>↗</span></button></div></form>
+      </div><div class="fleet-heading"><span class="eyebrow">03 / ВАШ АНГАР</span><small>${save.fleet.length} / 30 кораблей</small></div><div class="fleet-list">${save.fleet.map((s) => `<button data-ship-inventory="${esc(s.id)}">${hudIcon("ship")}<strong>${esc(s.name)}</strong><small>${SHIP_CLASS_NAMES[s.class]} · MK ${s.model} · ${save.inventory[`ship:${s.id}`] > 0 ? "В ИНВЕНТАРЕ / РАЗМЕСТИТЬ" : "НА ПЛОЩАДКЕ"}</small></button>`).join("")}</div>`,
       "shipyard",
     );
-    const read = () => ({
-      name: (this.ui.el("ship-name") as HTMLInputElement).value || "Без имени",
+    const preview = new ShipPreview(this.ui.el("ship-stage"), design);
+    this.ui.ownPanel(() => preview.dispose());
+    const read = (): Omit<Starship, "id"> => ({
+      name:
+        (this.ui.el("ship-name") as HTMLInputElement).value.trim() ||
+        "Без имени",
       class: (this.ui.el("ship-class") as HTMLSelectElement).value as ShipClass,
       model: Number((this.ui.el("ship-model") as HTMLSelectElement).value) as
-        | 1
-        | 2
-        | 3,
+        1 | 2 | 3,
       hull: (this.ui.el("ship-hull") as HTMLSelectElement)
         .value as Starship["hull"],
       wings: (this.ui.el("ship-wings") as HTMLSelectElement)
         .value as Starship["wings"],
       color: (this.ui.el("ship-color") as HTMLSelectElement)
         .value as Starship["color"],
+      engine: (this.ui.el("ship-engine") as HTMLSelectElement)
+        .value as Starship["engine"],
+      module: (this.ui.el("ship-module") as HTMLSelectElement)
+        .value as Starship["module"],
+      finish: (this.ui.el("ship-finish") as HTMLSelectElement)
+        .value as Starship["finish"],
     });
-    for (const name of ["class", "model", "hull", "wings", "color"])
-      (this.ui.el("ship-" + name) as HTMLSelectElement).onchange = () =>
-        this.shipyard(id, read());
-    this.ui.button(
-      "create-ship",
-      () =>
-        void this.run({ type: "createShip", ship: read() }, () =>
-          this.shipyard(id, read()),
-        ),
-    );
+    const update = (rebuild = true) => {
+      const d = { ...read(), id: "preview" },
+        stats = SHIP_STATS(d);
+      if (rebuild) preview.setDesign(d);
+      this.ui.el("preview-name").textContent = d.name;
+      this.ui.el("ship-metrics").innerHTML = (
+        [
+          ["speed", "СКОРОСТЬ", "м/с"],
+          ["cargo", "ТРЮМ", "ед."],
+          ["armor", "БРОНЯ", "HP"],
+          ["mass", "МАССА", "т"],
+        ] as const
+      )
+        .map(([key, label, unit]) => {
+          const delta = stats[key] - baseline[key];
+          return `<div><small>${label}</small><strong>${stats[key]}<em>${unit}</em></strong><span class="${(key === "mass" ? delta <= 0 : delta >= 0) ? "positive" : "negative"}">${delta > 0 ? "+" : ""}${delta} к активному кораблю</span></div>`;
+        })
+        .join("");
+      this.ui.el("ship-module-note").textContent =
+        `${SHIP_ENGINES[d.engine ?? "ion"].description}. ${SHIP_MODULES[d.module ?? "standard"].description}. Масса ${stats.mass} т.`;
+      this.ui
+        .el("modal-content")
+        .querySelectorAll<HTMLElement>("[data-ship-class]")
+        .forEach((b) =>
+          b.classList.toggle("active", b.dataset.shipClass === d.class),
+        );
+      this.ui
+        .el("modal-content")
+        .querySelectorAll<HTMLElement>("[data-ship-color]")
+        .forEach((b) =>
+          b.setAttribute(
+            "aria-pressed",
+            String(b.dataset.shipColor === d.color),
+          ),
+        );
+    };
+    this.ui.el("ship-form").onsubmit = (e) => e.preventDefault();
+    for (const name of [
+      "class",
+      "model",
+      "hull",
+      "wings",
+      "engine",
+      "module",
+      "finish",
+      "color",
+    ])
+      this.ui.el("ship-" + name).onchange = () => update();
+    this.ui.el("ship-name").oninput = () => update(false);
+    this.ui
+      .el("modal-content")
+      .querySelectorAll<HTMLButtonElement>(
+        "[data-ship-class], [data-ship-color]",
+      )
+      .forEach(
+        (b) =>
+          (b.onclick = () => {
+            const field = b.dataset.shipClass ? "class" : "color";
+            (this.ui.el("ship-" + field) as HTMLSelectElement).value =
+              b.dataset.shipClass ?? b.dataset.shipColor!;
+            update();
+          }),
+      );
+    this.ui.button("ship-zoom-in", () => preview.zoom(0.8));
+    this.ui.button("ship-zoom-out", () => preview.zoom(1.25));
+    this.ui.button("ship-reset-view", () => preview.reset());
+    this.ui.button("create-ship", () => {
+      const ship = read();
+      void this.run({ type: "createShip", ship }, () =>
+        this.shipyard(id, ship),
+      );
+    });
     this.ui
       .el("modal-content")
       .querySelectorAll<HTMLButtonElement>("[data-ship-inventory]")
@@ -230,6 +321,7 @@ export class ColonyPanels {
               `ship:${b.dataset.shipInventory}`,
             )),
       );
+    update(false);
   }
 
   profile(name: string) {

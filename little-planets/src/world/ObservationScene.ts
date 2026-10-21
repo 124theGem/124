@@ -1,4 +1,5 @@
 import * as T from "three";
+import { tiledSphere } from "./TiledSphere";
 import { Models } from "./Models";
 import { SphereWorld } from "./SphereWorld";
 import { StarSky } from "./StarSky";
@@ -15,6 +16,7 @@ export class ObservationScene {
   readonly camera = new T.PerspectiveCamera(45, 1, 0.1, 20000);
   private sky = new StarSky();
   private worlds: SphereWorld[] = [];
+  private homeProxy?: T.Mesh;
   private rotation = new T.Quaternion().setFromEuler(new T.Euler(-0.4, 0.5, 0));
   private focus = new T.Vector3();
   private home = new T.Vector3();
@@ -65,6 +67,16 @@ export class ObservationScene {
     const radius = PLANETS[id].id === "home" ? 46 : 34;
     this.distance = radius * 2.4;
     if (reveal) {
+      const proxy = tiledSphere("home", 7),
+        proxyMat = new T.MeshStandardMaterial({
+          vertexColors: true,
+          roughness: 0.95,
+        });
+      this.geometries.push(proxy.geometry);
+      this.materials.push(proxyMat);
+      this.homeProxy = new T.Mesh(proxy.geometry, proxyMat);
+      this.homeProxy.visible = false;
+      this.scene.add(this.homeProxy);
       // One lightweight instance per real catalog world, at its real relative position.
       // The reveal is an optical flight: it does not discover all these resources.
       const center = bodyCenter("home"),
@@ -189,6 +201,7 @@ export class ObservationScene {
   }
   update(dt: number, aspect: number) {
     this.elapsed += dt;
+
     const progress = this.reveal
       ? T.MathUtils.clamp(this.elapsed / REVEAL_DURATION, 0, 1)
       : 0;
@@ -220,6 +233,12 @@ export class ObservationScene {
     this.camera.aspect = aspect;
     this.camera.updateProjectionMatrix();
     this.camera.lookAt(focus);
+    const detailed = !this.reveal || this.camera.position.length() < 340;
+    if (this.homeProxy) this.homeProxy.visible = !detailed;
+    for (const world of this.worlds) {
+      world.root.visible = detailed;
+      if (detailed) world.animate(this.elapsed);
+    }
   }
   dispose() {
     for (const w of this.worlds) w.dispose();

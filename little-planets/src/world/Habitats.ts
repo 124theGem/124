@@ -176,6 +176,54 @@ export function habitat(k: Models, kind: BuildingKind, planet: PlanetId) {
       }
     }
   }
+  if (!["extractor", "bioextractor", "greenhouse"].includes(kind)) {
+    for (const side of [-1, 1]) {
+      for (let row = 0; row < 5; row++)
+        for (let panel = 0; panel < 3; panel++)
+          b(
+            side * (w / 2 + 0.012),
+            0.56 + row * 0.3,
+            -0.75 + panel * 0.7,
+            0.018,
+            0.015,
+            0.64,
+            0xb0b39e,
+          );
+      b(side * (w / 2 + 0.045), 0.91, -depth * 0.35, 0.06, 1.25, 0.06, metal);
+      for (let band = 0; band < 4; band++)
+        b(
+          side * (w / 2 + 0.06),
+          0.45 + band * 0.3,
+          -depth * 0.35,
+          0.1,
+          0.04,
+          0.13,
+          dark,
+        );
+      b(side * (w / 2 - 0.4), 0.3, depth / 2 + 0.15, 0.65, 0.08, 0.45, stone);
+      b(
+        side * (w / 2 - 0.4),
+        0.37,
+        depth / 2 + 0.15,
+        0.48,
+        0.045,
+        0.24,
+        0x66836b,
+      );
+    }
+    for (let light = 0; light < 3; light++)
+      k.box(
+        g,
+        -0.12 + light * 0.12,
+        1.78,
+        depth / 2 + 0.13,
+        0.05,
+        0.04,
+        0.04,
+        light === 0 ? 0x94d7c3 : 0x7e9f9a,
+        true,
+      );
+  }
   k.batch(g);
   g.userData.architecture = "limestone-colony";
   return g;

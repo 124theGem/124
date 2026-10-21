@@ -29,11 +29,13 @@ const base = process.env.GAME_URL || "http://127.0.0.1:5174";
 await mkdir("test-results", { recursive: true });
 let current;
 try {
-  for (const viewport of [
-    { width: 1100, height: 800 },
-    { width: 390, height: 844 },
-    { width: 844, height: 390 },
-  ]) {
+  for (const viewport of process.env.CUBEWORKS_SCOPE === "surface"
+    ? []
+    : [
+        { width: 1100, height: 800 },
+        { width: 390, height: 844 },
+        { width: 844, height: 390 },
+      ]) {
     const context = await browser.newContext({
       viewport,
       deviceScaleFactor: 0.5,
@@ -244,7 +246,9 @@ try {
     );
     await page.goto(base + "/?debug=1");
     await page.waitForFunction(
-      () => window.__planets?.snapshot().weather.type === "hurricane",
+      () =>
+        window.__planets?.snapshot().weather.type === "hurricane" &&
+        window.__planets.snapshot().art.frameCalls > 0,
     );
     await page.waitForTimeout(1500);
     const first = await page.evaluate(() => window.__planets.snapshot());
@@ -252,8 +256,16 @@ try {
     assert(first.sphere.groundHeight < level * VOXEL_STEP - 2);
     await page.screenshot({ path: "test-results/cubeworks-pit-occlusion.png" });
     await page.keyboard.down("d");
-    await page.waitForTimeout(1200);
-    await page.keyboard.up("d");
+    try {
+      await page.waitForFunction((before) => {
+        const s = window.__planets.snapshot();
+        return (
+          Math.hypot(s.position.x - before.x, s.position.z - before.z) > 0.005
+        );
+      }, first.position);
+    } finally {
+      await page.keyboard.up("d");
+    }
     const second = await page.evaluate(() => window.__planets.snapshot());
     assert.deepEqual(second.weatherOrigin, first.weatherOrigin);
     assert.deepEqual(second.sky.origin, first.sky.origin);

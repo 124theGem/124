@@ -2,7 +2,7 @@ import * as T from "three";
 import type { Models } from "./Models";
 import { planetSize, type PlanetId } from "../../shared/catalog";
 import { drillSize } from "../../shared/sector";
-import { SHIP_COLORS, starterShip, type Starship } from "../../shared/ships";
+import { starterShip, type Starship } from "../../shared/ships";
 export function industrialBuilding(
   k: Models,
   kind: string,
@@ -242,56 +242,5 @@ export function industrialBuilding(
   return g;
 }
 export function modularShip(k: Models, design: Starship = starterShip()) {
-  const g = new T.Group(),
-    c = SHIP_COLORS[design.color],
-    trim = 0xd5d9c8,
-    dark = 0x283e4e;
-  const box = (
-    x: number,
-    y: number,
-    z: number,
-    w: number,
-    h: number,
-    d: number,
-    color = c,
-    glow = false,
-  ) => k.box(g, x, y, z, w, h, d, color, glow);
-  const width =
-      design.hull === "freighter" ? 1.7 : design.hull === "armored" ? 1.4 : 0.9,
-    length = 2.1 + design.model * 0.3;
-  box(0, 0.7, 0, width, 0.6, length);
-  box(0, 1, -0.1, width * 0.65, 0.4, 1.2, trim);
-  box(0, 1.05, length * 0.3, width * 0.65, 0.28, 0.5, 0x67cde1, true);
-  box(0, 0.66, length * 0.55, width * 0.7, 0.35, 0.5, trim);
-  for (const sign of [-1, 1]) {
-    const wing = box(
-      sign * (width / 2 + 0.6),
-      0.65,
-      -0.25,
-      1.3,
-      0.14,
-      design.wings === "delta" ? 1.8 : 0.75,
-      trim,
-    );
-    wing.rotation.y =
-      sign *
-      (design.wings === "swept" ? 0.5 : design.wings === "delta" ? -0.25 : 0);
-    box(sign * (width / 2 + 0.6), 0.7, -0.9, 0.4, 0.45, 0.9, dark);
-    box(sign * (width / 2 + 0.6), 0.7, -1.4, 0.28, 0.27, 0.12, 0x67dceb, true);
-    for (let i = 0; i < design.model; i++)
-      box(sign * width * 0.55, 0.85, -0.55 + i * 0.45, 0.16, 0.12, 0.28, c);
-    if (design.class === "combat")
-      box(sign * (width / 2 + 0.4), 0.75, 0.7, 0.15, 0.15, 1.2, dark);
-    if (design.class === "cargo")
-      for (let i = 0; i < design.model; i++)
-        box(sign * 0.68, 0.66, -0.7 + i * 0.5, 0.55, 0.6, 0.43, 0xa99470);
-    if (design.class === "exploration")
-      box(sign * 0.3, 1.45, -0.4, 0.035, 0.8, 0.035, trim);
-    box(sign * 0.5, 0.2, -0.6, 0.15, 0.5, 0.2, dark);
-    box(sign * 0.5, 0.06, -0.6, 0.5, 0.12, 0.5, trim);
-  }
-  g.scale.setScalar(0.85 + design.model * 0.1);
-  g.userData.design = design;
-  k.batch(g);
-  return g;
+  return k.ship(design);
 }

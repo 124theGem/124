@@ -1,5 +1,7 @@
+import { surfaceGrain } from "./SurfaceGrain";
+import { ShipModels } from "./ShipModels";
 import { stableHash } from "../../shared/resources";
-import { industrialBuilding, modularShip } from "./IndustrialModels";
+import { industrialBuilding } from "./IndustrialModels";
 import type { Starship } from "../../shared/ships";
 import { habitat } from "./Habitats";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
@@ -15,6 +17,8 @@ import {
 } from "../../shared/catalog";
 /** Small procedural factories; their roots can later be replaced by GLTF models. */
 export class Models {
+  readonly grain = surfaceGrain();
+  private ships = new ShipModels();
   private boxGeo = new T.BoxGeometry(1, 1, 1);
   private stoneGeo = new RoundedBoxGeometry(1, 1, 1, 1, 0.025);
   private crystalGeo = new T.ConeGeometry(0.32, 1.4, 4);
@@ -42,7 +46,9 @@ export class Models {
     if (!material) {
       material = new T.MeshStandardMaterial({
         color,
-        roughness: 0.96,
+        roughness: 0.94,
+        normalMap: !glow && alpha === 1 && !doubleSide ? this.grain : null,
+        normalScale: new T.Vector2(0.11, 0.11),
         side: doubleSide ? T.DoubleSide : T.FrontSide,
         emissive: glow ? color : 0,
         emissiveIntensity: glow ? 0.65 : 0,
@@ -413,8 +419,11 @@ export class Models {
       return industrialBuilding(this, kind, planet, level);
     return habitat(this, kind, planet);
   }
+  cockpit(design?: Starship) {
+    return this.ships.cabin(design);
+  }
   ship(design?: Starship) {
-    return modularShip(this, design);
+    return this.ships.build(design);
   }
   furniture(kind: FurnitureKind) {
     const root = new T.Group(),
@@ -523,6 +532,8 @@ export class Models {
     }
   }
   dispose() {
+    this.ships.dispose();
+    this.grain.dispose();
     this.boxGeo.dispose();
     this.stoneGeo.dispose();
     this.crystalGeo.dispose();

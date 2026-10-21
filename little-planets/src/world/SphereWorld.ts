@@ -22,6 +22,7 @@ import {
 } from "../../shared/sphere";
 import { tiledSphere } from "./TiledSphere";
 import { SphereNature } from "./SphereNature";
+import { graphicsQuality } from "./Graphics";
 import { PrologueEffects } from "./PrologueEffects";
 import {
   surfacePoint,
@@ -56,6 +57,8 @@ export class SphereWorld {
   readonly id: PlanetId;
   private storyProps = new T.Group();
   private storyKey = "";
+  private cropsInWind: { root: T.Group; phase: number }[] = [];
+  private storyInWind: { root: T.Group; phase: number }[] = [];
   readonly prologueEffects = new PrologueEffects();
   readonly tiles: number;
   nature: SphereNature;
@@ -88,6 +91,8 @@ export class SphereWorld {
     now: number,
   ) {
     this.id = save.planet;
+    this.material.normalMap = kit.grain;
+    this.material.normalScale.set(0.13, 0.13);
     this.blockHighlight.visible = false;
     this.root.add(
       this.blockHighlight,
@@ -328,6 +333,7 @@ export class SphereWorld {
         if (o instanceof T.InstancedMesh) o.dispose();
       });
       this.structures.clear();
+      this.cropsInWind = [];
       for (const b of gardenBeds(save, this.id)) {
         const bed = new T.Group();
         this.kit.box(bed, 0, 0.04, 0, 0.85, 0.1, 0.85, 0x8b7552);
@@ -336,6 +342,7 @@ export class SphereWorld {
           const plant = this.kit.plant(crop.plant);
           plant.scale.setScalar(0.3 + stage(crop, now) * 0.35);
           bed.add(plant);
+          this.cropsInWind.push({ root: plant, phase: b.x * 0.3 + b.z * 0.7 });
         }
         bed.position.copy(spherePoint(b, 0.02, this.id));
         bed.quaternion.setFromUnitVectors(
@@ -396,6 +403,7 @@ export class SphereWorld {
         if (o instanceof T.InstancedMesh) o.dispose();
       });
       this.storyProps.clear();
+      this.storyInWind = [];
       const add = (g: T.Group, p: { x: number; z: number }, index: number) => {
         g.position.copy(spherePoint(p, 0.05, this.id));
         g.quaternion.setFromUnitVectors(
@@ -421,7 +429,10 @@ export class SphereWorld {
           save.prologue.plants.includes(i)
         )
           return;
-        const g = this.kit.plant(p.plant);
+        const g = new T.Group(),
+          plant = this.kit.plant(p.plant);
+        g.add(plant);
+        this.storyInWind.push({ root: plant, phase: i * 1.8 });
         add(g, p, i);
       });
       if (!save.prologue.meteor && save.prologue.phase !== "complete") {
@@ -465,6 +476,11 @@ export class SphereWorld {
   }
   animate(time: number) {
     this.nature.animate(time);
+    const strength = graphicsQuality() === "economy" ? 0 : 1;
+    for (const { root, phase } of [...this.cropsInWind, ...this.storyInWind]) {
+      root.rotation.z = Math.sin(time * 1.45 + phase) * 0.04 * strength;
+      root.rotation.x = Math.sin(time * 0.9 + phase) * 0.02 * strength;
+    }
     this.prologueEffects.animate(time);
   }
   dispose() {

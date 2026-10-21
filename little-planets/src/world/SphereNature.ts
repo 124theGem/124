@@ -1,4 +1,7 @@
 import * as T from "three";
+import { WindField } from "./WindField";
+import { MeadowParticles } from "./MeadowParticles";
+import { graphicsQuality } from "./Graphics";
 import { Models } from "./Models";
 import {
   PLANETS,
@@ -28,6 +31,10 @@ import { sanctuary } from "./Sanctuary";
 export class SphereNature {
   readonly root = new T.Group();
   private staticRoot = new T.Group();
+  private vegetation = new T.Group();
+  daylight = 1;
+  readonly wind: WindField;
+  readonly particles: MeadowParticles;
   private water: T.Group[] = [];
   private volcanoes: T.Group[] = [];
   private smokeGeo = new T.BoxGeometry(1, 1, 1);
@@ -54,7 +61,7 @@ export class SphereNature {
     readonly id: PlanetId,
     private cleared: readonly string[] = [],
   ) {
-    this.root.add(this.staticRoot);
+    this.root.add(this.staticRoot, this.vegetation);
     this.features = landmarks(id).map((f) =>
       id === "home" ? { ...f, scale: f.scale * 0.4 } : f,
     );
@@ -118,7 +125,8 @@ export class SphereNature {
             ? this.fir(theme)
             : this.broadleaf(i);
       this.place(tree, p.x, p.z);
-      this.staticRoot.add(tree);
+      tree.userData.windKind = 1;
+      this.vegetation.add(tree);
       this.stats.trees++;
     }
     for (let i = 0; i < 30; i++) {
@@ -160,7 +168,8 @@ export class SphereNature {
           kit.box(stalk, 0, h + 0.06, 0, 0.095, 0.24, 0.085, 0xc4ac63);
           kit.leaf(stalk, 0, h * 0.45, 0, 0.32, i + col, 0x7b8b47, -0.8);
           this.place(stalk, p.x, p.z);
-          this.staticRoot.add(stalk);
+          stalk.userData.windKind = 2.4;
+          this.vegetation.add(stalk);
           this.stats.stalks++;
         }
     }
@@ -190,8 +199,43 @@ export class SphereNature {
       const plant =
         i % 3 === 0 && moist ? this.fern(i) : this.undergrowth(i, theme);
       this.place(plant, p.x, p.z);
-      this.staticRoot.add(plant);
+      plant.userData.windKind = 1.8;
+      this.vegetation.add(plant);
       this.stats.bushes++;
+    }
+    for (let i = 0; i < 80; i++) {
+      const p = {
+        x: (i * 29.13 + seed) % size,
+        z: 2 + (terrainSeed(i * 179 + seed) % (size / 2 - 4)),
+      };
+      if (
+        surfaceDistance(p, pad, id) < 4.5 ||
+        this.cleared.includes(cellKey(sphereNormal(p, id), id))
+      )
+        continue;
+      const detail = new T.Group();
+      if (i % 3 === 0) {
+        kit.stone(detail, 0, 0.07, 0, 0.3, 0.14, 0.22, 0xc8c3ac);
+        kit.stone(detail, 0.25, 0.035, 0.16, 0.12, 0.07, 0.1, 0xa9ad91);
+      } else if (moist) {
+        for (let flower = 0; flower < 3; flower++) {
+          const x = Math.sin(flower * 2.4 + i) * 0.2,
+            z = Math.cos(flower * 2.4 + i) * 0.2;
+          kit.box(detail, x, 0.15, z, 0.025, 0.3, 0.025, 0x71884c);
+          kit.box(
+            detail,
+            x,
+            0.32,
+            z,
+            0.09,
+            0.045,
+            0.09,
+            i % 2 ? 0xe3cf99 : 0xb7b2c9,
+          );
+        }
+      }
+      this.place(detail, p.x, p.z);
+      this.staticRoot.add(detail);
     }
     const ruin = sanctuary(kit, seed),
       anchor = sanctuaryPoint(id);
@@ -264,6 +308,15 @@ export class SphereNature {
         this.cleared.includes(child.userData.groundCell)
       )
         child.removeFromParent();
+    for (const child of [...this.vegetation.children])
+      if (
+        child.userData.groundCell &&
+        this.cleared.includes(child.userData.groundCell)
+      )
+        child.removeFromParent();
+    this.wind = new WindField(this.vegetation);
+    this.particles = new MeadowParticles(id);
+    this.root.add(this.particles.root);
     kit.batch(this.staticRoot);
     this.smoke = new T.InstancedMesh(
       this.smokeGeo,
@@ -344,6 +397,19 @@ export class SphereNature {
         1.15,
         colors[(seed + i) % 4],
       );
+      for (let cluster = 0; cluster < 3; cluster++) {
+        const a = i * 2.4 + cluster * 2.1;
+        this.kit.box(
+          tree,
+          tip.x + Math.cos(a) * 0.7,
+          tip.y + 0.5 + cluster * 0.18,
+          tip.z + Math.sin(a) * 0.65,
+          0.65,
+          0.45,
+          0.6,
+          colors[(seed + cluster) % 4],
+        );
+      }
       for (let j = 0; j < 7; j++) {
         const angle = j * 2.4 + i;
         this.kit.leaf(
@@ -358,6 +424,17 @@ export class SphereNature {
         );
       }
     }
+    for (let band = 0; band < 5; band++)
+      this.kit.box(
+        tree,
+        0.08,
+        0.4 + band * 0.48,
+        0.12,
+        0.12,
+        0.07,
+        0.11,
+        0x8c8061,
+      );
     for (let j = 0; j < 4; j++)
       this.kit.stem(
         tree,
@@ -554,6 +631,8 @@ export class SphereNature {
     return flow;
   }
   animate(time: number) {
+    this.wind.update(time, graphicsQuality());
+    this.particles.update(time, this.daylight, graphicsQuality());
     for (const flow of this.water) {
       flow.children.forEach((o) => {
         if (o.userData.base !== undefined)
@@ -581,6 +660,8 @@ export class SphereNature {
     this.smoke.instanceMatrix.needsUpdate = true;
   }
   dispose() {
+    this.wind.dispose();
+    this.particles.dispose();
     this.root.traverse((o) => {
       if (o instanceof T.InstancedMesh) o.dispose();
     });

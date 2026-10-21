@@ -1,6 +1,6 @@
 {
   "name": "little-planets",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -13,7 +13,7 @@
     "build": "tsc --noEmit && vite build",
     "start": "tsx server/index.ts",
     "test": "vitest run",
-    "test:browser": "npm run test:cubeworks && npm run test:journey && npm run test:aurora && npm run test:flightdeck && npm run test:outfit && npm run test:firstlight",
+    "test:browser": "npm run test:cubeworks && npm run test:journey && npm run test:aurora && npm run test:flightdeck && npm run test:outfit && npm run test:firstlight && npm run test:horizon",
     "test:production": "tsx tests/production-browser.ts",
     "package:server": "npm run build && node scripts/package-server.mjs",
     "test:upgrade": "node --import tsx tests/upgrade.mjs",
@@ -28,7 +28,8 @@
     "test:flightdeck": "node --import tsx tests/flightdeck-browser.mjs",
     "test:outfit": "node --import tsx tests/outfit-browser.mjs",
     "test:firstlight": "node --import tsx tests/firstlight-browser.mjs",
-    "test:dawn": "FIRSTLIGHT_RESET=1 FIRSTLIGHT_SCOPE=intro node --import tsx tests/firstlight-browser.mjs"
+    "test:dawn": "FIRSTLIGHT_RESET=1 FIRSTLIGHT_SCOPE=intro node --import tsx tests/firstlight-browser.mjs",
+    "test:horizon": "node --import tsx tests/horizon-browser.mjs"
   },
   "dependencies": {
     "three": "^0.180.0",
