@@ -1,8 +1,15 @@
 import { chromium } from "@playwright/test";
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
-import { newGame, applyAction, WORLD_GENERATION } from "../shared/model.ts";
+import {
+  newGame,
+  applyAction,
+  WORLD_GENERATION,
+  landingPad,
+} from "../shared/model.ts";
+import { STORY_PLANTS, STORY_METEOR } from "../shared/prologue.ts";
 import { PLANETS } from "../shared/catalog.ts";
+import { DAY_DURATION } from "../shared/daylight.ts";
 import { offsetPoint } from "../shared/voxel.ts";
 import { openSystems, gameState } from "./outfit-helpers.ts";
 const browser = await chromium.launch({
@@ -25,6 +32,24 @@ async function launch(viewport, save) {
     page = await context.newPage();
   current = page;
   page.setDefaultTimeout(90000);
+  await page.addInitScript(() => {
+    window.arrivalSamples = [];
+    const sample = () => {
+      const veil = document.querySelector(".arrival-veil");
+      if (veil && window.arrivalSamples.length < 1000)
+        window.arrivalSamples.push({
+          opacity: Number(veil.style.opacity || 1),
+          hidden: veil.hidden,
+          at: performance.now(),
+        });
+    };
+    new MutationObserver(sample).observe(document, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ["style", "hidden"],
+    });
+  });
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   if (!save && process.env.FIRSTLIGHT_RESET) {
@@ -98,15 +123,46 @@ try {
     }
     assert(await page.locator('[data-hand="grapple"]').isDisabled());
     assert.equal(await page.locator("#first-person").count(), 0);
-    await page.waitForTimeout(1500);
+    assert.equal(await page.locator("#story-begin").count(), 0);
+    assert.equal(await page.locator("#story-target").count(), 0);
+    assert(await page.locator(".arrival-veil").isVisible());
+    assert(await page.locator("#story-panel").isHidden());
+    assert.equal(
+      (await page.evaluate(() => window.__planets.snapshot())).introduction
+        .effects.smoke,
+      18,
+    );
+    await page.waitForFunction(
+      () => window.__planets.snapshot().state.prologue.phase === "plants",
+    );
+    const samples = await page.evaluate(() => window.arrivalSamples);
+    assert(
+      samples.some((s) => s.opacity === 1 && !s.hidden),
+      "The scene starts completely black",
+    );
+    assert(
+      samples.some((s) => s.opacity > 0.1 && s.opacity < 0.9 && !s.hidden),
+      "Darkness fades gradually",
+    );
+    assert(
+      samples.some((s) => s.hidden),
+      "The veil is removed automatically",
+    );
+    assert(await page.locator(".arrival-veil").isHidden());
+    assert(await page.locator("#story-panel").isVisible());
+    assert.equal(
+      (await page.evaluate(() => window.__planets.snapshot())).introduction
+        .effects.targets,
+      3,
+    );
+    await page.waitForTimeout(1300);
     await page.screenshot({ path: "test-results/firstlight-arrival.png" });
-    await page.locator("#story-begin").click();
     for (let i = 0; i < 3; i++) {
       await page.waitForFunction(
         (n) => window.__planets.snapshot().state.prologue.plants.length === n,
         i,
       );
-      await page.locator("#story-target").click();
+      await hit(page, STORY_PLANTS[i], 0.5);
       await page
         .getByRole("button", { name: "Собрать растение", exact: true })
         .click();
@@ -122,7 +178,7 @@ try {
       }
     }
     assert.equal((await gameState(page)).prologue.phase, "meteor");
-    await page.locator("#story-target").click();
+    await hit(page, STORY_METEOR, 0.4);
     await page
       .getByRole("button", { name: "Добыть железо", exact: true })
       .click();
@@ -130,13 +186,15 @@ try {
       () => window.__planets.snapshot().state.prologue.phase === "repair",
     );
     assert.equal((await gameState(page)).inventory.iron, 3);
-    await page.locator("#story-target").click();
+    await page.locator("#view").click();
+    await page.waitForTimeout(1600);
+    await hit(page, landingPad(await gameState(page), "home"), 1);
     await page.locator("#story-ship").click();
     await page.waitForFunction(
       () => window.__planets.snapshot().state.prologue.phase === "launch",
     );
     assert.equal((await gameState(page)).inventory.iron, 0);
-    await page.locator("#story-target").click();
+    await hit(page, landingPad(await gameState(page), "home"), 1);
     assert.equal(await page.locator("#story-ship").textContent(), "ЗАПУСТИТЬ");
     await page.locator("#story-ship").click();
     await page.waitForFunction(
@@ -148,8 +206,16 @@ try {
       () => window.__planets?.snapshot().observing?.reveal,
     );
     await page.waitForFunction(
-      () => window.__planets.snapshot().observing?.elapsed >= 7,
+      () => window.__planets.snapshot().observing?.finished,
     );
+    const reveal = await page.evaluate(
+      () => window.__planets.snapshot().observing,
+    );
+    assert(reveal.planets > 1200);
+    assert(reveal.planetsInFrame >= 500, JSON.stringify(reveal));
+    assert(reveal.distance > 10000, JSON.stringify(reveal));
+    assert.equal((await gameState(page)).discovered.length, 5);
+    console.log("Reveal metrics", JSON.stringify(reveal));
     await page.screenshot({
       path: "test-results/firstlight-system-reveal.png",
     });
@@ -304,6 +370,33 @@ try {
   }
   if (
     !process.env.FIRSTLIGHT_SCOPE ||
+    process.env.FIRSTLIGHT_SCOPE === "night"
+  ) {
+    const s = newGame(Date.now(), true);
+    s.cycleEpoch = Date.now() - DAY_DURATION / 2;
+    const { page, context, errors } = await launch(
+      { width: 1100, height: 800 },
+      s,
+    );
+    await page.waitForFunction(() =>
+      document.querySelector("#day-clock").textContent.includes("Ночь"),
+    );
+    const lights = await page.evaluate(
+      () => window.__planets.snapshot().lighting,
+    );
+    assert(
+      lights.ambient >= 0.85 &&
+        lights.sunlight >= 0.55 &&
+        lights.moonlight >= 1,
+      JSON.stringify(lights),
+    );
+    await page.screenshot({ path: "test-results/firstlight-night.png" });
+    assert.deepEqual(errors, []);
+    await context.close();
+    console.log("PASS brighter night, readable world and retained night cycle");
+  }
+  if (
+    !process.env.FIRSTLIGHT_SCOPE ||
     process.env.FIRSTLIGHT_SCOPE === "mobile"
   )
     for (const viewport of [
@@ -311,7 +404,10 @@ try {
       { width: 844, height: 390 },
     ]) {
       const { page, context, errors } = await launch(viewport);
-      await page.locator("#story-begin").waitFor();
+      await page.waitForFunction(
+        () => window.__planets.snapshot().state.prologue.phase === "plants",
+      );
+      await page.waitForTimeout(1300);
       assert.equal(
         await page.evaluate(
           () => document.documentElement.scrollWidth > innerWidth,
@@ -321,8 +417,7 @@ try {
       await page.screenshot({
         path: `test-results/firstlight-mobile-${viewport.width}.png`,
       });
-      await page.locator("#story-begin").click();
-      await page.locator("#story-target").click();
+      await hit(page, STORY_PLANTS[0], 2.1);
       await page
         .getByRole("button", { name: "Собрать растение", exact: true })
         .click();

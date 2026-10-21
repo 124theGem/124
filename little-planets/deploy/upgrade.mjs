@@ -44,7 +44,7 @@ if (conf.HOST !== "127.0.0.1" || conf.PORT !== "8003")
 if (!conf.BOT_TOKEN)
   fail("BOT_TOKEN is missing in the existing .env. No changes made.");
 const database = conf.DATABASE_PATH;
-const archive = join(source, "releases/little-planets-newdawn-v12.tar.gz"),
+const archive = join(source, "releases/little-planets-deepsignal-v13.tar.gz"),
   expected = readFileSync(`${archive}.sha256`, "utf8").trim().split(/\s+/)[0];
 if (
   createHash("sha256").update(readFileSync(archive)).digest("hex") !== expected
@@ -130,7 +130,7 @@ try {
   }
   if (!healthy) fail("New service did not pass the health check.");
   console.log(
-    "Updated successfully. Reopen the Telegram Mini App. Settings are preserved. Previous test worlds reset once on next login; new progress is saved.",
+    "Updated successfully. Reopen the Telegram Mini App. Settings are preserved. Version 0.12 progress is preserved. Pre-0.12 worlds reset once on next login; new progress is saved.",
   );
   console.log("Caddy, DNS and other services were not changed.");
 } catch (error) {

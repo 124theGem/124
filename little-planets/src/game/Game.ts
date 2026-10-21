@@ -126,6 +126,8 @@ export class Game {
   private observation?: ObservationScene;
   private overviewRotation = new T.Quaternion();
   private introStarted = 0;
+  private introRetryAt = 0;
+  private introVeil = document.createElement("div");
   private miningAim?: { x: number; y: number };
   private visualUp = new T.Vector3(0, 1, 0);
   private renderForward = new T.Vector3(0, 0, 1);
@@ -134,6 +136,7 @@ export class Game {
   private ziplinePoll = 0;
   private ziplinePending = false;
   private ambient = new T.HemisphereLight(0xdce8df, 0x374335, 1.05);
+  private moon = new T.DirectionalLight(0xb6cff5, 0);
   private lantern = new T.PointLight(0xffe8bd, 0, 12, 1.5);
   private scene = new T.Scene();
   private sky = new StarSky();
@@ -224,6 +227,14 @@ export class Game {
     this.renderer.toneMappingExposure = 1.0;
     document.querySelector("#app")!.append(this.renderer.domElement);
     this.ui = new UI(store.local);
+    this.introVeil.className = "arrival-veil";
+    this.introVeil.setAttribute("aria-hidden", "true");
+    this.introVeil.hidden = store.state.prologue.phase !== "arrival";
+    document.querySelector("#app")!.append(this.introVeil);
+    this.ui.root.classList.toggle(
+      "in-arrival",
+      store.state.prologue.phase === "arrival",
+    );
     this.input = new Input();
     this.scene.add(this.ambient, this.lantern);
     this.sun.castShadow = true;
@@ -240,7 +251,7 @@ export class Game {
       far: 80,
     });
     this.sun.shadow.normalBias = 0.025;
-    this.scene.add(this.sun, this.sun.target);
+    this.scene.add(this.sun, this.sun.target, this.moon, this.moon.target);
     const fill = new T.DirectionalLight(0xb6c6a4, 0.3);
     fill.position.set(25, 8, -15);
     this.scene.add(fill);
@@ -296,32 +307,6 @@ export class Game {
       menu(() => this.ui.craft(store.state, "Мебель", id));
     this.ui.onObservePlanet = (id) => this.observePlanet(id);
     this.ui.onStory = () => void this.advanceStory();
-    this.ui.onStoryTarget = () => {
-      const q = this.store.state.prologue;
-      if (q.phase === "plants" || q.phase === "meteor") {
-        const index =
-          q.phase === "meteor"
-            ? 3
-            : [0, 1, 2].find((i) => !q.plants.includes(i))!;
-        const at = index === 3 ? STORY_METEOR : STORY_PLANTS[index];
-        this.approach({ ...at, type: "story", id: String(index) }, () =>
-          this.ui.context(
-            index === 3
-              ? "Упавший метеорит"
-              : PLANTS[STORY_PLANTS[index].plant].name,
-            index === 3
-              ? "Возьмите кирку. Добыча даст 3 железа."
-              : "Соберите биоволокно для двигателя.",
-            index === 3 ? "Добыть железо" : "Собрать растение",
-          ),
-        );
-      } else {
-        const p = landingPad(this.store.state, "home");
-        this.approach({ ...p, type: "ship" }, () =>
-          this.ui.shipDock(this.store.state),
-        );
-      }
-    };
     this.ui.onHand = (hand) => void this.chooseHand(hand);
     this.ui.onUnderfoot = () => void this.placeUnderfoot();
     this.ui.button("rotate-placement", () => {
@@ -623,6 +608,23 @@ export class Game {
             audio: this.audio.stats,
             weather: this.weather.stats,
             playerWorld: this.avatar.root.position.toArray(),
+            introduction: {
+              seconds: this.introStarted
+                ? (performance.now() - this.introStarted) / 1000
+                : 0,
+              veil: this.introVeil.hidden
+                ? 0
+                : Number(this.introVeil.style.opacity || 1),
+              effects:
+                this.view instanceof SphereWorld
+                  ? this.view.prologueEffects.stats
+                  : null,
+            },
+            lighting: {
+              ambient: this.ambient.intensity,
+              sunlight: this.sun.intensity,
+              moonlight: this.moon.intensity,
+            },
             playerUp: new T.Vector3(0, 1, 0)
               .applyQuaternion(this.avatar.root.quaternion)
               .toArray(),
@@ -632,6 +634,7 @@ export class Game {
                   target: this.observation.target,
                   reveal: this.observation.reveal,
                   elapsed: this.observation.elapsed,
+                  ...this.observation.stats,
                 }
               : null,
             placement:
@@ -688,11 +691,8 @@ export class Game {
       this.mode = "planet";
     } else if (store.state.prologue.phase === "reveal")
       this.observePlanet("home", true);
-    this.ui.toast(
-      store.state.prologue.phase === "complete"
-        ? "Нажмите ☰ для меню. Приятного путешествия!"
-        : "ПИКО: Сканирование завершено. Обнаружено ещё 4 планеты.",
-    );
+    if (store.state.prologue.phase === "complete")
+      this.ui.toast("Нажмите ☰ для меню. Приятного путешествия!");
   }
 
   private observePlanet(id: PlanetId, reveal = false) {
@@ -720,7 +720,7 @@ export class Game {
     this.ui.root.classList.add("in-optics");
     const panel = this.ui.el("optics");
     panel.classList.remove("hidden");
-    panel.innerHTML = `<span class="eyebrow">${reveal ? "ПЕРВЫЙ ЗАПУСК / СИСТЕМА КОЛЫБЕЛЬ" : "ОПТИЧЕСКИЙ КАНАЛ / ТЕЛЕСКОП"}</span><h2>${reveal ? "Ваша история начинается здесь" : PLANETS[id].name}</h2><p>${reveal ? "Родная и ещё четыре мира. Исследуйте, выращивайте и стройте." : "Перетаскивайте изображение в любом направлении. Колесо / щипок — увеличение."}</p><div><button id="optics-plus">+</button><button id="optics-minus">−</button><button id="${reveal ? "optics-finish" : "optics-close"}" class="primary" ${reveal ? "disabled" : ""}>${reveal ? "Начать исследование" : "Вернуться к персонажу"}</button></div>`;
+    panel.innerHTML = `<span class="eyebrow">${reveal ? "ПЕРВЫЙ ЗАПУСК / СИСТЕМА КОЛЫБЕЛЬ" : "ОПТИЧЕСКИЙ КАНАЛ / ТЕЛЕСКОП"}</span><h2>${reveal ? "Тысячи миров. Ваше начало." : PLANETS[id].name}</h2><p>${reveal ? "Ваш первый полёт — лишь начало. Впереди сотни планет и далёкие созвездия." : "Перетаскивайте изображение в любом направлении. Колесо / щипок — увеличение."}</p><div><button id="optics-plus">+</button><button id="optics-minus">−</button><button id="${reveal ? "optics-finish" : "optics-close"}" class="primary" ${reveal ? "disabled" : ""}>${reveal ? "Начать исследование" : "Вернуться к персонажу"}</button></div>`;
     this.ui.button("optics-plus", () => this.observation?.magnify(0.8));
     this.ui.button("optics-minus", () => this.observation?.magnify(1.25));
     this.ui.button(
@@ -730,7 +730,7 @@ export class Game {
   }
   private async closeObservation() {
     if (this.observation?.reveal) {
-      if (this.observation.elapsed < 7) return;
+      if (!this.observation.finished) return;
       try {
         await this.store.action({ type: "story", step: "finish" });
       } catch (e) {
@@ -764,6 +764,12 @@ export class Game {
               ? "repair"
               : "launch",
       });
+      this.introVeil.hidden = true;
+      this.ui.root.classList.remove("in-arrival");
+      if (phase === "arrival")
+        this.ui.toast(
+          "ПИКО: Сканирование завершено. В системе обнаружено ещё 4 планеты.",
+        );
       this.ui.close();
       this.clearSelection();
       this.rebuild();
@@ -988,7 +994,7 @@ export class Game {
     const arriving = this.store.state.prologue.phase === "arrival",
       overview = this.mode === "planet" && !arriving,
       target = arriving
-        ? this.spherePoint({ x: 11, z: 14 }, 1.5)
+        ? this.spherePoint(landingPad(this.store.state, "home"), 1.1)
         : overview
           ? new T.Vector3()
           : feet.clone().addScaledVector(n, 2.3).addScaledVector(forward, -2.5),
@@ -1284,6 +1290,14 @@ export class Game {
       }
       const story = this.view.pickStory(this.raycaster.ray);
       if (story !== null) {
+        if (story === 4) {
+          this.stopBuild();
+          this.approach(
+            { ...landingPad(this.store.state, "home"), type: "ship" },
+            () => this.ui.shipDock(this.store.state),
+          );
+          return;
+        }
         if (story === -1) {
           this.ui.toast(storyText(this.store.state.prologue)[1]);
           return;
@@ -2598,12 +2612,20 @@ export class Game {
       this.observation.update(dt, innerWidth / innerHeight);
       const finish = this.ui.el("optics-finish");
       if (finish)
-        (finish as HTMLButtonElement).disabled = this.observation.elapsed < 7;
+        (finish as HTMLButtonElement).disabled = !this.observation.finished;
       this.renderer.render(this.observation.scene, this.observation.camera);
       return;
     }
     if (this.store.state.prologue.phase === "arrival" && this.introStarted) {
       this.zoom = 1;
+      const seconds = (time - this.introStarted) / 1000;
+      this.introVeil.style.opacity = String(
+        1 - T.MathUtils.smoothstep(seconds, 1, 4.8),
+      );
+      if (seconds >= 6.2 && !this.busy && time >= this.introRetryAt) {
+        this.introRetryAt = time + 4000;
+        void this.advanceStory();
+      }
     }
     if (this.zipline) {
       this.ziplineFrame(dt, time);
@@ -2725,15 +2747,22 @@ export class Game {
       );
     this.sun.position.copy(this.avatar.root.position).addScaledVector(dir, 38);
     this.sun.target.position.copy(this.avatar.root.position);
-    this.sun.intensity = 0.35 + cycle.daylight * 2.8;
-    this.ambient.intensity = 0.38 + cycle.daylight * 0.8;
-    this.ambient.color.setHex(cycle.daylight > 0.5 ? 0xdce8df : 0x819ebf);
+    this.sun.intensity = 0.55 + cycle.daylight * 2.6;
+    this.ambient.intensity = 0.85 + cycle.daylight * 0.33;
+    this.ambient.color.setHex(cycle.daylight > 0.5 ? 0xdce8df : 0xa3bad4);
+    // Soft moon fill keeps the six cube faces readable while the sun is below them.
+    this.moon.position
+      .copy(this.avatar.root.position)
+      .addScaledVector(this.visualUp, 35)
+      .addScaledVector(this.renderForward, 16);
+    this.moon.target.position.copy(this.avatar.root.position);
+    this.moon.intensity = (1 - cycle.daylight) * 1.2;
     this.lantern.position
       .copy(this.avatar.root.position)
       .addScaledVector(this.visualUp, 1.2);
     this.lantern.intensity = (1 - cycle.daylight) * 6;
     if (!this.store.state.inside)
-      this.scene.background = new T.Color(0x061426).lerp(
+      this.scene.background = new T.Color(0x172c44).lerp(
         new T.Color(0x9cbcaf),
         cycle.daylight * 0.65,
       );
@@ -2840,6 +2869,7 @@ export class Game {
         (o.material as T.Material).dispose();
       }
     });
+    this.introVeil.remove();
     this.renderer.dispose();
   }
 }

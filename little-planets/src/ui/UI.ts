@@ -82,7 +82,6 @@ export class UI {
   private galaxyMap?: GalaxyMap;
   onObservePlanet = (id: PlanetId) => {};
   onStory = () => {};
-  onStoryTarget = () => {};
   onHand = (hand: Save["hand"]) => {};
   onUnderfoot = () => {};
   onGrapple = (planet: PlanetId) => {};
@@ -292,11 +291,7 @@ export class UI {
     if (story.dataset.signature !== storySignature) {
       story.dataset.signature = storySignature;
       const [title, text] = storyText(q);
-      story.innerHTML = `<span class="eyebrow">${hudIcon("automation")} ПИКО / БОРТОВОЙ ПОМОЩНИК</span><h3>${title}</h3><p>${text}</p>${q.phase === "arrival" ? '<button id="story-begin" class="primary">Начать восстановление</button>' : q.phase !== "reveal" ? '<button id="story-target">К цели задания ↗</button>' : ""}`;
-      if (q.phase === "arrival")
-        this.button("story-begin", () => this.onStory());
-      if (this.el("story-target"))
-        this.button("story-target", () => this.onStoryTarget());
+      story.innerHTML = `<span class="eyebrow">${hudIcon("automation")} ПИКО / ВОССТАНОВЛЕНИЕ ДВИГАТЕЛЯ</span><h3>${title}</h3><p>${text}</p>`;
     }
     if (this.el("mine-strike").dataset.tool !== save.hand) {
       this.el("mine-strike").dataset.tool = save.hand;
@@ -650,8 +645,7 @@ export class UI {
     );
     (this.el("travel-mode") as HTMLSelectElement).onchange = () => {
       this.travelMode = (this.el("travel-mode") as HTMLSelectElement).value as
-        | "ship"
-        | "grapple";
+        "ship" | "grapple";
     };
   }
   placementMode(title: string | null) {

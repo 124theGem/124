@@ -3541,12 +3541,11 @@ progress::-webkit-progress-value {
   top: calc(var(--top) + 120px);
   width: min(330px, calc(100vw - 40px));
   padding: 18px;
-  background: linear-gradient(135deg, #0b202aef, #101a26ed);
-  border: 1px solid #80dece70;
-  border-left: 3px solid var(--cyan);
-  pointer-events: auto;
-  border-radius: 4px;
-  box-shadow: 0 16px 50px #0005;
+  background: linear-gradient(90deg, #071420bb, #07142000);
+  border: 0;
+  border-left: 2px solid #8cebdc88;
+  pointer-events: none;
+  text-shadow: 0 2px 5px #000;
 }
 .story-panel .eyebrow {
   display: flex;
@@ -3574,6 +3573,34 @@ progress::-webkit-progress-value {
 .in-prologue .bottom,
 .in-prologue #underfoot {
   display: none;
+}
+.arrival-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: #000;
+  opacity: 1;
+  pointer-events: auto;
+}
+.arrival-veil[hidden] {
+  display: none;
+}
+.in-arrival {
+  visibility: hidden;
+  pointer-events: none;
+}
+.in-prologue .story-panel {
+  animation: mission-arrives 0.9s ease-out both;
+}
+@keyframes mission-arrives {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 .in-optics .topbar,
 .in-optics .bottom,

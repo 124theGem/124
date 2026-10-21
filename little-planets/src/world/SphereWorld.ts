@@ -22,6 +22,7 @@ import {
 } from "../../shared/sphere";
 import { tiledSphere } from "./TiledSphere";
 import { SphereNature } from "./SphereNature";
+import { PrologueEffects } from "./PrologueEffects";
 import {
   surfacePoint,
   surfaceCoordinates,
@@ -55,6 +56,7 @@ export class SphereWorld {
   readonly id: PlanetId;
   private storyProps = new T.Group();
   private storyKey = "";
+  readonly prologueEffects = new PrologueEffects();
   readonly tiles: number;
   nature: SphereNature;
   private clearingKey = "";
@@ -87,7 +89,11 @@ export class SphereWorld {
   ) {
     this.id = save.planet;
     this.blockHighlight.visible = false;
-    this.root.add(this.blockHighlight, this.storyProps);
+    this.root.add(
+      this.blockHighlight,
+      this.storyProps,
+      this.prologueEffects.root,
+    );
     setTerrainEdits(this.id, save.worlds[this.id].terrain);
     const tile = tiledSphere(this.id);
     this.geometry = tile.geometry;
@@ -170,7 +176,10 @@ export class SphereWorld {
     this.root.updateMatrixWorld(true);
     const caster = new T.Raycaster();
     caster.ray.copy(ray);
-    const hit = caster.intersectObject(this.storyProps, true)[0];
+    const hit = caster.intersectObjects(
+      [this.storyProps, this.prologueEffects.targets],
+      true,
+    )[0];
     if (!hit) return null;
     const ground = caster.intersectObject(this.ground, false)[0];
     if (ground && ground.distance + 0.05 < hit.distance) return null;
@@ -230,6 +239,7 @@ export class SphereWorld {
   }
   rebuild(save: Save, now: number) {
     setTerrainEdits(this.id, save.worlds[this.id].terrain);
+    this.prologueEffects.update(save);
     if (!save.flight) {
       const pad = landingPad(save, this.id),
         record = save.worlds[this.id].launchPad;
@@ -412,7 +422,6 @@ export class SphereWorld {
         )
           return;
         const g = this.kit.plant(p.plant);
-        this.kit.box(g, 0, 0.05, 0, 0.8, 0.07, 0.8, 0x80efd5, true);
         add(g, p, i);
       });
       if (!save.prologue.meteor && save.prologue.phase !== "complete") {
@@ -456,11 +465,13 @@ export class SphereWorld {
   }
   animate(time: number) {
     this.nature.animate(time);
+    this.prologueEffects.animate(time);
   }
   dispose() {
     this.blockHighlight.geometry.dispose();
     this.blockHighlight.material.dispose();
     this.nature.dispose();
+    this.prologueEffects.dispose();
     this.root.traverse((o) => {
       if (o instanceof T.InstancedMesh) o.dispose();
     });
