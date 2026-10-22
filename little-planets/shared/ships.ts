@@ -70,6 +70,40 @@ export const SHIP_FINISHES = {
   titanium: { name: "Шлифованный титан", metalness: 0.88, roughness: 0.24 },
   carbon: { name: "Углеродный композит", metalness: 0.22, roughness: 0.48 },
 };
+export const SHIP_LIVERIES = {
+  aurora: {
+    name: "AURORA / Экспедиция",
+    corporation: "AURORA EXPEDITION",
+    accent: 0x497c80,
+    stripe: 0xd4b57b,
+  },
+  helix: {
+    name: "HELIX / Грузовой флот",
+    corporation: "HELIX FREIGHT SYSTEMS",
+    accent: 0xba793c,
+    stripe: 0xe5d9b8,
+  },
+  polar: {
+    name: "POLAR / Спасательная служба",
+    corporation: "POLAR RESCUE DIVISION",
+    accent: 0x9d4b43,
+    stripe: 0xc6d9d7,
+  },
+  obsidian: {
+    name: "ORION / Спецоперации",
+    corporation: "ORION DEFENCE WORKS",
+    accent: 0x4f5b67,
+    stripe: 0xb2bac0,
+  },
+};
+export function shipRegistration(
+  s: Pick<Starship, "name" | "class" | "model">,
+) {
+  let hash = 2166136261;
+  for (const c of s.name + s.class + s.model)
+    hash = Math.imul(hash ^ c.charCodeAt(0), 16777619) >>> 0;
+  return `LP-${String(hash % 100000).padStart(5, "0")}`;
+}
 export interface Starship {
   id: string;
   name: string;
@@ -78,12 +112,14 @@ export interface Starship {
   hull: "needle" | "armored" | "freighter";
   wings: "swept" | "delta" | "twin";
   color: keyof typeof SHIP_COLORS;
+  livery?: keyof typeof SHIP_LIVERIES;
   engine?: keyof typeof SHIP_ENGINES;
   module?: keyof typeof SHIP_MODULES;
   finish?: keyof typeof SHIP_FINISHES;
 }
 export const shipConfiguration = (s: Starship) => ({
   ...s,
+  livery: s.livery ?? "aurora",
   engine: s.engine ?? "ion",
   module: s.module ?? "standard",
   finish: s.finish ?? "ceramic",

@@ -143,15 +143,20 @@ try {
     // Select the physical model immediately without switching the item in hand.
     await page.waitForTimeout(700);
     p = await point(page, b.x, b.z, 1.2);
-    const exposed = () => page.evaluate(
-      (p) => document.elementFromPoint(p.x, p.y)?.matches("canvas.world"), p,
-    );
+    const exposed = () =>
+      page.evaluate(
+        (p) => document.elementFromPoint(p.x, p.y)?.matches("canvas.world"),
+        p,
+      );
     if (!(await exposed())) {
       await page.locator("#view").click();
       await page.waitForTimeout(700);
       p = await point(page, b.x, b.z, 1.2);
     }
-    assert(await exposed(), `Building exposed in world canvas: ${JSON.stringify(p)}`);
+    assert(
+      await exposed(),
+      `Building exposed in world canvas: ${JSON.stringify(p)}`,
+    );
     await page.mouse.click(p.x, p.y);
     await page.locator(".facility-summary").waitFor();
     assert.equal(
@@ -175,22 +180,23 @@ try {
   {
     const save = newGame(Date.now(), true);
     save.position = { ...ship("home") };
-    save.hand = "grapple";
+    save.hand = "axe";
     const { page, context, errors, snap } = await launch(
       { width: 1100, height: 800 },
       save,
     );
-    // Select grapple travel first, then click the actual ship mesh.
-    await page.locator('[data-hand="grapple"]').click();
-    await page.locator("#travel-mode").selectOption("grapple");
-    await page.locator("#close-modal").click();
+    await page.locator('[data-hand="axe"]').click();
+    assert.equal(
+      await page.locator('[data-hand="grapple"], #underfoot').count(),
+      0,
+    );
     const pad = ship("home"),
       p = await point(page, pad.x, pad.z, 0.8);
     await page.mouse.click(p.x, p.y);
     await page.locator("#board-ship").waitFor();
     await page.screenshot({ path: "test-results/flightdeck-dock.png" });
     await page.locator("#ship-route").click();
-    assert.equal(await page.locator("#travel-mode").inputValue(), "ship");
+    assert.equal(await page.locator("#travel-mode").count(), 0);
     await page.locator("#close-modal").click();
     await page.mouse.click(p.x, p.y);
     await page.locator("#board-ship").click();
@@ -200,12 +206,8 @@ try {
     assert.equal((await snap()).state.flight.target, "home");
     assert.equal((await snap()).state.grapple, null);
     await page.locator("#space-course").click();
-    assert.equal(await page.locator("#travel-mode").inputValue(), "ship");
-    assert(
-      await page
-        .locator('#travel-mode option[value="grapple"]')
-        .evaluate((el) => el.disabled),
-    );
+    assert.equal(await page.locator("#travel-mode").count(), 0);
+    assert.equal(await page.locator('[data-hand="grapple"]').count(), 0);
     await page.locator("#close-modal").click();
     await page.reload();
     await page.waitForFunction(
@@ -215,7 +217,7 @@ try {
     assert.deepEqual(errors, []);
     await context.close();
     console.log(
-      "PASS grapple-independent physical ship boarding, ship routes and persisted cockpit",
+      "PASS axe-independent physical ship boarding, ship routes and persisted cockpit",
     );
   }
 } catch (e) {

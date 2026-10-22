@@ -19,6 +19,7 @@ export class WindField {
         anchors: number[];
         ups: number[];
         directions: number[];
+        treeIds: (string | null)[];
       }
     >();
     for (const plant of root.children) {
@@ -37,9 +38,11 @@ export class WindField {
             anchors: [],
             ups: [],
             directions: [],
+            treeIds: [],
           });
         const bucket = buckets.get(key)!;
         bucket.matrices.push(o.matrixWorld.clone());
+        bucket.treeIds.push(plant.userData.treeId ?? null);
         bucket.anchors.push(anchor.x, anchor.y, anchor.z, kind);
         bucket.ups.push(up.x, up.y, up.z);
         const tangent = new T.Vector3(0.8, 0.24, 0.58).projectOnPlane(up);
@@ -95,6 +98,7 @@ export class WindField {
       const mesh = new T.InstancedMesh(geo, material, bucket.matrices.length);
       bucket.matrices.forEach((m, i) => mesh.setMatrixAt(i, m));
       mesh.castShadow = mesh.receiveShadow = true;
+      mesh.userData.treeIds = bucket.treeIds;
       const depth = new T.MeshDepthMaterial({
         depthPacking: T.RGBADepthPacking,
       });
@@ -105,6 +109,15 @@ export class WindField {
       this.materials.push(material, depth);
       this.batches.push(mesh);
       root.add(mesh);
+    }
+  }
+  pick(ray: T.Ray): string | undefined {
+    const caster = new T.Raycaster();
+    caster.ray.copy(ray);
+    const hits = caster.intersectObjects(this.batches, false);
+    for (const hit of hits) {
+      const id = hit.object.userData.treeIds?.[hit.instanceId ?? -1];
+      if (id) return id;
     }
   }
   update(time: number, quality: GraphicsQuality) {

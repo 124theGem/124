@@ -89,11 +89,8 @@ export class UI {
   onObservePlanet = (id: PlanetId) => {};
   onStory = () => {};
   onHand = (hand: Save["hand"]) => {};
-  onUnderfoot = () => {};
-  onGrapple = (planet: PlanetId) => {};
   onSkills = () => {};
   onSpendSkill = (skill: keyof typeof SKILLS) => {};
-  travelMode: "ship" | "grapple" = "ship";
   onInventory = () => {};
   onScan = () => {};
   onSpaceAuto = () => {};
@@ -136,7 +133,7 @@ export class UI {
  <header class="topbar"><div class="identity"><button id="profile" class="avatar" aria-label="Профиль и космический паспорт">${hudIcon("profile")}</button><div><div class="brand">LITTLE PLANETS <span>AURORA / EXPLORER</span></div><strong id="planet-name">Родная</strong><small id="planet-tag"></small></div></div><div class="top-buttons"><button id="view" title="Камера" aria-label="Переключить камеру">${hudIcon("planet")}</button><button id="audio-toggle" title="Звук" aria-label="Включить или выключить звук">${hudIcon("audio")}</button><button id="settings" title="Настройки" aria-label="Настройки">${hudIcon("settings")}</button></div></header>
 
  <aside id="story-panel" class="story-panel hidden"></aside><section id="optics" class="optics hidden"></section>
- <button id="mine-strike" class="mine-strike hidden" aria-label="Ударить киркой" title="Удерживайте, чтобы добывать">${hudIcon("pickaxe")}</button>
+ <button id="mine-strike" class="mine-strike hidden" aria-label="Рубить дерево" title="Удерживайте, чтобы добывать">${hudIcon("axe")}</button>
  <div id="combat-hud" class="combat-hud hidden"><span>${hudIcon("health")}<b id="health-value">100</b><small>ЦЕЛОСТНОСТЬ</small></span><div class="health-track"><i id="health-fill"></i></div><small id="equipped-label"></small></div><button id="attack" class="attack-button hidden" aria-label="Атаковать">${hudIcon("blaster")}<small>Атака</small></button>
  <div id="event-banner" class="event-banner hidden" role="status"></div><div id="context" class="context panel hidden"></div><div id="build-panel" class="build-panel panel hidden"></div>
  <div class="bottom"><nav id="menu-items" class="hidden" aria-label="Меню игры"><div class="nav-heading">СИСТЕМЫ КОЛОНИИ<span>01 — 07</span></div>${[
@@ -157,8 +154,8 @@ export class UI {
    )}</nav><button id="menu-toggle" aria-label="Открыть меню" aria-expanded="false"><span>${hudIcon("menu")}</span><small>Системы</small></button><span class="save-status" id="save-status">${local ? "LOCAL" : "ONLINE"} · сохранено</span></div>
  <div id="joystick" aria-label="Джойстик движения"><span></span></div><div class="keyboard"><kbd>W A S D</kbd> движение <span>·</span> перетащите для обзора</div>
  <div id="placement-mode" class="placement-mode hidden"><span>${hudIcon("build")}</span><div><small>РАЗМЕЩЕНИЕ</small><strong id="placement-name"></strong></div><button id="rotate-placement" class="hidden" aria-label="Повернуть ограду">↻</button><button id="cancel-placement" aria-label="Завершить размещение">${hudIcon("close")}</button></div>
- <div id="handbar" class="handbar" aria-label="Предмет в руках"></div><button id="underfoot" class="underfoot" title="Поставить блок под собой">${hudIcon("block")}<span>Под себя</span></button><div id="progress-hud" class="progress-hud"><button id="skills-button"></button><div><i id="xp-fill"></i></div><small id="day-clock"></small></div>
- <section id="zipline-hud" class="zipline-hud hidden"><span class="eyebrow">ГАРПУН / МЕЖПЛАНЕТНЫЙ ТРОС</span><h3 id="zipline-target"></h3><progress id="zipline-progress" max="1"></progress><p>Держимся за перекладину · перелёт по тросу</p><button id="zipline-cancel">Вернуться на исходную планету</button></section><div id="toast" role="status"></div>
+ <div id="handbar" class="handbar" aria-label="Предмет в руках"></div><div id="progress-hud" class="progress-hud"><button id="skills-button"></button><div><i id="xp-fill"></i></div><small id="day-clock"></small></div>
+ <div id="toast" role="status"></div>
  <div id="modal" class="modal hidden"><section class="sheet" role="dialog" aria-modal="true" aria-labelledby="window-title"><header class="window-header"><div class="window-brand">${hudIcon("galaxy")}<span>AURORA<strong>КОМАНДНЫЙ ИНТЕРФЕЙС</strong></span></div><div class="window-breadcrumb"><span>СИСТЕМЫ</span><b id="window-title">Колония</b></div><button class="close" id="close-modal" aria-label="Закрыть окно">${hudIcon("close")}</button></header><nav class="window-nav" aria-label="Разделы командного интерфейса">${[
    ["profile", "profile", "Паспорт"],
    ["inventory", "inventory", "Инвентарь"],
@@ -183,7 +180,6 @@ export class UI {
       ["profile", () => this.onProfile()],
 
       ["skills-button", () => this.onSkills()],
-      ["underfoot", () => this.onUnderfoot()],
       ["inventory", () => this.onInventory()],
       ["automation", () => this.onAutomation()],
       ["plant", () => this.onPlant()],
@@ -302,21 +298,20 @@ export class UI {
     if (this.el("mine-strike").dataset.tool !== save.hand) {
       this.el("mine-strike").dataset.tool = save.hand;
       this.el("mine-strike").innerHTML = hudIcon(
-        save.hand === "cultivator" ? "cultivator" : "pickaxe",
+        save.hand === "cultivator" ? "cultivator" : "axe",
       );
       this.el("mine-strike").setAttribute(
         "aria-label",
-        save.hand === "cultivator" ? "Обработать землю" : "Ударить киркой",
+        save.hand === "cultivator" ? "Обработать землю" : "Рубить дерево",
       );
     }
     this.el("save-status").dataset.testing = String(save.freeConstruction);
     const p = PLANETS[save.planet];
     this.el("mine-strike").classList.toggle(
       "hidden",
-      !["pickaxe", "cultivator"].includes(save.hand) ||
+      !["axe", "cultivator"].includes(save.hand) ||
         !!save.inside ||
-        !!save.flight ||
-        !!save.grapple,
+        !!save.flight,
     );
     const level = experienceLevel(save.progression.xp),
       floor = levelFloor(level),
@@ -331,14 +326,8 @@ export class UI {
       icon: string;
       available: boolean;
     }[] = [
-      { id: "pickaxe", name: "Кирка", icon: "⛏", available: true },
+      { id: "axe", name: "Топор", icon: "⛏", available: true },
       { id: "cultivator", name: "Культиватор", icon: "⚒", available: true },
-      {
-        id: "grapple",
-        name: "Гарпун",
-        icon: "↗",
-        available: save.prologue.phase === "complete",
-      },
       ...(["sword", "spear", "blaster"] as const).map((id) => ({
         id,
         name: GEAR[id].name,
@@ -355,7 +344,7 @@ export class UI {
       this.el("handbar").innerHTML = hands
         .map(
           (h, i) =>
-            `<button data-hand="${h.id}" title="${h.name}${h.available ? "" : h.id === "grapple" ? " · после первого запуска" : " · сначала создайте"}" aria-label="${h.name}" aria-pressed="${save.hand === h.id}" ${h.available ? "" : "disabled"}><small>${i + 1}</small><span>${hudIcon(h.id)}</span></button>`,
+            `<button data-hand="${h.id}" title="${h.name}${h.available ? "" : " · сначала создайте"}" aria-label="${h.name}" aria-pressed="${save.hand === h.id}" ${h.available ? "" : "disabled"}><small>${i + 1}</small><span>${hudIcon(h.id)}</span></button>`,
         )
         .join("");
       this.el("handbar")
@@ -365,11 +354,6 @@ export class UI {
             (b.onclick = () => this.onHand(b.dataset.hand as Save["hand"])),
         );
     }
-    this.el("underfoot").classList.toggle(
-      "hidden",
-      !!save.inside || !!save.flight || !!save.grapple,
-    );
-
     this.el("planet-name").textContent = save.inside ? "Главный дом" : p.name;
     this.el("planet-tag").textContent = save.inside
       ? "Жилой сектор / интерьер"
@@ -387,7 +371,7 @@ export class UI {
     this.el("combat-hud").classList.toggle("hidden", !combat);
     this.el("attack").classList.toggle(
       "hidden",
-      !combat || save.hand === "pickaxe",
+      !combat || save.hand === "axe",
     );
     this.el("health-value").textContent = String(save.health);
     this.el("health-fill").style.width = `${save.health}%`;
@@ -649,25 +633,20 @@ export class UI {
     this.el("build-panel").classList.add("hidden");
   }
   galaxy(save: Save, query = this.galaxyQuery) {
-    if (save.flight) this.travelMode = "ship";
     this.activeModal = "galaxy";
     this.galaxyQuery = query;
     this.show(
-      `<span class="eyebrow">AURORA / STELLAR CARTOGRAPHY</span><h2>Звёздная сеть</h2><label class="travel-selector">Способ путешествия<select id="travel-mode"><option value="ship" ${this.travelMode === "ship" ? "selected" : ""}>Корабль</option><option value="grapple" ${save.flight ? "disabled" : ""} ${this.travelMode === "grapple" ? "selected" : ""}>Гарпун и трос</option></select></label><div id="galaxy-network"></div>`,
+      `<span class="eyebrow">AURORA / STELLAR CARTOGRAPHY</span><h2>Звёздная сеть</h2><p class="configuration-note">Межпланетные путешествия на корабле</p><div id="galaxy-network"></div>`,
     );
     this.galaxyMap = new GalaxyMap(
       this.el("galaxy-network"),
       save,
       (id) => this.onScanPlanet(id),
-      (id) =>
-        this.travelMode === "grapple" ? this.onGrapple(id) : this.onTravel(id),
+      (id) => this.onTravel(id),
       (id) => this.onObservePlanet(id),
     );
-    (this.el("travel-mode") as HTMLSelectElement).onchange = () => {
-      this.travelMode = (this.el("travel-mode") as HTMLSelectElement).value as
-        "ship" | "grapple";
-    };
   }
+
   placementMode(title: string | null) {
     this.el("rotate-placement").classList.add("hidden");
     this.el("placement-mode").classList.toggle("hidden", !title);
@@ -695,7 +674,6 @@ export class UI {
       return;
     }
 
-    this.travelMode = "ship";
     this.hideContext();
     const ship = save.fleet.find(
         (s) => s.id === (dock?.shipId ?? save.activeShip),
@@ -709,7 +687,6 @@ export class UI {
     this.ownPanel(() => preview.dispose());
     this.button("board-ship", () => this.onBoardShip());
     this.button("ship-route", () => {
-      this.travelMode = "ship";
       this.galaxy(save);
     });
   }

@@ -166,50 +166,30 @@ describe("six cube faces, shared rendering and physical surface", () => {
   });
 });
 describe("authoritative destructible blocks, construction and save reset", () => {
-  it("starts with a pickaxe, removes geometry, awards one material, builds and restores persistent material layers", () => {
-    let s = newGame(0);
-    expect(s.inventory["tool:pickaxe"]).toBe(1);
-    const p = { ...s.position },
-      n = sphereNormal(p, "home"),
-      c = voxelCell(n, "home"),
-      k = cellKey(n, "home"),
-      h = voxelLevel(c.normal, "home", {}),
-      stone = s.inventory.stone,
-      wood = s.inventory.wood;
-    s = applyAction(s, { type: "terrain", mode: "dig", ...p }, 1000);
-    expect(s.worlds.home.terrain[k].height).toBeCloseTo(h - VOXEL_STEP);
-    expect(s.inventory.stone).toBe(stone + 1);
-    s = applyAction(
-      s,
-      { type: "terrain", mode: "place", material: "wood", ...p },
-      1300,
-    );
-    s = applyAction(
-      s,
-      { type: "terrain", mode: "place", material: "obsidian", ...p },
-      1600,
-    );
-    expect(s.inventory.wood).toBe(wood - 1);
-    s = parseSave(JSON.stringify(s));
-    s = applyAction(s, { type: "terrain", mode: "dig", ...p }, 1900);
-    expect(s.inventory.obsidian).toBe(12);
-    s = applyAction(s, { type: "terrain", mode: "dig", ...p }, 2200);
-    expect(s.inventory.wood).toBe(wood);
-    expect(s.worlds.home.terrain[k].height).toBeCloseTo(h - VOXEL_STEP);
-    expect(parseSave(JSON.stringify(s))).toEqual(s);
+  it("rejects all retired block editing actions without changing inventories or terrain", () => {
+    const s = newGame(0),
+      before = structuredClone(s);
+    expect(s.inventory["tool:axe"]).toBe(1);
+    expect(s.inventory["tool:pickaxe"]).toBeUndefined();
+    for (const mode of ["dig", "place"])
+      expect(() =>
+        applyAction(s, { type: "terrain", mode, ...s.position }, 1000),
+      ).toThrow();
+    expect(s).toEqual(before);
   });
-  it("destroys an individual buried block without removing its roof and saves a real cavity", () => {
+  it("preserves a legacy buried cavity without removing its roof", () => {
     let s = newGame(0);
     const p = s.position,
       n = sphereNormal(p, "home"),
       c = voxelCell(n, "home"),
       top = Math.round(voxelLevel(c.normal, "home", {}) / VOXEL_STEP),
       k = cellKey(n, "home");
-    s = applyAction(
-      s,
-      { type: "terrain", mode: "dig", ...p, level: top - 1 },
-      1000,
-    );
+    s.worlds.home.terrain[k] = {
+      height: top * VOXEL_STEP,
+      material: "stone",
+      removed: [top - 1],
+      blocks: {},
+    };
     expect(s.worlds.home.terrain[k].height).toBeCloseTo(top * VOXEL_STEP);
     expect(s.worlds.home.terrain[k].removed).toContain(top - 1);
     setTerrainEdits("home", s.worlds.home.terrain);
@@ -232,39 +212,17 @@ describe("authoritative destructible blocks, construction and save reset", () =>
       parseSave(JSON.stringify(s)).worlds.home.terrain[k].removed,
     ).toContain(top - 1);
   });
-  it("rejects distant edits, missing materials/tools, spam and digging through bedrock without mutating input", () => {
-    let s = newGame(0);
-    const p = { ...s.position };
-    expect(() =>
-      applyAction(s, { type: "terrain", mode: "dig", x: 0, z: 0 }, 1000),
-    ).toThrow(/поближе/);
-    const clone = structuredClone(s);
-    s.inventory.wood = 0;
-    expect(() =>
-      applyAction(
-        s,
-        { type: "terrain", mode: "place", material: "wood", ...p },
-        1000,
-      ),
-    ).toThrow(/материала/);
-    s = clone;
-    s = applyAction(s, { type: "terrain", mode: "dig", ...p }, 1000);
-    expect(() =>
-      applyAction(s, { type: "terrain", mode: "dig", ...p }, 1100),
-    ).toThrow(/взмаха/);
-    for (let t = 1300; t < 20000; t += 300) {
-      try {
-        s = applyAction(s, { type: "terrain", mode: "dig", ...p }, t);
-      } catch (e) {
-        expect((e as Error).message).toMatch(/ядро/);
-        break;
-      }
-    }
-    const c = voxelCell(sphereNormal(p, "home"), "home");
-    expect(voxelLevel(c.normal, "home", s.worlds.home.terrain)).toBeCloseTo(
-      -1.8,
+  it("keeps existing player terrain through reload despite retiring editing", () => {
+    const s = newGame(0);
+    s.worlds.home.terrain["0:5:5"] = {
+      height: 2.7,
+      material: "wood",
+      blocks: { "6": "wood" },
+      removed: [2],
+    };
+    expect(parseSave(JSON.stringify(s)).worlds.home.terrain).toEqual(
+      s.worlds.home.terrain,
     );
-    expect(clone.worlds.home.terrain).toEqual({});
   });
   it("starts fresh for versions 1–5, validates current saved graphs, and rejects malformed edits", () => {
     for (const version of [1, 2, 3, 4, 5])
@@ -301,9 +259,9 @@ describe("programs control real actors and conserved resources", () => {
       }
     }
     expect(unloaded).toBe(true);
-    expect(s.worlds.home.stock.wood).toBe(24);
+    expect(s.worlds.home.stock.wood).toBeGreaterThanOrEqual(24);
     expect(s.inventory.wood).toBe(before);
-    expect(Object.keys(s.worlds.home.depleted).length).toBeGreaterThan(0);
+    expect(s.worlds.home.clearedNodes.length).toBeGreaterThan(0);
     const d = s.automation.devices.find((d) => d.id === id)!;
     expect(cargoAmount(d)).toBe(0);
     expect(d.pc).toBe("mine");

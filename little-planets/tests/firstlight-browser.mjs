@@ -121,7 +121,12 @@ try {
       );
       assert.equal((await gameState(page)).cycleEpoch, start.cycleEpoch);
     }
-    assert(await page.locator('[data-hand="grapple"]').isDisabled());
+    assert.equal(
+      await page
+        .locator('[data-hand="grapple"], [data-hand="pickaxe"], #underfoot')
+        .count(),
+      0,
+    );
     assert.equal(await page.locator("#first-person").count(), 0);
     assert.equal(await page.locator("#story-begin").count(), 0);
     assert.equal(await page.locator("#story-target").count(), 0);

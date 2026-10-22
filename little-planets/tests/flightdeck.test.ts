@@ -3,10 +3,10 @@ import { newGame, applyAction, parseSave } from "../shared/model";
 import { ship } from "../shared/catalog";
 import { finishFlight } from "./fly";
 describe("explicit ship boarding", () => {
-  it("boards with a grapple selected, persists the cockpit, then flies a real course and lands", () => {
+  it("boards with an axe selected, persists the cockpit, then flies a real course and lands", () => {
     let s = newGame(Date.now(), true);
     s.position = { ...ship("home") };
-    s.hand = "grapple";
+    s.hand = "axe";
     s = applyAction(s, { type: "boardShip" });
     expect(s.flight?.origin).toBe("home");
     expect(s.flight?.target).toBe("home");

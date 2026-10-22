@@ -40,6 +40,12 @@ export class Store {
         raw.fleet === undefined ||
         raw.freeConstruction === undefined ||
         raw.hand === undefined ||
+        ["pickaxe", "grapple"].includes(raw.hand) ||
+        raw.inventory?.["tool:axe"] === undefined ||
+        raw.inventory?.["tool:pickaxe"] !== undefined ||
+        raw.inventory?.["tool:grapple"] !== undefined ||
+        raw.shipBlueprints === undefined ||
+        !!raw.grapple ||
         raw.progression === undefined ||
         raw.cycleEpoch === undefined ||
         raw.grapple === undefined ||
@@ -48,7 +54,9 @@ export class Store {
             w.gardens === undefined ||
             w.fences === undefined ||
             w.cleared === undefined ||
-            w.clearedNodes === undefined,
+            w.clearedNodes === undefined ||
+            w.treeDamage === undefined ||
+            w.treeTimber === undefined,
         );
       if (needsDefaults)
         this.db

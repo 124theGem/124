@@ -331,7 +331,8 @@ describe("additive Cubeworks v6 migration", () => {
       expect(second).toEqual(first);
       expect(second.revision).toBe(42);
       expect(second.inventory.wood).toBe(37);
-      expect(second.inventory["tool:grapple"]).toBe(1);
+      expect(second.inventory["tool:axe"]).toBe(1);
+      expect(second.inventory["tool:grapple"]).toBeUndefined();
       const check = new DatabaseSync(file);
       try {
         const row = check
@@ -345,6 +346,91 @@ describe("additive Cubeworks v6 migration", () => {
     } finally {
       store.close();
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("Outpost compatible tool retirement", () => {
+  it("persists retired tools and an unfinished journey migration before the first action", () => {
+    const dir = mkdtempSync(join(tmpdir(), "planets-outpost-")),
+      file = join(dir, "state.sqlite");
+    let store = new Store(file);
+    store.close();
+    const old: any = newGame(1000, true);
+    old.inventory.wood = 444;
+    old.revision = 27;
+    old.hand = "grapple";
+    old.inventory["tool:pickaxe"] = 1;
+    old.inventory["tool:grapple"] = 1;
+    old.grapple = {
+      origin: "home",
+      target: "listoria",
+      originPosition: { x: 8, z: 7 },
+    };
+    const db = new DatabaseSync(file);
+    db.prepare("INSERT INTO saves(user_id,state) VALUES(?,?)").run(
+      "55",
+      JSON.stringify(old),
+    );
+    db.close();
+    try {
+      store = new Store(file);
+      const migrated = store.get(55);
+      expect(migrated.revision).toBe(27);
+      expect(migrated.inventory.wood).toBe(444);
+      expect(migrated.position).toEqual({ x: 8, z: 7 });
+      expect(migrated.hand).toBe("axe");
+      const check = new DatabaseSync(file);
+      try {
+        const row = check
+          .prepare("SELECT state FROM saves WHERE user_id=?")
+          .get("55") as { state: string };
+        const disk = JSON.parse(row.state);
+        expect(disk).toEqual(migrated);
+        expect(disk.grapple).toBeNull();
+        expect(disk.inventory["tool:grapple"]).toBeUndefined();
+      } finally {
+        check.close();
+      }
+      store.close();
+      store = new Store(file);
+      expect(store.get(55)).toEqual(migrated);
+    } finally {
+      store.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+  it("rejects retired block editing and grapple requests through the signed HTTP API", async () => {
+    const app = await createApp({
+      botToken: token,
+      databasePath: ":memory:",
+      staticRoot: "/nonexistent-planets-build",
+    });
+    const headers = { authorization: `tma ${signed(551)}` };
+    try {
+      const original = (await app.inject({ url: "/api/state", headers })).json()
+        .state;
+      for (const action of [
+        { type: "terrain", mode: "dig", x: 1, z: 1 },
+        { type: "terrain", mode: "place", x: 1, z: 1 },
+        { type: "grappleStart", planet: "listoria" },
+        { type: "grappleTick" },
+        { type: "grappleCancel" },
+        { type: "hand", item: "pickaxe" },
+      ]) {
+        const res = await app.inject({
+          method: "POST",
+          url: "/api/action",
+          headers,
+          payload: { revision: original.revision, action },
+        });
+        expect(res.statusCode).toBe(400);
+      }
+      expect(
+        (await app.inject({ url: "/api/state", headers })).json().state,
+      ).toEqual(original);
+    } finally {
+      await app.close();
     }
   });
 });

@@ -14,8 +14,8 @@ const paths: Record<string, string> = {
     "M9 3h6l1 4 4 2v6l-4 2-1 4H9l-1-4-4-2V9l4-2ZM15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z",
   profile: "M8 8a4 4 0 1 1 8 0 4 4 0 0 1-8 0ZM4 21v-3c0-4 16-4 16 0v3",
   ship: "m12 2 5 9 4 5-7-2-2 7-2-7-7 2 4-5ZM10 10h4M7 20l-2 2m12-2 2 2",
-  pickaxe: "m4 5 15 14M3 10l4-6 6-1 5 3M14 5l5 5",
-  grapple: "M4 20 15 9m-4-5 9 9m-9-9h9v9M4 15l5 5",
+  axe: "m7 21 10-16m-6 4 4-6 8 5-4 6z",
+
   sword: "m5 3 14 14m-1-14L7 14l3 3L21 6V3ZM4 13l7 7M3 21l4-4",
   spear: "m3 21 13-13m-3-1 8-4-4 8Z",
   blaster: "M3 9h16l3 3H9v7H5v-7H3ZM16 7v2M10 12v3h3",

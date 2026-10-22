@@ -1,3 +1,4 @@
+import { finishFlight } from "./fly";
 import { AutomationActors } from "../src/world/AutomationActors";
 import { describe, it, expect } from "vitest";
 import * as T from "three";
@@ -166,17 +167,19 @@ describe("Planetary harvester and modular facilities", () => {
       s.worlds.home.buildings.find((b) => b.id === id)!.produced,
     ).toBeGreaterThanOrEqual(108);
   });
-  it("places construction blocks with no inventory cost for test pilots", () => {
-    let s = newGame(0, true);
+  it("keeps construction free while rejecting retired individual block placement", () => {
+    const s = newGame(0, true);
     s.inventory.stone = 0;
-    s.position = offsetPoint(ship("home"), -4, 0, "home");
-    s = applyAction(
-      s,
-      { type: "terrain", mode: "place", material: "stone", ...s.position },
-      1000,
-    );
+    expect(s.freeConstruction).toBe(true);
+    expect(() =>
+      applyAction(
+        s,
+        { type: "terrain", mode: "place", material: "stone", ...s.position },
+        1000,
+      ),
+    ).toThrow();
     expect(s.inventory.stone).toBe(0);
-    expect(Object.keys(s.worlds.home.terrain).length).toBe(1);
+    expect(s.worlds.home.terrain).toEqual({});
   });
   it("grows to near a whole face and twenty-three meters tall, with increasing architectural detail", () => {
     const k = new Models();
@@ -345,8 +348,9 @@ describe("Personal fleet and access passport", () => {
     let s = newGame(1000, true);
     s = tick(s, 6000);
     expect(s.profile.visits.home.seconds).toBe(5);
-    s = applyAction(s, { type: "grappleStart", planet: "listoria" }, 6100);
-    s = applyAction(s, { type: "grappleTick" }, s.grapple!.endsAt);
+    s.position = { ...ship("home") };
+    s = applyAction(s, { type: "travel", planet: "listoria" }, 6100);
+    s = finishFlight(s);
     expect(s.profile.visits.listoria.arrivals).toBe(1);
     s = tick(s, s.updatedAt + 1000);
     expect(s.profile.visits.listoria.seconds).toBe(1);

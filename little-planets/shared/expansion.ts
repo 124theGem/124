@@ -8,7 +8,6 @@ import {
   add,
   mul,
 } from "./space";
-import { beginGrapple } from "./grapple";
 import type { Save } from "./model";
 /** One-time expansion of v0.9 angular coordinates and persistent voxel edits. */
 export function expandSavedWorlds(save: Save) {
@@ -82,17 +81,6 @@ export function expandSavedWorlds(save: Save) {
         .map(([p, w]) => [p, { x: w.launchPad!.x, z: w.launchPad!.z }]),
     );
     save.flight = redirectFlight(f, f.target, save.discovered);
-  }
-  if (save.grapple) {
-    const g = save.grapple;
-    point(g.originPosition, g.origin);
-    g.route = beginGrapple(
-      g.origin,
-      g.target,
-      g.originPosition,
-      save.discovered,
-      g.startedAt,
-    ).route;
   }
   if (!save.worlds[save.planet].launchPad) {
     const p = save.planet;

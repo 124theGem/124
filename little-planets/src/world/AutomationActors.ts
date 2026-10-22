@@ -15,10 +15,7 @@ export class AutomationActors {
     const g = new T.Group(),
       k = this.kit;
     if (kind === "warehouse" || kind === "refinery")
-      return k.building(
-        kind === "warehouse" ? "warehouse" : "laboratory",
-        "home",
-      );
+      return k.architecture.build(kind);
     if (kind === "drone") {
       k.box(g, 0, 0.25, 0, 0.9, 0.45, 0.9, 0xe4d7b5);
       k.box(g, 0, -0.2, 0, 0.65, 0.4, 0.65, 0x718c7d);

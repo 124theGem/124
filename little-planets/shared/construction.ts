@@ -1,4 +1,5 @@
-import { nodes, type PlanetId } from "./catalog";
+import type { PlanetId } from "./catalog";
+import { resourceNodes as nodes } from "./forestry";
 import { sphereNormal, sphereCoordinates } from "./sphere";
 import {
   cubeNormal,

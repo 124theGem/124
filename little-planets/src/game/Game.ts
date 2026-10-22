@@ -17,7 +17,7 @@ import { hudIcon } from "../ui/Glyphs";
 import { illustration } from "../ui/Illustrations";
 import { ColonyPanels } from "../ui/ColonyPanels";
 import { SurfaceFollower } from "../world/Motion";
-import { ZiplineScene } from "../world/ZiplineScene";
+import { resourceNodes as nodes, treeCleared } from "../../shared/forestry";
 import { dayCycle } from "../../shared/daylight";
 import { cubeVisualUp } from "../../shared/sphere";
 import { Occlusion } from "../world/Occlusion";
@@ -62,7 +62,6 @@ import {
   beds,
   ship,
   key,
-  nodes,
   planetSize,
   terrainHeight,
   allowedBuildings,
@@ -122,8 +121,6 @@ export class Game {
   private colonyPanels!: ColonyPanels;
   private occlusion = new Occlusion();
   private machines = new AutomationActors(new Models());
-  private terrainMode: "dig" | "place" = "dig";
-  private terrainMaterial: "stone" | "wood" | "obsidian" = "stone";
   private buildOnCube?: BuildingKind;
   private inventoryPlacement?: string;
   private fenceKind?: "wood" | "stone" | "energy";
@@ -138,9 +135,6 @@ export class Game {
   private visualUp = new T.Vector3(0, 1, 0);
   private renderForward = new T.Vector3(0, 0, 1);
   private surfaceMotion = new SurfaceFollower();
-  private zipline?: ZiplineScene;
-  private ziplinePoll = 0;
-  private ziplinePending = false;
   private ambient = new T.HemisphereLight(0xdce8df, 0x374335, 1.05);
   private moon = new T.DirectionalLight(0xb6cff5, 0);
   private lantern = new T.PointLight(0xffe8bd, 0, 12, 1.5);
@@ -326,7 +320,6 @@ export class Game {
     this.ui.onObservePlanet = (id) => this.observePlanet(id);
     this.ui.onStory = () => void this.advanceStory();
     this.ui.onHand = (hand) => void this.chooseHand(hand);
-    this.ui.onUnderfoot = () => void this.placeUnderfoot();
     this.ui.button("rotate-placement", () => {
       this.fenceRotation = (this.fenceRotation + 1) % 4;
       this.showContext();
@@ -340,8 +333,6 @@ export class Game {
         this.ui.toast((e as Error).message);
       }
     };
-    this.ui.onGrapple = (id) => void this.startGrapple(id);
-    this.ui.button("zipline-cancel", () => void this.finishZipline(true));
     this.ui.onPlant = () => this.selectNearestBed();
     this.ui.onAttack = () => void this.attack();
     this.ui.onScan = () => void this.scan();
@@ -412,7 +403,7 @@ export class Game {
     this.ui.onGalaxy = () => {
       if (store.state.inside || store.state.prologue.phase !== "complete")
         return;
-      this.ui.travelMode = "ship";
+
       menu(() => this.ui.galaxy(store.state));
     };
     this.ui.onMineStrike = () => void this.mineStrike();
@@ -434,7 +425,6 @@ export class Game {
     this.ui.onSpaceLand = () => void this.land();
     this.ui.onSpaceCourse = () => {
       if (!this.busy) {
-        this.ui.travelMode = "ship";
         this.ui.galaxy(this.store.state);
       }
     };
@@ -509,12 +499,11 @@ export class Game {
             e.target instanceof HTMLSelectElement
           )
         ) {
-          if (/^Digit[1-7]$/.test(e.code)) {
+          if (/^Digit[1-6]$/.test(e.code)) {
             const hand = (
               [
-                "pickaxe",
+                "axe",
                 "cultivator",
-                "grapple",
                 "sword",
                 "spear",
                 "blaster",
@@ -523,7 +512,6 @@ export class Game {
             )[Number(e.code.at(-1)) - 1];
             void this.chooseHand(hand);
           }
-          if (e.code === "KeyB") void this.placeUnderfoot();
         }
         if (e.code === "Space" && !this.ui.modalOpen) {
           e.preventDefault();
@@ -535,8 +523,7 @@ export class Game {
             this.mode === "build" ||
             this.buildOnCube ||
             this.fenceKind ||
-            this.inventoryPlacement ||
-            this.terrainMode === "place"
+            this.inventoryPlacement
           )
             this.stopBuild();
           else this.clearSelection();
@@ -590,7 +577,6 @@ export class Game {
     );
     this.resize();
     if (store.state.flight) this.enterSpace();
-    if (store.state.grapple) this.enterZipline();
     this.renderer.setAnimationLoop(this.frame);
     if (new URLSearchParams(location.search).has("debug"))
       Object.defineProperty(window, "__planets", {
@@ -668,12 +654,9 @@ export class Game {
               this.fenceKind ??
               this.inventoryPlacement ??
               this.buildOnCube ??
-              (this.terrainMode === "place" ? "block" : null),
+              null,
             cockpit: !!this.space,
             hand: store.state.hand,
-            zipline: store.state.grapple,
-            ziplineRider: this.zipline?.rider.position.toArray(),
-            ziplineCameraDistance: this.zipline?.followDistance,
             machines: this.machines.positions,
             enemies: this.enemies?.positions ?? [],
             daylight: dayCycle(
@@ -821,10 +804,6 @@ export class Game {
   }
   private async chooseHand(hand: import("../../shared/model").Save["hand"]) {
     if (this.flying || this.busy) return;
-    if (hand === "grapple" && this.store.state.prologue.phase !== "complete") {
-      this.ui.toast("Гарпун доступен после первого запуска.");
-      return;
-    }
     try {
       await this.store.action({ type: "hand", item: hand });
       this.avatar.equip(
@@ -833,92 +812,14 @@ export class Game {
         this.store.state.hand,
       );
       this.ui.update(this.store.state, this.store.now());
-      if (hand === "pickaxe" || hand === "cultivator") {
+      if (hand === "axe" || hand === "cultivator") {
         this.stopBuild();
       }
-      if (hand === "grapple") {
-        this.ui.travelMode = "grapple";
-        this.ui.galaxy(this.store.state);
-      }
     } catch (error) {
       this.ui.toast((error as Error).message);
     }
   }
-  private async placeUnderfoot() {
-    if (this.busy || this.flying || this.store.state.inside) return;
-    await this.perform(
-      {
-        type: "terrain",
-        mode: "place",
-        material: this.terrainMaterial,
-        x: this.position.x,
-        z: this.position.z,
-      },
-      "tool",
-      "Блок установлен под ногами.",
-    );
-  }
-  private async startGrapple(target: PlanetId) {
-    if (this.busy || this.flying) return;
-    this.busy = true;
-    try {
-      await this.flushMove();
-      await this.store.action({ type: "grappleStart", planet: target });
-      this.ui.close();
-      this.enterZipline();
-    } catch (error) {
-      this.ui.toast((error as Error).message);
-    } finally {
-      this.busy = false;
-    }
-  }
-  private enterZipline() {
-    const g = this.store.state.grapple;
-    if (!g) return;
-    this.zipline = new ZiplineScene(this.kit, g, this.store.state);
-    this.flying = true;
-    this.input.clear();
-    this.ui.root.classList.add("in-zipline");
-    this.ui.el("zipline-hud").classList.remove("hidden");
-    this.ui.el("zipline-target").textContent =
-      `Трос → ${PLANETS[g.target].name}`;
-    this.ziplinePoll = 0;
-  }
-  private ziplineFrame(dt: number, time: number) {
-    const progress = this.zipline!.update(this.store.now(), dt);
-    (this.ui.el("zipline-progress") as HTMLProgressElement).value = progress;
-    this.renderer.render(this.zipline!.scene, this.zipline!.camera);
-    if (time - this.ziplinePoll > 500 && !this.ziplinePending) {
-      this.ziplinePoll = time;
-      void this.finishZipline(false);
-    }
-  }
-  private async finishZipline(cancel: boolean) {
-    if (this.ziplinePending || !this.store.state.grapple) return;
-    this.ziplinePending = true;
-    try {
-      await this.store.action({
-        type: cancel ? "grappleCancel" : "grappleTick",
-      });
-      if (!this.store.state.grapple) {
-        this.zipline?.dispose();
-        this.zipline = undefined;
-        this.flying = false;
-        this.ui.root.classList.remove("in-zipline");
-        this.ui.el("zipline-hud").classList.add("hidden");
-        this.loadScene();
-        this.ui.toast(
-          cancel
-            ? "Возвращение к точке гарпуна."
-            : "Вы приехали на другую планету.",
-        );
-      }
-    } catch (e) {
-      this.ui.el("save-status").textContent = (e as Error).message;
-    } finally {
-      this.ziplinePending = false;
-    }
-  }
+
   private async scanPlanet(planet: PlanetId) {
     if (this.busy) return;
     this.busy = true;
@@ -1138,7 +1039,6 @@ export class Game {
   private resize = () => {
     this.renderer.setSize(innerWidth, innerHeight);
     this.space?.resize();
-    this.zipline?.resize();
     this.art?.resize();
     if (!this.flying) this.updateCamera(1, true);
   };
@@ -1337,7 +1237,7 @@ export class Game {
               ? "Метеоритное железо"
               : PLANTS[STORY_PLANTS[story].plant].name,
             story === 3
-              ? "Добыть железо киркой для двигателя."
+              ? "Извлечь железо из обломков метеорита."
               : "Биоволокно для ремонта двигателя.",
             story === 3 ? "Добыть железо" : "Собрать растение",
           );
@@ -1382,10 +1282,7 @@ export class Game {
           return;
         }
       }
-      const point = this.view.pick(
-        this.raycaster.ray,
-        this.terrainMode === "place",
-      );
+      const point = this.view.pick(this.raycaster.ray);
       if (!point) return;
       let selected: Selection = { ...point, type: "ground" };
       const pad = landingPad(this.store.state, this.store.state.planet),
@@ -1394,6 +1291,12 @@ export class Game {
             !this.store.state.worlds[
               this.store.state.planet
             ].clearedNodes.includes(n.id) &&
+            !treeCleared(
+              this.store.state.planet,
+              n,
+              this.store.state.worlds[this.store.state.planet].cleared,
+              [],
+            ) &&
             surfaceDistance(point, n, this.store.state.planet) < 1.1,
         );
       const building = this.store.state.worlds[
@@ -1416,9 +1319,19 @@ export class Game {
         );
         return;
       }
-      if (this.terrainMode === "place" || this.buildOnCube) {
+      if (this.buildOnCube) {
         this.approach(selected, () => this.showContext());
         return;
+      }
+      if (this.store.state.hand !== "cultivator") {
+        const treeId = this.view.nature.wind.pick(this.raycaster.ray);
+        const tree = treeId
+          ? nodes(this.store.state.planet).find((n) => n.id === treeId)
+          : undefined;
+        if (tree) {
+          this.approach({ ...tree, type: "node" }, () => this.showContext());
+          return;
+        }
       }
       const garden = gardenBeds(this.store.state, this.store.state.planet).find(
         (b) => surfaceDistance(point, b, this.store.state.planet) < 0.7,
@@ -1427,10 +1340,7 @@ export class Game {
         this.approach({ ...garden, type: "bed" }, () => this.showContext());
         return;
       }
-      if (
-        ["pickaxe", "cultivator"].includes(this.store.state.hand) &&
-        this.terrainMode === "dig"
-      ) {
+      if (this.store.state.hand === "cultivator") {
         this.clearSelection();
         this.selected = { ...point, type: "ground" };
         this.sphereDestination = undefined;
@@ -1610,7 +1520,7 @@ export class Game {
           ? "Упавший метеорит"
           : PLANTS[STORY_PLANTS[Number(s.id)].plant].name,
         meteor
-          ? "Возьмите кирку. Добыча даст 3 железа."
+          ? "Извлеките 3 железа из обломков. Инструмент не требуется."
           : "Соберите биоволокно для двигателя.",
         meteor ? "Добыть железо" : "Собрать растение",
       );
@@ -1640,11 +1550,7 @@ export class Game {
       );
       return;
     }
-    if (
-      s.type === "ground" &&
-      !this.buildOnCube &&
-      this.terrainMode === "dig"
-    ) {
+    if (s.type === "ground" && !this.buildOnCube) {
       this.ui.hideContext();
       return;
     }
@@ -1681,10 +1587,14 @@ export class Game {
       const n = nodes(state.planet).find((n) => n.id === s.id)!;
       this.ui.context(
         RESOURCE_LABELS[n.resource],
+        n.resource === "wood"
+          ? `Древесина: ${n.timber ?? 4} · ударов: ${world.treeDamage[n.id] ?? 0}/${n.hits ?? 2}. Возьмите топор. Вырубка сохраняется.`
+          : "Соберите 3 единицы ресурса. Восстановление: 20 секунд.",
         nodeReady(world, n.id, now)
-          ? "Соберите 3 единицы ресурса. Восстановление: 20 секунд."
-          : "Источник восстанавливается.",
-        nodeReady(world, n.id, now) ? "Собрать" : "Восстанавливается",
+          ? n.resource === "wood"
+            ? "Рубить дерево"
+            : "Собрать"
+          : "Собрано",
         !nodeReady(world, n.id, now),
       );
     } else if (s.type === "ship")
@@ -1722,21 +1632,9 @@ export class Game {
       );
     } else if (s.type === "ground")
       this.ui.context(
-        this.buildOnCube
-          ? BUILDINGS[this.buildOnCube].name
-          : this.terrainMode === "dig"
-            ? "Кирка · блок земли"
-            : "Строительство блока",
-        this.buildOnCube
-          ? "Разместить постройку здесь."
-          : this.terrainMode === "dig"
-            ? "Разрушить один блок. Материал попадёт в рюкзак. Неразрушимое ядро на глубине 1.8 м."
-            : `Материал: ${RESOURCE_LABELS[this.terrainMaterial]} · в рюкзаке ${state.inventory[this.terrainMaterial] ?? 0}`,
-        this.buildOnCube
-          ? "Построить"
-          : this.terrainMode === "dig"
-            ? "⛏ Разрушить блок"
-            : "▣ Поставить блок",
+        this.buildOnCube ? BUILDINGS[this.buildOnCube].name : "Поверхность",
+        "Разместить постройку здесь.",
+        "Построить",
       );
     else this.ui.hideContext();
   }
@@ -1807,19 +1705,6 @@ export class Game {
           "tool",
           "Постройка установлена.",
         );
-      else
-        void this.perform(
-          {
-            type: "terrain",
-            mode: this.terrainMode,
-            material: this.terrainMaterial,
-            x: s.x,
-            z: s.z,
-            level: s.level,
-          },
-          "tool",
-          this.terrainMode === "dig" ? "Блок добыт." : "Блок установлен.",
-        );
       return;
     }
     if (s.type === "enemy") {
@@ -1836,7 +1721,7 @@ export class Game {
           "Урожай в рюкзаке.",
         );
     } else if (s.type === "node")
-      void this.perform({ type: "mine", id: s.id! }, "tool", "+3 ресурса.");
+      void this.perform({ type: "mine", id: s.id! }, "tool", "");
     else if (s.type === "ship") {
       this.stopBuild();
       this.ui.shipDock(state);
@@ -1863,13 +1748,21 @@ export class Game {
       this.flying ||
       this.ui.modalOpen ||
       this.store.state.inside ||
-      !["pickaxe", "cultivator"].includes(this.store.state.hand) ||
+      !["axe", "cultivator"].includes(this.store.state.hand) ||
       this.buildOnCube ||
-      this.inventoryPlacement ||
-      this.terrainMode !== "dig"
+      this.inventoryPlacement
     )
       return;
     if (!(this.view instanceof SphereWorld)) return;
+    if (this.store.state.hand === "axe" && this.selected?.type === "node") {
+      const target = nodes(this.store.state.planet).find(
+        (n) => n.id === this.selected!.id,
+      );
+      if (target?.resource === "wood") {
+        await this.perform({ type: "mine", id: target.id }, "tool", "");
+        return;
+      }
+    }
     const aim = this.miningAim;
     let point;
     if (aim) {
@@ -1895,8 +1788,8 @@ export class Game {
       this.ui.toast("Подойдите ближе к блоку.");
       return;
     }
-    this.view.highlightBlock(point);
     if (this.store.state.hand === "cultivator") {
+      this.view.highlightBlock(point);
       const at = { x: Math.round(point.x), z: Math.round(point.z) };
       if (
         gardenBeds(this.store.state, this.store.state.planet).some(
@@ -1911,19 +1804,36 @@ export class Game {
       );
       return;
     }
-    await this.perform(
-      {
-        type: "terrain",
-        mode: "dig",
-        material: "stone",
-        x: point.x,
-        z: point.z,
-        level: "level" in point ? (point.level as number) : undefined,
-      },
-      "tool",
-      "",
-    );
+    const pickedId = this.view.nature.wind.pick(this.raycaster.ray);
+    const tree = nodes(this.store.state.planet)
+      .filter(
+        (n) =>
+          n.resource === "wood" &&
+          !treeCleared(
+            this.store.state.planet,
+            n,
+            this.store.state.worlds[this.store.state.planet].cleared,
+            [],
+          ) &&
+          (!pickedId || n.id === pickedId) &&
+          nodeReady(
+            this.store.state.worlds[this.store.state.planet],
+            n.id,
+            this.store.now(),
+          ),
+      )
+      .sort(
+        (a, b) =>
+          surfaceDistance(a, point, this.store.state.planet) -
+          surfaceDistance(b, point, this.store.state.planet),
+      )[0];
+    if (!tree || surfaceDistance(tree, point, this.store.state.planet) > 2.2) {
+      this.ui.toast("Выберите дерево рядом с персонажем.");
+      return;
+    }
+    await this.perform({ type: "mine", id: tree.id }, "tool", "");
   }
+
   private async flushMove() {
     if (this.flying) return;
     const old = this.store.state.position;
@@ -1965,6 +1875,7 @@ export class Game {
         oldPlanet = this.store.state.planet,
         oldHealth = this.store.state.health,
         oldKills = this.store.state.kills;
+      const retainedTarget = this.selected;
       await this.store.action(action);
       if (["build", "placeDevice", "placeShip"].includes(action.type))
         this.stopBuild();
@@ -1993,7 +1904,18 @@ export class Game {
       else if (mode === "gather" || mode === "tool") this.audio.play("gather");
       if (this.store.state.health < oldHealth) this.audio.play("hurt");
       this.ui.refreshModal(this.store.state);
-      this.clearSelection();
+      if (
+        action.type === "mine" &&
+        retainedTarget &&
+        nodeReady(
+          this.store.state.worlds[this.store.state.planet],
+          action.id,
+          this.store.now(),
+        )
+      ) {
+        this.selected = retainedTarget;
+        this.showContext();
+      } else this.clearSelection();
       if (message) this.ui.toast(message);
     } catch (e) {
       this.ui.toast(
@@ -2023,7 +1945,7 @@ export class Game {
   private startBuild(kind?: BuildingKind | FurnitureKind) {
     if (!this.store.state.inside && !this.flying && !this.busy) {
       this.ui.panel(
-        `<span class="eyebrow">КОЛОНИАЛЬНАЯ АРХИТЕКТУРА / МОДУЛИ ПОВЕРХНОСТИ</span><h2>Строительство колонии</h2><p>Выберите чертёж и укажите место рядом с персонажем. Площадка выравнивается автоматически. После постройки объект сразу доступен для управления.</p><div class="construction-tools"><button id="tool-cultivate">${hudIcon("cultivator")}<div><strong>Культиватор</strong><small>Новые грядки на выбранной земле</small></div></button><button id="tool-dig">${hudIcon("pickaxe")}<div><strong>Кирка</strong><small>Разрушение и добыча блоков</small></div>${hudIcon("arrow")}</button>${(["stone", "wood", "obsidian"] as const).map((r) => `<button data-terrain="${r}">${hudIcon("block")}<div><strong>${RESOURCE_LABELS[r]}</strong><small>Установка блока / в запасе ${this.store.state.inventory[r] ?? 0}</small></div>${hudIcon("arrow")}</button>`).join("")}</div><h3>Ограды для сада</h3><div class="fence-tools">${(["wood", "stone", "energy"] as const).map((k) => `<button data-fence="${k}">${k === "wood" ? "Деревянная" : k === "stone" ? "Каменная" : "Энергетическая"} ограда</button>`).join("")}</div><h3>Модули колонии</h3><div class="construction-grid">${allowedBuildings(
+        `<span class="eyebrow">КОЛОНИАЛЬНАЯ АРХИТЕКТУРА / МОДУЛИ ПОВЕРХНОСТИ</span><h2>Строительство колонии</h2><p>Выберите чертёж и укажите место рядом с персонажем. Площадка выравнивается автоматически. После постройки объект сразу доступен для управления.</p><div class="construction-tools"><button id="tool-cultivate">${hudIcon("cultivator")}<div><strong>Культиватор</strong><small>Новые грядки на выбранной земле</small></div></button><button id="tool-axe">${hudIcon("axe")}<div><strong>Топор</strong><small>Заготовка всех лесных деревьев</small></div></button></div><h3>Ограды для сада</h3><div class="fence-tools">${(["wood", "stone", "energy"] as const).map((k) => `<button data-fence="${k}">${k === "wood" ? "Деревянная" : k === "stone" ? "Каменная" : "Энергетическая"} ограда</button>`).join("")}</div><h3>Модули колонии</h3><div class="construction-grid">${allowedBuildings(
           this.store.state.planet,
         )
           .map(
@@ -2052,28 +1974,11 @@ export class Game {
               this.ui.el("rotate-placement").classList.remove("hidden");
             }),
         );
-      this.ui.button("tool-dig", () => {
+      this.ui.button("tool-axe", () => {
         this.stopBuild();
         this.ui.close();
-        void this.chooseHand("pickaxe");
-        this.ui.toast("Выберите блок и удерживайте кнопку удара.");
+        void this.chooseHand("axe");
       });
-      this.ui
-        .el("modal-content")
-        .querySelectorAll<HTMLButtonElement>("[data-terrain]")
-        .forEach(
-          (b) =>
-            (b.onclick = () => {
-              this.terrainMode = "place";
-              this.terrainMaterial = b.dataset.terrain as "stone";
-              this.buildOnCube = undefined;
-              this.ui.placementMode(
-                `Блок: ${RESOURCE_LABELS[this.terrainMaterial]}`,
-              );
-              this.ui.close();
-              this.ui.toast("Выберите участок для блока.");
-            }),
-        );
       this.ui
         .el("modal-content")
         .querySelectorAll<HTMLButtonElement>("[data-cube-building]")
@@ -2081,7 +1986,6 @@ export class Game {
           (b) =>
             (b.onclick = () => {
               this.buildOnCube = b.dataset.cubeBuilding as BuildingKind;
-              this.terrainMode = "dig";
               this.ui.placementMode(BUILDINGS[this.buildOnCube].name);
               this.ui.close();
               this.ui.toast("Выберите участок для постройки.");
@@ -2197,7 +2101,6 @@ export class Game {
       this.buildOnCube = undefined;
       this.inventoryPlacement = undefined;
       this.fenceKind = undefined;
-      this.terrainMode = "dig";
       this.ui.placementMode(null);
     }
     if (this.mode !== "build") return;
@@ -2658,10 +2561,6 @@ export class Game {
         void this.advanceStory();
       }
     }
-    if (this.zipline) {
-      this.ziplineFrame(dt, time);
-      return;
-    }
     if (this.space) {
       this.spaceFrame(dt, time);
       return;
@@ -2824,11 +2723,10 @@ export class Game {
         .el("mine-strike")
         .classList.toggle(
           "hidden",
-          !["pickaxe", "cultivator"].includes(this.store.state.hand) ||
+          !["axe", "cultivator"].includes(this.store.state.hand) ||
             !!this.store.state.inside ||
             !!this.buildOnCube ||
-            !!this.inventoryPlacement ||
-            this.terrainMode === "place",
+            !!this.inventoryPlacement,
         );
       this.automationPanel?.refresh();
       this.colonyPanels?.refresh();
@@ -2890,7 +2788,6 @@ export class Game {
     this.machines.dispose();
     this.occlusion.dispose();
     this.art?.dispose();
-    this.zipline?.dispose();
     this.observation?.dispose();
     this.sky.dispose();
     this.space?.dispose();

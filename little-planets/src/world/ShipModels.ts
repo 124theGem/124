@@ -1,6 +1,10 @@
+import { IndustrialSurface } from "./IndustrialSurface";
+import { liveryTexture } from "./Livery";
 import * as T from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import {
+  SHIP_LIVERIES,
+  shipRegistration,
   SHIP_COLORS,
   SHIP_ENGINES,
   SHIP_FINISHES,
@@ -14,33 +18,9 @@ export class ShipModels {
   private geometries = new Map<string, T.BufferGeometry>();
   private materials = new Map<string, T.MeshStandardMaterial>();
   private textures: T.Texture[] = [];
-  private surface = this.texture(false);
-  private normal = this.texture(true);
-  private texture(normal: boolean) {
-    const n = 128,
-      data = new Uint8Array(n * n * 4);
-    for (let y = 0; y < n; y++)
-      for (let x = 0; x < n; x++) {
-        const i = (y * n + x) * 4,
-          noise = ((x * 73 + y * 37 + x * y * 3) % 23) - 11;
-        const seam = x % 64 < 1 || y % 32 < 1;
-        data[i] = normal
-          ? 128 + (seam ? 22 : noise * 0.3)
-          : 210 + noise - (seam ? 35 : 0);
-        data[i + 1] = normal ? 128 + noise * 0.3 : data[i];
-        data[i + 2] = normal ? 255 : data[i];
-        data[i + 3] = 255;
-      }
-    const texture = new T.DataTexture(data, n, n);
-    texture.wrapS = texture.wrapT = T.RepeatWrapping;
-    texture.repeat.set(2, 2);
-    texture.magFilter = T.LinearFilter;
-    texture.minFilter = T.LinearMipmapLinearFilter;
-    texture.generateMipmaps = true;
-    texture.needsUpdate = true;
-    this.textures.push(texture);
-    return texture;
-  }
+  private pbr = new IndustrialSurface();
+  private surface = this.pbr.color;
+  private normal = this.pbr.normal;
   private geo(key: string, make: () => T.BufferGeometry) {
     if (!this.geometries.has(key)) this.geometries.set(key, make());
     return this.geometries.get(key)!;
@@ -60,8 +40,8 @@ export class ShipModels {
         bevelEnabled: true,
         bevelSegments: 2,
         steps: 1,
-        bevelSize: 0.045,
-        bevelThickness: 0.045,
+        bevelSize: 0.075,
+        bevelThickness: 0.075,
       });
       g.rotateX(Math.PI / 2);
       g.translate(0, depth / 2, 0);
@@ -87,12 +67,14 @@ export class ShipModels {
       color,
       ...finish,
       map: this.surface,
-      clearcoat: design.finish === "ceramic" ? 0.45 : 0.12,
+      clearcoat: design.finish === "ceramic" ? 0.18 : 0.08,
       clearcoatRoughness: 0.25,
       envMapIntensity: 1.4,
       normalMap: this.normal,
       normalScale: new T.Vector2(0.18, 0.18),
-      roughnessMap: this.surface,
+      roughnessMap: this.pbr.roughness,
+      aoMap: this.pbr.ao,
+      aoMapIntensity: 0.35,
     });
     const alloy = this.material("alloy", {
       color: 0x9baebc,
@@ -101,7 +83,9 @@ export class ShipModels {
       roughness: 0.3,
       normalMap: this.normal,
       normalScale: new T.Vector2(0.09, 0.09),
-      roughnessMap: this.surface,
+      roughnessMap: this.pbr.roughness,
+      aoMap: this.pbr.ao,
+      aoMapIntensity: 0.35,
     });
     const dark = this.material("dark", {
       color: 0x17232d,
@@ -126,16 +110,16 @@ export class ShipModels {
       roughness: 0.25,
     });
     const glass = this.material("glass", {
-      color: 0x17394c,
+      color: 0x77898b,
       metalness: 0.15,
       roughness: 0.08,
       transparent: true,
-      opacity: 0.9,
-      transmission: 0.18,
+      opacity: 1,
+      transmission: 0.6,
       thickness: 0.12,
       ior: 1.45,
       clearcoat: 0.8,
-      envMapIntensity: 2.2,
+      envMapIntensity: 1.3,
     });
     const nav = (color: number) =>
       this.material(`nav:${color}`, {
@@ -145,15 +129,15 @@ export class ShipModels {
       });
     const boxGeo = this.geo(
       "panel",
-      () => new RoundedBoxGeometry(1, 1, 1, 1, 0.06),
+      () => new RoundedBoxGeometry(1, 1, 1, 2, 0.035),
     );
     const cylinder = this.geo("cylinder", () => {
-      const g = new T.CylinderGeometry(1, 1, 1, 16);
+      const g = new T.CylinderGeometry(1, 1, 1, 32);
       g.rotateX(Math.PI / 2);
       return g;
     });
     const nozzle = this.geo("nozzle", () => {
-      const g = new T.CylinderGeometry(0.68, 1, 1, 20, 1, true);
+      const g = new T.CylinderGeometry(0.68, 1, 1, 40, 1, true);
       g.rotateX(Math.PI / 2);
       return g;
     });
@@ -536,44 +520,162 @@ export class ShipModels {
         mesh(module, cylinder, glass, [x, 1.56, -0.93], [0.06, 0.06, 0.02]);
       }
     }
+    const livery = SHIP_LIVERIES[design.livery];
+    const coating = this.material(`livery-coating:${design.livery}`, {
+      color: livery.accent,
+      metalness: 0.45,
+      roughness: 0.52,
+      normalMap: this.normal,
+      roughnessMap: this.pbr.roughness,
+    });
+    // Segmented shoulder armour, service ribs and ventilated dark subframe.
+    for (const side of [-1, 1]) {
+      for (let j = 0; j < 6; j++) {
+        const z = -1.13 + j * 0.39;
+        const plate = box(
+          hull,
+          j === 1 || j === 2 ? coating : paint,
+          side * width * 0.84,
+          0.94,
+          z,
+          width * 0.35,
+          0.42,
+          0.36,
+        );
+        plate.rotation.z = side * -0.16;
+        box(detail, alloy, side * (width * 0.99), 0.82, z, 0.022, 0.1, 0.24);
+        for (const y of [0.82, 1.08])
+          box(detail, dark, side * width * 0.99, y, z, 0.025, 0.022, 0.025);
+      }
+      for (let j = 0; j < 8; j++)
+        box(
+          detail,
+          dark,
+          side * width * 0.5,
+          1.25,
+          -1.15 + j * 0.1,
+          0.21,
+          0.018,
+          0.035,
+        );
+      const stripe = box(
+        wings,
+        coating,
+        side * (width + 0.45),
+        0.85,
+        -0.5,
+        0.16,
+        0.025,
+        0.9,
+      );
+      stripe.rotation.y = side * 0.3;
+      box(detail, alloy, side * 0.35, 0.48, -1.74, 0.035, 0.055, 0.7);
+      const seat = box(hull, dark, side * 0.18, 1.16, 0.46, 0.24, 0.24, 0.25);
+      seat.rotation.x = -0.2;
+      box(hull, dark, side * 0.18, 1.08, 0.83, 0.25, 0.06, 0.19);
+      box(detail, nav(0xa6d8d1), side * 0.18, 1.12, 0.88, 0.16, 0.015, 0.025);
+    }
+    // Flush inspection covers, segmented nose plates and bolted cargo restraint frames.
+    for (const side of [-1, 1]) {
+      for (let j = 0; j < 5; j++) {
+        const z = 0.15 + j * 0.25,
+          taper = 1 - j * 0.12;
+        box(
+          detail,
+          j % 2 ? alloy : paint,
+          side * width * 0.27 * taper,
+          1.116,
+          z,
+          width * 0.46 * taper,
+          0.018,
+          0.22,
+        );
+        for (const dx of [-1, 1])
+          box(
+            detail,
+            dark,
+            side * width * 0.27 * taper + dx * width * 0.15 * taper,
+            1.13,
+            z,
+            0.018,
+            0.009,
+            0.022,
+          );
+      }
+      if (design.class === "cargo" || design.module === "hold")
+        for (let j = 0; j < 4; j++) {
+          const x = side * (width + 0.04),
+            z = -0.9 + j * 0.25;
+          box(detail, alloy, x, 1.54, z, 0.45, 0.04, 0.025);
+          box(detail, coating, x, 1.565, z, 0.22, 0.014, 0.018);
+          box(detail, dark, x + side * 0.25, 1.34, z, 0.018, 0.3, 0.04);
+        }
+    }
+    // Recessed pressure bay with visible walls, floor lighting and deployed access ramp.
+    box(hull, dark, 0, 0.7, -1.51, 0.74, 0.48, 0.06);
+    for (const side of [-1, 1]) {
+      box(detail, alloy, side * 0.26, 0.7, -1.7, 0.13, 0.32, 0.2);
+      box(detail, nav(0xffd3a0), side * 0.26, 0.85, -1.81, 0.08, 0.018, 0.015);
+    }
+    for (const side of [-1, 1]) {
+      box(hull, paint, side * 0.43, 0.85, -1.72, 0.14, 0.82, 0.48);
+      box(detail, alloy, side * 0.34, 0.81, -1.94, 0.045, 0.62, 0.045);
+      box(detail, nav(0xffd3a0), side * 0.32, 1.05, -1.965, 0.025, 0.12, 0.015);
+    }
+    box(hull, paint, 0, 1.24, -1.72, 0.95, 0.14, 0.48);
+    box(hull, alloy, 0, 0.48, -1.79, 0.85, 0.08, 0.6);
+    const ramp = box(gear, dark, 0, 0.32, -2.21, 0.83, 0.065, 0.7);
+    ramp.rotation.x = -0.35;
+    for (let j = 0; j < 6; j++)
+      box(
+        detail,
+        alloy,
+        0,
+        0.23 + j * 0.036,
+        -2.48 + j * 0.105,
+        0.74,
+        0.022,
+        0.026,
+      );
+    box(detail, nav(0xffd3a0), 0, 1.15, -1.97, 0.28, 0.024, 0.02);
     if (typeof document !== "undefined") {
-      const key = `marking:${design.class}:${design.model}`;
+      const key = `livery:${design.livery}:${design.color}:${design.name}:${design.model}:${design.class}`;
       let marking = this.materials.get(key);
       if (!marking) {
-        const canvas = document.createElement("canvas");
-        canvas.width = 512;
-        canvas.height = 128;
-        const ctx = canvas.getContext("2d")!;
-        ctx.clearRect(0, 0, 512, 128);
-        ctx.fillStyle = "#d6e3df";
-        ctx.font = "bold 43px monospace";
-        ctx.fillText(`LP / 0${design.model}`, 16, 52);
-        ctx.font = "16px monospace";
-        ctx.fillStyle = "#b8c5c6";
-        ctx.fillText("AURORA  /  ORBITAL SYSTEMS", 17, 84);
-        ctx.fillStyle = "#dba968";
-        ctx.fillRect(17, 104, 148, 5);
-        const texture = new T.CanvasTexture(canvas);
-        texture.colorSpace = T.SRGBColorSpace;
+        const texture = liveryTexture(design)!;
         this.textures.push(texture);
         marking = this.material(key, {
           map: texture,
           transparent: true,
           depthWrite: false,
-          roughness: 0.55,
+          roughness: 0.65,
           polygonOffset: true,
-          polygonOffsetFactor: -1,
+          polygonOffsetFactor: -2,
+          side: T.DoubleSide,
         });
       }
-      const decal = mesh(
-        detail,
-        this.geo("decal", () => new T.PlaneGeometry(1, 1)),
+      const plane = this.geo("livery-plane", () => new T.PlaneGeometry(1, 1));
+      for (const side of [-1, 1]) {
+        const decal = mesh(
+          hull,
+          plane,
+          marking,
+          [side * (width + 0.022), 0.96, -0.25],
+          [1.72, 0.43, 1],
+        );
+        decal.rotation.y = (side * Math.PI) / 2;
+      }
+      const roof = mesh(
+        hull,
+        plane,
         marking,
-        [width * 0.6, 1.25, -0.62],
-        [0.43, 0.14, 1],
+        [0, 1.245, -0.63],
+        [width * 1.5, (width * 1.5) / 4, 1],
       );
-      decal.rotation.x = -Math.PI / 2;
+      roof.rotation.x = -Math.PI / 2;
     }
+    root.userData.livery = design.livery;
+    root.userData.registration = shipRegistration(design);
     if (design.class === "exploration" || design.module === "survey") {
       box(module, alloy, 0, 1.55, -0.65, 0.04, 0.65, 0.04);
       mesh(module, cylinder, dark, [0, 1.88, -0.61], [0.18, 0.18, 0.11]);
@@ -732,5 +834,6 @@ export class ShipModels {
     this.geometries.forEach((g) => g.dispose());
     this.materials.forEach((m) => m.dispose());
     this.textures.forEach((t) => t.dispose());
+    this.pbr.dispose();
   }
 }

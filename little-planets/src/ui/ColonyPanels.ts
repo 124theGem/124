@@ -1,5 +1,6 @@
 import { ShipPreview } from "./ShipPreview";
 import {
+  SHIP_LIVERIES,
   SHIP_ENGINES,
   SHIP_MODULES,
   SHIP_FINISHES,
@@ -204,6 +205,7 @@ export class ColonyPanels {
         ${select("module", "Функциональный модуль", names(SHIP_MODULES), design.module)}
         <p id="ship-module-note" class="configuration-note"></p><div class="dock-divider">МАТЕРИАЛЫ И ОКРАСКА</div>
         ${select("finish", "Покрытие корпуса", names(SHIP_FINISHES), design.finish)}
+        ${select("livery", "Ливрея / оператор", names(SHIP_LIVERIES), design.livery)}
         ${select("color", "Палитра", { ivory: "Полярный белый", graphite: "Графит", cobalt: "Кобальт", ember: "Оксид меди", emerald: "Изумруд" }, design.color)}
         <div class="ship-swatches">${Object.entries(SHIP_COLORS)
           .map(
@@ -211,8 +213,8 @@ export class ColonyPanels {
               `<button type="button" data-ship-color="${c}" style="--swatch:#${value.toString(16).padStart(6, "0")}" aria-label="Окраска ${c}" aria-pressed="${design.color === c}"></button>`,
           )
           .join("")}</div>
-        <div class="fabrication-order"><span>Стоимость сборки<b>${save.freeConstruction ? "0 ресурсов" : resources(shipCost(design))}</b></span><small>${save.freeConstruction ? "ТЕСТОВЫЙ ДОПУСК / БЕСПЛАТНО" : "Материалы из инвентаря"}</small><button type="button" id="create-ship" class="primary">${hudIcon("ship")} Создать в инвентарь <span>↗</span></button></div></form>
-      </div><div class="fleet-heading"><span class="eyebrow">03 / ВАШ АНГАР</span><small>${save.fleet.length} / 30 кораблей</small></div><div class="fleet-list">${save.fleet.map((s) => `<button data-ship-inventory="${esc(s.id)}">${hudIcon("ship")}<strong>${esc(s.name)}</strong><small>${SHIP_CLASS_NAMES[s.class]} · MK ${s.model} · ${save.inventory[`ship:${s.id}`] > 0 ? "В ИНВЕНТАРЕ / РАЗМЕСТИТЬ" : "НА ПЛОЩАДКЕ"}</small></button>`).join("")}</div>`,
+        <div class="fabrication-order"><span>Стоимость сборки<b>${save.freeConstruction ? "0 ресурсов" : resources(shipCost(design))}</b></span><small>${save.freeConstruction ? "ТЕСТОВЫЙ ДОПУСК / БЕСПЛАТНО" : "Материалы из инвентаря"}</small><button type="button" id="save-ship-design">Сохранить проект</button><button type="button" id="create-ship" class="primary">${hudIcon("ship")} Создать в инвентарь <span>↗</span></button></div></form>
+      </div><div class="blueprint-list">${save.shipBlueprints.map((s) => `<button data-blueprint="${esc(s.id)}">Загрузить проект · ${esc(s.name)}</button>`).join("")}</div><div class="fleet-heading"><span class="eyebrow">03 / ВАШ АНГАР</span><small>${save.fleet.length} / 30 кораблей</small></div><div class="fleet-list">${save.fleet.map((s) => `<button data-ship-inventory="${esc(s.id)}">${hudIcon("ship")}<strong>${esc(s.name)}</strong><small>${SHIP_CLASS_NAMES[s.class]} · MK ${s.model} · ${save.inventory[`ship:${s.id}`] > 0 ? "В ИНВЕНТАРЕ / РАЗМЕСТИТЬ" : "НА ПЛОЩАДКЕ"}</small></button>`).join("")}</div>`,
       "shipyard",
     );
     const preview = new ShipPreview(this.ui.el("ship-stage"), design);
@@ -223,7 +225,9 @@ export class ColonyPanels {
         "Без имени",
       class: (this.ui.el("ship-class") as HTMLSelectElement).value as ShipClass,
       model: Number((this.ui.el("ship-model") as HTMLSelectElement).value) as
-        1 | 2 | 3,
+        | 1
+        | 2
+        | 3,
       hull: (this.ui.el("ship-hull") as HTMLSelectElement)
         .value as Starship["hull"],
       wings: (this.ui.el("ship-wings") as HTMLSelectElement)
@@ -234,6 +238,8 @@ export class ColonyPanels {
         .value as Starship["engine"],
       module: (this.ui.el("ship-module") as HTMLSelectElement)
         .value as Starship["module"],
+      livery: (this.ui.el("ship-livery") as HTMLSelectElement)
+        .value as Starship["livery"],
       finish: (this.ui.el("ship-finish") as HTMLSelectElement)
         .value as Starship["finish"],
     });
@@ -282,10 +288,11 @@ export class ColonyPanels {
       "engine",
       "module",
       "finish",
+      "livery",
       "color",
     ])
       this.ui.el("ship-" + name).onchange = () => update();
-    this.ui.el("ship-name").oninput = () => update(false);
+    this.ui.el("ship-name").onchange = () => update();
     this.ui
       .el("modal-content")
       .querySelectorAll<HTMLButtonElement>(
@@ -298,6 +305,25 @@ export class ColonyPanels {
             (this.ui.el("ship-" + field) as HTMLSelectElement).value =
               b.dataset.shipClass ?? b.dataset.shipColor!;
             update();
+          }),
+      );
+    this.ui.button(
+      "save-ship-design",
+      () =>
+        void this.run({ type: "saveShipDesign", ship: read() }, () =>
+          this.shipyard(id, read()),
+        ),
+    );
+    this.ui
+      .el("modal-content")
+      .querySelectorAll<HTMLButtonElement>("[data-blueprint]")
+      .forEach(
+        (b) =>
+          (b.onclick = () => {
+            const project = this.state().shipBlueprints.find(
+              (p) => p.id === b.dataset.blueprint,
+            );
+            if (project) this.shipyard(id, project);
           }),
       );
     this.ui.button("ship-zoom-in", () => preview.zoom(0.8));

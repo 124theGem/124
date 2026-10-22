@@ -1,3 +1,4 @@
+import { forestTrees, treeCleared } from "../../shared/forestry";
 import * as T from "three";
 import { WindField } from "./WindField";
 import { MeadowParticles } from "./MeadowParticles";
@@ -60,6 +61,7 @@ export class SphereNature {
     private kit: Models,
     readonly id: PlanetId,
     private cleared: readonly string[] = [],
+    private felled: readonly string[] = [],
   ) {
     this.root.add(this.staticRoot, this.vegetation);
     this.features = landmarks(id).map((f) =>
@@ -81,33 +83,12 @@ export class SphereNature {
       seed = PLANETS[id].seed ?? 71;
     const moist = theme !== "volcanic" && theme !== "desert" && theme !== "ice";
     // Wide patches form actual forests and meadows rather than evenly spaced decoration.
-    for (let i = 0; i < 170; i++) {
-      const p =
-          i < 22
-            ? offsetPoint(
-                pad,
-                -13 + (i % 6) * 4,
-                -15 + Math.floor(i / 6) * 3.5,
-                id,
-              )
-            : {
-                x: (i * 43.7 + seed) % size,
-                z: 2 + (terrainSeed(seed + i * 277) % (size / 2 - 4)),
-              },
-        n = sphereNormal(p, id),
-        d = surfaceDistance(p, pad, id),
-        uv = clearingCoordinates(n, id);
-      if (
-        d < 4.8 ||
-        (uv.front > 0.55 && uv.x > -11 && uv.x < -1 && uv.z > -14 && uv.z < 0)
-      )
-        continue;
-      const density = noise3(n.x * 7, n.y * 7, n.z * 7, seed + 99);
-      if (density < 0.38 && i >= 22) continue;
-      if (id === "home" && this.cleared.includes(cellKey(n, id))) continue;
-      this.stats.treeCandidates++;
-      // Halve eligible home trees, including after clearing, without thinning other vegetation.
-      if (id === "home" && this.stats.treeCandidates % 2 === 1) continue;
+    this.stats.treeCandidates =
+      forestTrees(id).length * (id === "home" ? 2 : 1);
+    for (const resource of forestTrees(id)) {
+      const p = resource,
+        i = resource.variant;
+      if (treeCleared(id, resource, cleared, felled)) continue;
       let tree: T.Group;
       if (theme === "fungal") {
         tree = kit.plant("moonshroom");
@@ -124,8 +105,10 @@ export class SphereNature {
           theme === "ice" || theme === "alpine"
             ? this.fir(theme)
             : this.broadleaf(i);
+      tree.scale.multiplyScalar(0.88 + ((resource.hits ?? 3) - 3) * 0.12);
       this.place(tree, p.x, p.z);
       tree.userData.windKind = 1;
+      tree.userData.treeId = resource.id;
       this.vegetation.add(tree);
       this.stats.trees++;
     }

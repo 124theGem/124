@@ -85,7 +85,7 @@ describe("Outfit inventory, placement and enlarged worlds", () => {
     expect(s.inventory["device:collector"]).toBe(1);
     expect(s.automation.devices).toHaveLength(0);
   });
-  it("requires the pickaxe in hand for actual block destruction", () => {
+  it("rejects block destruction even when a tool is owned", () => {
     const s = newGame(Date.now(), true);
     s.hand = "none";
     expect(() =>
@@ -95,7 +95,7 @@ describe("Outfit inventory, placement and enlarged worlds", () => {
         material: "stone",
         ...s.position,
       }),
-    ).toThrow("Возьмите кирку");
+    ).toThrow();
     expect(s.inventory.stone).toBe(75);
   });
   it("stores a customised ship in inventory, installs its pad and preserves the replaced ship", () => {

@@ -120,8 +120,16 @@ export class SphereWorld {
       this.resources,
       this.structures,
     );
-    this.nature = new SphereNature(kit, this.id, save.worlds[this.id].cleared);
-    this.clearingKey = JSON.stringify(save.worlds[this.id].cleared);
+    this.nature = new SphereNature(
+      kit,
+      this.id,
+      save.worlds[this.id].cleared,
+      save.worlds[this.id].clearedNodes,
+    );
+    this.clearingKey = JSON.stringify([
+      save.worlds[this.id].cleared,
+      save.worlds[this.id].clearedNodes,
+    ]);
     this.root.add(this.nature.root);
     const pad = landingPad(save, this.id),
       base = new T.Group();
@@ -290,7 +298,10 @@ export class SphereWorld {
         this.ship.quaternion.copy(this.landingBase.quaternion);
       }
     }
-    const clearingKey = JSON.stringify(save.worlds[this.id].cleared);
+    const clearingKey = JSON.stringify([
+      save.worlds[this.id].cleared,
+      save.worlds[this.id].clearedNodes,
+    ]);
     if (clearingKey !== this.clearingKey) {
       this.clearingKey = clearingKey;
       this.nature.dispose();
@@ -298,6 +309,7 @@ export class SphereWorld {
         this.kit,
         this.id,
         save.worlds[this.id].cleared,
+        save.worlds[this.id].clearedNodes,
       );
       this.root.add(this.nature.root);
     }

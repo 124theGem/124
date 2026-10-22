@@ -44,7 +44,7 @@ if (conf.HOST !== "127.0.0.1" || conf.PORT !== "8003")
 if (!conf.BOT_TOKEN)
   fail("BOT_TOKEN is missing in the existing .env. No changes made.");
 const database = conf.DATABASE_PATH;
-const archive = join(source, "releases/little-planets-horizon-v14.tar.gz"),
+const archive = join(source, "releases/little-planets-outpost-v15.tar.gz"),
   expected = readFileSync(`${archive}.sha256`, "utf8").trim().split(/\s+/)[0];
 if (
   createHash("sha256").update(readFileSync(archive)).digest("hex") !== expected
@@ -130,7 +130,7 @@ try {
   }
   if (!healthy) fail("New service did not pass the health check.");
   console.log(
-    "Updated successfully. Reopen the Telegram Mini App. Settings are preserved. At the user's request, test worlds through 0.13 reset once on next login. New generation 3 progress is saved.",
+    "Updated successfully. Reopen the Telegram Mini App. Settings are preserved. Version 0.14 generation 3 progress is preserved. Retired tools and rope trips are migrated without resetting your world.",
   );
   console.log("Caddy, DNS and other services were not changed.");
 } catch (error) {

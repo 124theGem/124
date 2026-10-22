@@ -1,9 +1,10 @@
+import { drillSize } from "../../shared/sector";
+import { planetSize } from "../../shared/catalog";
+import { IndustrialArchitecture } from "./IndustrialArchitecture";
 import { surfaceGrain } from "./SurfaceGrain";
 import { ShipModels } from "./ShipModels";
 import { stableHash } from "../../shared/resources";
-import { industrialBuilding } from "./IndustrialModels";
 import type { Starship } from "../../shared/ships";
-import { habitat } from "./Habitats";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import * as T from "three";
 import {
@@ -19,6 +20,7 @@ import {
 export class Models {
   readonly grain = surfaceGrain();
   private ships = new ShipModels();
+  readonly architecture = new IndustrialArchitecture();
   private boxGeo = new T.BoxGeometry(1, 1, 1);
   private stoneGeo = new RoundedBoxGeometry(1, 1, 1, 1, 0.025);
   private crystalGeo = new T.ConeGeometry(0.32, 1.4, 4);
@@ -415,10 +417,15 @@ export class Models {
     return root;
   }
   building(kind: BuildingKind, planet: PlanetId = "home", level = 1): T.Group {
-    if (["scanner", "planetdrill", "shipyard", "telescope"].includes(kind))
-      return industrialBuilding(this, kind, planet, level);
-    return habitat(this, kind, planet);
+    if (kind === "planetdrill")
+      return this.architecture.drill(
+        drillSize(level, planetSize(planet)),
+        [0, 5.8, 8, 12, 17, 23][level],
+        level,
+      );
+    return this.architecture.build(kind, level);
   }
+
   cockpit(design?: Starship) {
     return this.ships.cabin(design);
   }
@@ -533,6 +540,7 @@ export class Models {
   }
   dispose() {
     this.ships.dispose();
+    this.architecture.dispose();
     this.grain.dispose();
     this.boxGeo.dispose();
     this.stoneGeo.dispose();

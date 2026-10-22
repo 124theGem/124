@@ -111,7 +111,8 @@ try {
       engine: "fusion",
       module: "hold",
       finish: "titanium",
-      color: "graphite",
+      color: "ivory",
+      livery: "helix",
     })) {
       const revision = Number(await stage.getAttribute("data-revision"));
       await page.locator("#ship-" + field).selectOption(value);
@@ -124,6 +125,15 @@ try {
     await page.locator("#ship-name").fill("Горизонт / Atlas");
     await page.locator("#ship-reset-view").click();
     await page.screenshot({ path: "test-results/horizon-yard-configured.png" });
+    await page.locator("#save-ship-design").click();
+    await page.waitForFunction(() =>
+      window.__planets
+        .snapshot()
+        .state.shipBlueprints.some(
+          (s) => s.name === "Горизонт / Atlas" && s.livery === "helix",
+        ),
+    );
+    await page.locator("#ship-stage canvas").waitFor();
     const before = (await gameState(page)).inventory;
     await page.locator("#create-ship").click();
     await page.waitForFunction(() =>
@@ -134,6 +144,7 @@ try {
     const s = await gameState(page),
       ship = s.fleet.find((s) => s.name === "Горизонт / Atlas");
     assert.equal(ship.engine, "fusion");
+    assert.equal(ship.livery, "helix");
     assert.equal(ship.module, "hold");
     assert.equal(ship.finish, "titanium");
     assert.equal(s.inventory.iron, before.iron);
@@ -175,7 +186,8 @@ try {
     );
     const flight = await page.evaluate(() => window.__planets.snapshot().space);
     assert.equal(flight.design.engine, "fusion");
-    assert.equal(flight.cabinDesign.color, "graphite");
+    assert.equal(flight.design.livery, "helix");
+    assert.equal(flight.cabinDesign.color, "ivory");
     assert.equal(flight.flight.topSpeed, SHIP_STATS(ship).speed);
     await page.screenshot({ path: "test-results/horizon-cockpit.png" });
     assert.deepEqual(errors, []);
@@ -204,6 +216,7 @@ try {
       await page.locator("#ship-engine").selectOption("plasma");
       await page.locator("#ship-module").selectOption("shield");
       await page.locator("#ship-finish").selectOption("carbon");
+      await page.locator("#ship-livery").selectOption("polar");
       await page.locator("#ship-name").fill("Мобильный");
       await page.locator("#create-ship").scrollIntoViewIfNeeded();
       await page.locator("#create-ship").click();

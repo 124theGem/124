@@ -1,8 +1,9 @@
+import { resourceNodes as nodes, cutTree, treeCleared } from "./forestry";
 import { bodyCenter, len, sub } from "./space";
 import { resourceValid, INDUSTRIAL_RECIPES } from "./resources";
 import { gainExperience } from "./progression";
 import { z } from "zod";
-import { PLANETS, nodes, ship, type PlanetId } from "./catalog";
+import { PLANETS, ship, type PlanetId } from "./catalog";
 import {
   sphereNormal,
   cubeRouteDirection,
@@ -406,6 +407,7 @@ export function advanceAutomation(save: Save, now: number) {
             .filter(
               (p) =>
                 p.resource === n.resource &&
+                !treeCleared(d.planet, p, world.cleared, world.clearedNodes) &&
                 !world.clearedNodes.includes(p.id) &&
                 (world.depleted[p.id] === undefined ||
                   t - world.depleted[p.id] >= 20000),
@@ -421,8 +423,11 @@ export function advanceAutomation(save: Save, now: number) {
           continue;
         }
         if (!move(d, target, dt) || t < d.cooldown) continue;
-        const count = Math.min(3, d.capacity - cargoAmount(d));
-        world.depleted[target.id] = t;
+        const count =
+          n.resource === "wood"
+            ? cutTree(world, target, d.capacity - cargoAmount(d))
+            : Math.min(3, d.capacity - cargoAmount(d));
+        if (n.resource !== "wood") world.depleted[target.id] = t;
         d.cargo[n.resource] = (d.cargo[n.resource] ?? 0) + count;
         d.cooldown = t + 900;
         next();

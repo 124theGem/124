@@ -43,15 +43,15 @@ export class ShipPreview {
       ),
     );
     this.renderer.toneMapping = T.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.0;
+    this.renderer.toneMappingExposure = 0.9;
     this.renderer.shadowMap.enabled = graphicsQuality() !== "economy";
     this.renderer.shadowMap.type = T.PCFSoftShadowMap;
     this.renderer.shadowMap.autoUpdate = false;
     this.environment = studioEnvironment(this.renderer);
     this.scene.environment = this.environment.texture;
-    this.scene.environmentIntensity = 0.95;
+    this.scene.environmentIntensity = 0.8;
     this.scene.add(new T.HemisphereLight(0xcde4fa, 0x131d2b, 1.25));
-    const sun = new T.DirectionalLight(0xffecd0, 2.4);
+    const sun = new T.DirectionalLight(0xffecd0, 1.9);
     sun.position.set(4, 6, 5);
     sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 1024);
@@ -65,10 +65,10 @@ export class ShipPreview {
     });
     sun.shadow.normalBias = 0.025;
     this.scene.add(sun);
-    const rim = new T.DirectionalLight(0x71b6ee, 2);
+    const rim = new T.DirectionalLight(0xc5d7d6, 1.4);
     rim.position.set(-4, 2, -4);
     this.scene.add(rim);
-    const grid = new T.GridHelper(16, 32, 0x49627b, 0x1c2c3e);
+    const grid = new T.GridHelper(16, 32, 0x899690, 0x42504f);
     grid.position.y = -0.13;
     this.scene.add(grid);
     this.owned.push(
@@ -77,7 +77,7 @@ export class ShipPreview {
     );
     const platformGeo = new T.CylinderGeometry(3.3, 3.5, 0.12, 64),
       platformMat = new T.MeshStandardMaterial({
-        color: 0x101c29,
+        color: 0x464f4d,
         roughness: 0.75,
         metalness: 0.2,
       });
@@ -85,16 +85,29 @@ export class ShipPreview {
     platform.position.y = -0.08;
     platform.receiveShadow = true;
     this.scene.add(platform);
+    for (const side of [-1, 1]) {
+      const geo = new T.BoxGeometry(0.12, 3, 0.15),
+        mat = new T.MeshStandardMaterial({
+          color: 0x5a6663,
+          metalness: 0.45,
+          roughness: 0.7,
+        });
+      const support = new T.Mesh(geo, mat);
+      support.position.set(side * 3.8, 1.3, -3.4);
+      this.scene.add(support);
+      this.owned.push(geo, mat);
+      this.turntable.push(support);
+    }
     this.owned.push(platformGeo, platformMat);
     const ringGeo = new T.TorusGeometry(3.35, 0.012, 4, 96),
-      ringMat = new T.MeshBasicMaterial({ color: 0x6dbaa9 });
+      ringMat = new T.MeshBasicMaterial({ color: 0xb4c8bb });
     const ring = new T.Mesh(ringGeo, ringMat);
     ring.rotation.x = Math.PI / 2;
     ring.position.y = 0;
     this.scene.add(ring);
     this.turntable.push(grid, platform, ring);
     this.owned.push(ringGeo, ringMat);
-    this.camera.position.set(5.4, 3.8, 6.4);
+    this.camera.position.set(4.3, 2.9, 5.5);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.target.set(0, 0.8, 0);
     this.controls.enableDamping = true;
@@ -133,7 +146,7 @@ export class ShipPreview {
     );
   }
   reset() {
-    this.camera.position.set(5.4, 3.8, 6.4);
+    this.camera.position.set(4.3, 2.9, 5.5);
     this.controls.target.set(0, 0.8, 0);
     this.controls.update();
   }

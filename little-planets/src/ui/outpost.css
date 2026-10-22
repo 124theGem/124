@@ -1,0 +1,465 @@
+/* Outpost 07 — restrained industrial telemetry, shared by every screen. */
+:root {
+  --ink: #151a1c;
+  --surface: #2b3335;
+  --raised: #394244;
+  --line: #d6e0db28;
+  --line-bright: #e4eae658;
+  --muted: #a5b0af;
+  --text: #edf0ea;
+  --cyan: #aac7c2;
+  --amber: #c9b38b;
+}
+body {
+  font-family: Inter, "Segoe UI", Roboto, Arial, sans-serif;
+  color: var(--text);
+}
+button,
+input,
+select {
+  border-radius: 2px;
+  font-family: inherit;
+  letter-spacing: 0.015em;
+}
+button {
+  background: #b3bfba08;
+  border: 1px solid #d1dcd22a;
+  box-shadow: none;
+  transition:
+    background 0.18s,
+    border-color 0.18s,
+    transform 0.18s;
+}
+button:hover:not(:disabled) {
+  background: #d8e2dc14;
+  border-color: #e5eee17a;
+  box-shadow: none;
+}
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 1px solid #c4dcd4;
+  outline-offset: 3px;
+}
+button.primary {
+  background: #b7cbc022;
+  border: 1px solid #cedcd49c;
+  color: #f1f4ee;
+  box-shadow: none;
+}
+button.primary:hover:not(:disabled) {
+  background: #d2ded339;
+  color: #fff;
+}
+input,
+select {
+  background: #111719ad;
+  border-color: #c1cdc438;
+  color: #edf0ea;
+  min-height: 42px;
+}
+select option {
+  background: #283032;
+  color: #fff;
+}
+.eyebrow {
+  color: #b0bfba;
+  font-size: 10px;
+  letter-spacing: 0.13em;
+  line-height: 1.65;
+}
+h2 {
+  font-size: clamp(22px, 3vw, 34px);
+  font-weight: 450;
+  letter-spacing: -0.025em;
+}
+h3 {
+  font-weight: 500;
+}
+.modal {
+  background: #10171935;
+  backdrop-filter: blur(5px) saturate(0.75);
+}
+.sheet {
+  width: min(1600px, 100%);
+  height: min(950px, 100%);
+  border-radius: 3px;
+  background: linear-gradient(130deg, #353e40e8, #1a2325ed);
+  border: 1px solid #d8e2dc50;
+  box-shadow: 0 20px 80px #0005;
+}
+.window-header {
+  background: #1c2528ba;
+  border-bottom: 1px solid #d4ded52c;
+}
+.window-brand {
+  color: #dfe8e0;
+}
+.window-brand strong {
+  color: #b5c0ba;
+}
+.window-nav {
+  background: #19222570;
+  gap: 4px;
+}
+.window-nav > button {
+  border: 1px solid transparent;
+  border-radius: 0;
+  color: #bac6bf;
+  font-size: 12px;
+}
+.window-nav > button[aria-current="true"] {
+  background: #d7e2da0c;
+  border-color: #d7e2da35;
+  color: #f2f3ec;
+}
+.window-nav > button[aria-current="true"]:before {
+  background: #b7d0c6;
+  box-shadow: none;
+  width: 1px;
+}
+.window-footer {
+  background: #1b252780;
+  border-top: 1px solid #d4ded52c;
+}
+#modal-content {
+  background: none;
+  scrollbar-color: #8d9d95 #202a2b;
+}
+.topbar {
+  background: linear-gradient(180deg, #17212475, #17212408);
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: blur(3px);
+}
+.brand {
+  font-weight: 450;
+  letter-spacing: 0.16em;
+}
+.brand span {
+  color: #bdc8c0;
+}
+.identity .avatar {
+  background: #cbd7d412;
+  border: 1px solid #d5dfd449;
+  box-shadow: none;
+}
+.top-buttons button {
+  background: #15202422;
+  border: 1px solid #dde4d43b;
+  border-radius: 50%;
+  box-shadow: none;
+}
+#planet-name {
+  font-weight: 450;
+  letter-spacing: 0.04em;
+}
+.handbar {
+  background: #1823268c;
+  border: 1px solid #cedbd040;
+  border-radius: 3px;
+  backdrop-filter: blur(8px);
+  box-shadow: none;
+}
+.handbar button {
+  border-radius: 2px;
+  background: transparent;
+}
+.handbar button[aria-pressed="true"] {
+  background: #c8dbd41a;
+  border-color: #d5e5db8c;
+  box-shadow: none;
+}
+.progress-hud {
+  background: #1924278c;
+  border: 1px solid #d4dfd12d;
+  border-radius: 2px;
+  box-shadow: none;
+}
+#xp-fill,
+#health-fill {
+  background: #bccfc1;
+  box-shadow: none;
+}
+.mine-strike,
+#attack {
+  background: #2633369e;
+  border: 1px solid #d4e1d469;
+  box-shadow: none;
+  backdrop-filter: blur(5px);
+}
+.context-panel,
+#build-panel,
+.story-panel {
+  background: #243034d9;
+  border: 1px solid #c7d8cf3d;
+  border-radius: 3px;
+  box-shadow: none;
+  backdrop-filter: blur(10px);
+}
+.dock-heading {
+  border-bottom-color: #dce3d032;
+}
+.dock-heading h2 {
+  font-size: clamp(24px, 3vw, 38px);
+  font-weight: 400;
+}
+.dock-status {
+  color: #c4d7c8;
+}
+.ship-preview {
+  border: 1px solid #d9e2d333;
+  border-radius: 2px;
+  background: linear-gradient(150deg, #aab7b520, #26333540 65%);
+  box-shadow: none;
+}
+.preview-heading {
+  background: transparent;
+  border-bottom: 1px solid #dce4d222;
+  color: #d1ded3;
+}
+.preview-heading i,
+.dock-status i {
+  background: #c3d5c4;
+  box-shadow: none;
+}
+.ship-stage {
+  background: radial-gradient(ellipse at 50% 40%, #889a9927, transparent 65%);
+  min-height: 390px;
+}
+.preview-toolbar {
+  background: transparent;
+  border-top: 1px solid #e0e4d21c;
+}
+.ship-metrics {
+  border-top-color: #dce4d228;
+}
+.ship-metrics strong {
+  font-weight: 450;
+}
+.ship-metrics .positive {
+  color: #b2cdb8;
+}
+.ship-class-card,
+.fleet-list > button,
+.construction-grid > button,
+.inventory-card,
+.recipe-card,
+.facility-summary,
+.passport-card {
+  border-radius: 2px;
+  background: #c0d0c508;
+  border-color: #d1ddce28;
+  box-shadow: none;
+}
+.ship-class-card.active {
+  background: #bcd4c715;
+  border-color: #bdd7c068;
+  box-shadow: none;
+}
+.ship-class-card .ui-icon {
+  color: #bbccc4;
+}
+.dock-configuration {
+  background: transparent;
+}
+.dock-divider {
+  border-color: #d8e4d12d;
+  color: #bccbc1;
+}
+.ship-field > span {
+  font-size: 11px;
+  color: #bbc8bf;
+}
+.configuration-note {
+  color: #b5c2b9;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.ship-swatches button {
+  border-radius: 2px;
+}
+.fabrication-order {
+  background: transparent;
+  border-top: 1px solid #dde5d329;
+}
+.fabrication-order > button {
+  width: 100%;
+  margin-top: 8px;
+}
+.blueprint-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.blueprint-list > button {
+  font-size: 12px;
+  min-height: 36px;
+}
+.resource-chips > * {
+  border-radius: 2px;
+  background: #c5d6cc0b;
+}
+.metric-strip {
+  background: #b8c6bf08;
+  border-radius: 2px;
+  border-color: #dae3d42d;
+}
+.metric-strip b {
+  font-weight: 450;
+}
+.tabs button {
+  border-radius: 1px;
+}
+.tabs .active {
+  background: #c9dbd21a;
+  box-shadow: none;
+}
+.scan-resources i,
+.upgrade-track .filled {
+  background: #b5cbbd;
+  box-shadow: none;
+}
+#toast {
+  background: #253235eb;
+  color: #edf0e6;
+  border: 1px solid #b8d1c053;
+  border-radius: 2px;
+  box-shadow: none;
+}
+@media (min-width: 1100px) {
+  .sheet:has(.shipyard-layout) {
+    width: min(1720px, calc(100vw - 64px));
+    height: 94vh;
+  }
+  .shipyard-layout {
+    grid-template-columns: 155px minmax(0, 1fr) 300px;
+  }
+  .ship-stage {
+    min-height: 480px;
+  }
+  .window-nav {
+    width: auto;
+  }
+}
+@media (max-width: 700px) {
+  .sheet {
+    border-radius: 0;
+  }
+  .window-nav > button {
+    font-size: 10px;
+  }
+  .ship-stage {
+    min-height: 300px;
+  }
+  .ship-field > span {
+    font-size: 12px;
+  }
+  #modal-content {
+    padding: 16px;
+  }
+  .dock-heading h2 {
+    font-size: 25px;
+  }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  .ship-stage {
+    min-height: 230px;
+  }
+  .shipyard-layout {
+    grid-template-columns: minmax(0, 1fr) 255px;
+  }
+  .dock-heading {
+    margin-bottom: 14px;
+  }
+  .sheet {
+    border-radius: 0;
+  }
+  .ship-class-card {
+    min-height: 70px;
+  }
+  .ship-metrics {
+    gap: 8px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+.context,
+.menu-items,
+.menu-items button,
+.event-banner,
+.status-tag {
+  border-radius: 2px;
+  box-shadow: none;
+  background-color: #263235d9;
+  border-color: #cfddce40;
+}
+[data-window="shipyard"] .sheet {
+  max-width: 100%;
+  min-width: 0;
+}
+.shipyard-layout > * {
+  min-width: 0;
+}
+.shipyard-layout form.dock-configuration {
+  max-width: 100%;
+}
+
+/* Common content surfaces and telemetry use the same outpost palette. */
+.item-detail,
+.recipe-detail,
+.facility-summary,
+.automation-summary,
+.device-card,
+.profile-row,
+.sound-controls,
+.seed-options > button,
+.program-node,
+.space-hud > header {
+  border-radius: 2px;
+  background: #293638d4;
+  border-color: #c8d6ce38;
+  box-shadow: none;
+}
+.slot,
+.recipe,
+.build-card,
+.resource-chips > span,
+.metric-strip > span,
+.passport {
+  border-radius: 2px;
+  border-color: #cbd8d037;
+}
+.slot.selected,
+.recipe.selected {
+  background: #b6ccbf1a;
+  border-color: #c5d9c978;
+  box-shadow: none;
+}
+.program-node header {
+  background: #3c4a4c;
+  border-bottom-color: #c8d8ca35;
+}
+.program-node.condition header {
+  background: #494338;
+  color: #e3d4b6;
+}
+.program-node.condition {
+  border-color: #ccb58c80;
+}
+.program-node.executing {
+  box-shadow: 0 0 0 1px #bddec093;
+}
+.space-hud > header {
+  border-left: 1px solid #b7d1c0;
+}
+.flight-readings b {
+  font-weight: 450;
+  color: #e4ece2;
+}

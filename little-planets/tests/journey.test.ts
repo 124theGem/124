@@ -24,7 +24,7 @@ import {
 import { prepareFoundation, foundationCells } from "../shared/construction";
 import { experienceLevel, skillPoints } from "../shared/progression";
 import { dayCycle, DAY_DURATION } from "../shared/daylight";
-import { grapplePosition } from "../shared/grapple";
+
 import { programSchema } from "../shared/automation";
 import { SurfaceFollower, ActorFollower } from "../src/world/Motion";
 import { Models } from "../src/world/Models";
@@ -166,7 +166,7 @@ describe("automatic foundations and detailed colony buildings", () => {
         else if (o instanceof T.Mesh) parts++;
       });
       expect(parts, kind).toBeGreaterThan(25);
-      expect(model.userData.architecture).toBe("limestone-colony");
+      expect(model.userData.architecture).toBe("panelled-pressure-module");
     }
     kit.dispose();
   });
@@ -201,7 +201,7 @@ describe("persistent programs, hands and existing save compatibility", () => {
     s = applyAction(s, { type: "hand", item: "sword" }, 1000);
     expect(s.equipment.weapon).toBe("sword");
     expect(s.hand).toBe("sword");
-    s = applyAction(s, { type: "hand", item: "pickaxe" }, 1000);
+    s = applyAction(s, { type: "hand", item: "axe" }, 1000);
     expect(s.equipment.weapon).toBeNull();
     expect(s.inventory["gear:sword"]).toBe(1);
   });
@@ -221,12 +221,13 @@ describe("persistent programs, hands and existing save compatibility", () => {
     const next = parseSave(JSON.stringify(old));
     expect(next.revision).toBe(17);
     expect(next.inventory.wood).toBe(123);
-    expect(next.inventory["tool:grapple"]).toBe(1);
+    expect(next.inventory["tool:axe"]).toBe(1);
+    expect(next.inventory["tool:grapple"]).toBeUndefined();
     expect(next.progression.xp).toBe(0);
     expect(next.worlds.home.cleared).toEqual([]);
   });
 });
-describe("day-night cycle, progression and real grapple transfer", () => {
+describe("day-night cycle, progression and retired transit", () => {
   it("has repeatable daylight, twilight and night using the saved epoch", () => {
     expect(dayCycle(1000, 1000).daylight).toBe(1);
     expect(dayCycle(1000, 1000 + DAY_DURATION / 2).daylight).toBe(0);
@@ -250,47 +251,36 @@ describe("day-night cycle, progression and real grapple transfer", () => {
     expect(() =>
       applyAction(s, { type: "spendSkill", skill: "combat" }, 18000),
     ).toThrow();
-    const n = nodes("home")[0];
+    const n = nodes("home").find((n) => n.resource !== "wood")!;
     s.position = { x: n.x, z: n.z };
     const before = s.inventory[n.resource];
     s = applyAction(s, { type: "mine", id: n.id }, 19000);
     expect(s.inventory[n.resource]).toBe(before + 4);
     expect(parseSave(JSON.stringify(s)).progression.skills.mining).toBe(1);
   });
-  it("holds the origin until arrival, persists the rope trip, blocks early actions and arrives using server time", () => {
-    let s = newGame(1000);
-    const inventory = { ...s.inventory };
-    s = applyAction(s, { type: "grappleStart", planet: "listoria" }, 2000);
-    const g = s.grapple!;
-    expect(s.planet).toBe("home");
-    expect(g.route.length).toBeGreaterThan(2);
-    expect(() => applyAction(s, { type: "move", x: 1, z: 1 }, 2100)).toThrow(
-      /трос/,
-    );
-    const a = grapplePosition(g, g.startedAt),
-      b = grapplePosition(g, g.endsAt);
-    expect(a.progress).toBe(0);
-    expect(b.progress).toBe(1);
-    expect(v(a.position).distanceTo(v(b.position))).toBeGreaterThan(100);
-    s = parseSave(JSON.stringify(s));
-    s = applyAction(s, { type: "grappleTick" }, g.endsAt - 1);
-    expect(s.planet).toBe("home");
-    s = applyAction(s, { type: "grappleTick" }, g.endsAt);
-    expect(s.planet).toBe("listoria");
-    expect(s.grapple).toBeNull();
-    expect(s.inventory).toEqual(inventory);
-    expect(s.progression.xp).toBe(15);
-  });
-  it("cancels safely and rejects undiscovered destinations", () => {
-    let s = newGame(0),
-      start = { ...s.position };
-    expect(() =>
-      applyAction(s, { type: "grappleStart", planet: "wild-1" }, 1000),
-    ).toThrow();
-    s = applyAction(s, { type: "grappleStart", planet: "listoria" }, 1000);
-    s = applyAction(s, { type: "grappleCancel" }, 1100);
-    expect(s.position).toEqual(start);
-    expect(s.planet).toBe("home");
-    expect(s.grapple).toBeNull();
+  it("rejects retired grapple actions and migrates an unfinished journey back to its origin", () => {
+    const s = newGame(1000),
+      old: any = structuredClone(s);
+    for (const type of ["grappleStart", "grappleTick", "grappleCancel"])
+      expect(() =>
+        applyAction(s, { type, planet: "listoria" }, 2000),
+      ).toThrow();
+    old.grapple = {
+      origin: "home",
+      target: "listoria",
+      originPosition: { x: 8, z: 7 },
+    };
+    old.hand = "grapple";
+    old.inventory["tool:grapple"] = 1;
+    old.inventory["tool:pickaxe"] = 1;
+    old.inventory.wood = 321;
+    const next = parseSave(JSON.stringify(old));
+    expect(next.grapple).toBeNull();
+    expect(next.position).toEqual({ x: 8, z: 7 });
+    expect(next.planet).toBe("home");
+    expect(next.inventory.wood).toBe(321);
+    expect(next.inventory["tool:grapple"]).toBeUndefined();
+    expect(next.hand).toBe("axe");
+    expect(parseSave(JSON.stringify(next))).toEqual(next);
   });
 });

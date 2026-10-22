@@ -84,7 +84,7 @@ describe("cube colony, farming, buildings and interior regression checks", () =>
     expect(() =>
       applyAction(s, { type: "plant", ...b, plant: "carrot" }, 2000),
     ).toThrow();
-    const n = nodes("home")[0];
+    const n = nodes("home").find((n) => n.resource !== "wood")!;
     s.position = { x: n.x, z: n.z };
     const before = s.inventory[n.resource];
     s = applyAction(s, { type: "mine", id: n.id }, 3000);

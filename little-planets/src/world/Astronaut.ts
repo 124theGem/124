@@ -7,14 +7,13 @@ export class Astronaut {
   private arms: T.Group[] = [];
   private legs: T.Group[] = [];
   private tool = new T.Group();
-  mode: "idle" | "walk" | "plant" | "gather" | "tool" | "attack" | "hang" =
-    "idle";
+  mode: "idle" | "walk" | "plant" | "gather" | "tool" | "attack" = "idle";
   private animation = 0;
   private equipment = new T.Group();
   private armor = new T.Group();
   private equippedKey = "";
   private kit: Models;
-  private hand = "pickaxe";
+  private hand = "axe";
   constructor(kit: Models) {
     this.kit = kit;
     const b = (
@@ -54,14 +53,14 @@ export class Astronaut {
       this.legs.push(leg);
     }
     b(this.tool, 0, -0.32, 0.18, 0.06, 0.55, 0.06, 0xa98555);
-    b(this.tool, 0, -0.55, 0.18, 0.36, 0.09, 0.09, 0xa9c0c4);
+    b(this.tool, 0, -0.55, 0.18, 0.24, 0.23, 0.07, 0xa9c0c4);
     this.arms[1].add(this.tool, this.equipment);
     this.body.add(this.armor);
     this.tool.visible = false;
     for (const part of this.root.children) part.position.y -= 0.19;
     this.root.scale.setScalar(0.83);
   }
-  equip(weapon: GearKind | null, armor: GearKind | null, hand = "pickaxe") {
+  equip(weapon: GearKind | null, armor: GearKind | null, hand = "axe") {
     this.hand = hand;
     const key = `${weapon}|${armor}|${hand}`;
     if (key === this.equippedKey) return;
@@ -110,15 +109,11 @@ export class Astronaut {
       this.mode === "attack";
     const stride = moving ? Math.sin(time * 11) * 0.6 : 0;
     this.legs.forEach((leg, i) => (leg.rotation.x = stride * (i ? 1 : -1)));
-    this.arms.forEach((arm) => (arm.visible = this.mode !== "hang"));
     this.arms.forEach(
       (arm, i) =>
-        (arm.rotation.x =
-          this.mode === "hang"
-            ? Math.PI
-            : work
-              ? -0.8 + Math.sin(time * 13) * 0.35
-              : stride * (i ? -1 : 1) * 0.8),
+        (arm.rotation.x = work
+          ? -0.8 + Math.sin(time * 13) * 0.35
+          : stride * (i ? -1 : 1) * 0.8),
     );
     this.body.position.y =
       -0.19 +
@@ -126,7 +121,6 @@ export class Astronaut {
         ? -0.12
         : Math.sin(time * (moving ? 22 : 2)) * (moving ? 0.025 : 0.012));
     this.body.rotation.x = work ? 0.22 : 0;
-    this.tool.visible =
-      this.mode !== "hang" && (this.hand === "pickaxe" || this.mode === "tool");
+    this.tool.visible = this.hand === "axe";
   }
 }

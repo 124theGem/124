@@ -689,10 +689,8 @@ export function itemInfo(id: string): {
   }
   if (id.startsWith("ship:"))
     return { name: "Корабль с площадкой", icon: "🚀", group: "Корабли" };
-  if (id === "tool:grapple")
-    return { name: "Гарпун", icon: "↗", group: "Инструменты" };
-  if (id === "tool:pickaxe")
-    return { name: "Кирка", icon: "⛏", group: "Инструменты" };
+  if (id === "tool:axe")
+    return { name: "Топор", icon: "🪓", group: "Инструменты" };
   const [prefix, value] = id.split(":");
   if (prefix === "seed" || prefix === "crop") {
     const p = PLANTS[value];
