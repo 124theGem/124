@@ -5,12 +5,21 @@ export class IndustrialSurface {
   readonly normal: T.DataTexture;
   readonly roughness: T.DataTexture;
   readonly ao: T.DataTexture;
+  readonly metalness: T.DataTexture;
   constructor(resolution = 1024) {
     const n = resolution,
       albedo = new Uint8Array(n * n * 4),
       normals = new Uint8Array(n * n * 4),
       rough = new Uint8Array(n * n * 4),
       ambient = new Uint8Array(n * n * 4);
+    const metallic = new Uint8Array(n * n * 4);
+    const pitch = n / 4;
+    const relief = (x: number, y: number) => {
+      const u = (x + n) % pitch,
+        v = (y + n) % pitch;
+      const edge = Math.min(u, pitch - u, v, pitch - v);
+      return edge < 2 ? -0.75 : edge < 5 ? -0.15 : Math.sin(y * 2.7) * 0.006;
+    };
     for (let y = 0; y < n; y++)
       for (let x = 0; x < n; x++) {
         const i = (y * n + x) * 4,
@@ -18,25 +27,48 @@ export class IndustrialSurface {
             (Math.imul(x + 37, y + 913) ^
               Math.imul(x, 73856093) ^
               Math.imul(y, 19349663)) >>>
-            0,
-          grain = (hash % 13) - 6;
-        const edge = Math.min(x, n - 1 - x, y, n - 1 - y),
-          scratch = hash % 317 === 0 && x % 61 < 28 ? 27 : 0;
-        const dirt =
-          (Math.sin(x * 0.009 + y * 0.013) * Math.cos(y * 0.021 - x * 0.004) +
-            1) *
-          6;
+            0;
+        const grain = (hash % 17) - 8,
+          u = x % pitch,
+          v = y % pitch;
+        const edge = Math.min(u, pitch - u, v, pitch - v);
+        const panel =
+          (Math.floor(x / pitch) * 13 + Math.floor(y / pitch) * 7) % 11;
+        const streak =
+          Math.max(0, Math.sin(x * 0.12) * Math.sin(x * 0.037) - 0.18) *
+          Math.exp((-v / pitch) * 2) *
+          25;
+        const grime =
+          (Math.sin(x * 0.021 + y * 0.017) * Math.cos(y * 0.027) + 1) * 7 +
+          streak;
+        const scratch = hash % 499 === 0 && edge < 20 ? 30 : 0;
+        const seam = edge < 2 ? 72 : edge < 5 ? 32 : 0;
+        const wear = edge >= 5 && edge < 7 ? 17 : 0;
         const value = Math.min(
           255,
-          240 + grain - dirt - (edge < 3 ? 26 : 0) + scratch,
+          239 - panel + grain * 0.45 - grime - seam + wear + scratch,
         );
-        albedo.set([value, value, value - 2, 255], i);
-        const brushed = Math.sin(y * 2.7) * 1.5 + grain * 0.2;
-        normals.set([128 + brushed, 128 + grain * 0.3, 255, 255], i);
-        const r = 155 + grain * 2 + dirt * 2 - (scratch ? 50 : 0);
+        albedo.set(
+          [
+            value,
+            Math.max(0, value - grime * 0.07),
+            Math.max(0, value - grime * 0.13),
+            255,
+          ],
+          i,
+        );
+        const dx = (relief(x + 1, y) - relief(x - 1, y)) * 65,
+          dy = (relief(x, y + 1) - relief(x, y - 1)) * 65;
+        normals.set([128 - dx, 128 - dy + grain * 0.12, 250, 255], i);
+        const r = Math.min(
+          255,
+          165 + grain + grime * 1.3 + (edge < 5 ? 35 : 0) - wear * 3 - scratch,
+        );
         rough.set([r, r, r, 255], i);
-        const a = edge < 2 ? 170 : edge < 5 ? 225 : 255;
-        ambient.set([a, a, a, 255], i);
+        const ao = edge < 2 ? 130 : edge < 5 ? 205 : 255;
+        ambient.set([ao, ao, ao, 255], i);
+        const met = edge < 5 ? 180 : 225 - grime;
+        metallic.set([met, met, met, 255], i);
       }
     const make = (data: Uint8Array, srgb = false) => {
       const t = new T.DataTexture(data, n, n);
@@ -53,11 +85,13 @@ export class IndustrialSurface {
     this.normal = make(normals);
     this.roughness = make(rough);
     this.ao = make(ambient);
+    this.metalness = make(metallic);
   }
   dispose() {
     this.color.dispose();
     this.normal.dispose();
     this.roughness.dispose();
     this.ao.dispose();
+    this.metalness.dispose();
   }
 }

@@ -463,3 +463,62 @@ h3 {
   font-weight: 450;
   color: #e4ece2;
 }
+
+/* The drawing is an actual five-camera render of the configured model. */
+.ship-stage {
+  position: relative;
+  isolation: isolate;
+}
+.ship-view-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid #ffffff20;
+}
+.ship-view-tabs button {
+  flex: 1;
+  min-height: 36px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+.ship-view-tabs button[aria-pressed="true"] {
+  background: #cad9d421;
+  border-color: #bbc9c3;
+  color: #f0f4ec;
+}
+.blueprint-viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #e9e2cf;
+  touch-action: none;
+  cursor: grab;
+}
+.blueprint-viewport:active {
+  cursor: grabbing;
+}
+.blueprint-viewport[hidden],
+.shipyard-canvas[hidden] {
+  display: none !important;
+}
+.blueprint-sheet {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1400px !important;
+  height: 1780px !important;
+  max-width: none !important;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+.ship-stage[aria-busy="true"]::after {
+  content: "Вычисление проекций…";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: #e9e2cf;
+  color: #414640;
+  font-size: 14px;
+  z-index: 3;
+}

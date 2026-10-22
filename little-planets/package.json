@@ -1,6 +1,6 @@
 {
   "name": "little-planets",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -13,7 +13,7 @@
     "build": "tsc --noEmit && vite build",
     "start": "tsx server/index.ts",
     "test": "vitest run",
-    "test:browser": "npm run test:flightdeck && npm run test:firstlight && npm run test:horizon && npm run test:outpost",
+    "test:browser": "npm run test:flightdeck && npm run test:firstlight && npm run test:horizon && npm run test:outpost && npm run test:atlas",
     "test:production": "tsx tests/production-browser.ts",
     "package:server": "npm run build && node scripts/package-server.mjs",
     "test:upgrade": "node --import tsx tests/upgrade.mjs",
@@ -30,7 +30,9 @@
     "test:firstlight": "node --import tsx tests/firstlight-browser.mjs",
     "test:dawn": "FIRSTLIGHT_RESET=1 FIRSTLIGHT_SCOPE=intro node --import tsx tests/firstlight-browser.mjs",
     "test:horizon": "node --import tsx tests/horizon-browser.mjs",
-    "test:outpost": "node --import tsx tests/outpost-browser.mjs"
+    "test:outpost": "node --import tsx tests/outpost-browser.mjs",
+    "test:atlas": "node --import tsx tests/atlas-browser.mjs",
+    "test:atlas-models": "node --import tsx tests/atlas-models-browser.mjs"
   },
   "dependencies": {
     "three": "^0.180.0",

@@ -1,3 +1,4 @@
+import { updateIndustrialLights } from "../world/IndustrialLighting";
 import {
   graphicsQuality,
   studioEnvironment,
@@ -2700,6 +2701,7 @@ export class Game {
     this.avatar.root.visible = true;
     if (this.view instanceof SphereWorld)
       this.view.nature.daylight = cycle.daylight;
+    updateIndustrialLights(this.scene,this.avatar.root.position,cycle.daylight,this.quality,time/1000);
     this.view.animate(time / 1000);
     this.life?.update(this.store.state, time / 1000, dt);
     this.enemies?.update(this.store.state, time / 1000, dt);

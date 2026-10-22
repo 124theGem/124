@@ -253,7 +253,7 @@ const starshipSchema = z.object({
   model: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   hull: z.enum(["needle", "armored", "freighter"]),
   wings: z.enum(["swept", "delta", "twin"]),
-  color: z.enum(["ivory", "graphite", "cobalt", "ember", "emerald"]),
+  color: z.enum(["ivory", "ochre", "graphite", "cobalt", "ember", "emerald"]),
   livery: z.enum(["aurora", "helix", "polar", "obsidian"]).optional(),
   engine: z.enum(["ion", "plasma", "fusion"]).optional(),
   module: z.enum(["standard", "survey", "shield", "hold"]).optional(),

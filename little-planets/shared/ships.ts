@@ -7,6 +7,7 @@ export const SHIP_CLASS_NAMES: Record<ShipClass, string> = {
 };
 export const SHIP_COLORS = {
   ivory: 0xe0dfcb,
+  ochre: 0xe2ad32,
   graphite: 0x3e4c60,
   cobalt: 0x477aa9,
   ember: 0xc67243,

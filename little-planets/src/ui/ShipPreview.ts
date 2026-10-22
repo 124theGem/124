@@ -1,3 +1,4 @@
+import { BlueprintViewport, drawShipBlueprint } from "./ShipBlueprint";
 import * as T from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { Models } from "../world/Models";
@@ -22,6 +23,10 @@ export class ShipPreview {
   private disposed = false;
   private last = -1000;
   private owned: (T.Material | T.BufferGeometry)[] = [];
+  private blueprint = new BlueprintViewport();
+  private blueprintMode = false;
+  private blueprintDirty = true;
+  private design!: Starship;
   private turntable: T.Object3D[] = [];
   constructor(
     private host: HTMLElement,
@@ -116,7 +121,8 @@ export class ShipPreview {
     this.controls.maxDistance = 17;
     this.controls.minPolarAngle = 0.12;
     this.controls.maxPolarAngle = Math.PI * 0.8;
-    this.host.append(this.renderer.domElement);
+    this.host.append(this.renderer.domElement, this.blueprint.el);
+    this.blueprint.el.hidden = true;
     this.resize = new ResizeObserver(() => this.fit());
     this.resize.observe(host);
     this.fit();
@@ -129,6 +135,7 @@ export class ShipPreview {
     this.renderer.setSize(width, height, false);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
+    if (this.blueprintMode) this.blueprint.reset();
   }
   setDesign(design: Starship) {
     if (this.ship) {
@@ -137,6 +144,8 @@ export class ShipPreview {
       });
       this.ship.removeFromParent();
     }
+    this.design = design;
+    this.blueprintDirty = true;
     this.renderer.shadowMap.needsUpdate = true;
     this.ship = this.kit.ship(design);
     this.scene.add(this.ship);
@@ -145,12 +154,30 @@ export class ShipPreview {
       Number(this.host.dataset.revision ?? 0) + 1,
     );
   }
+  setMode(mode: "model" | "blueprint") {
+    this.blueprintMode = mode === "blueprint";
+    this.blueprint.el.hidden = !this.blueprintMode;
+    this.renderer.domElement.hidden = this.blueprintMode;
+    this.host.dataset.mode = mode;
+    this.host.setAttribute(
+      "aria-busy",
+      this.blueprintMode && this.blueprintDirty ? "true" : "false",
+    );
+  }
   reset() {
+    if (this.blueprintMode) {
+      this.blueprint.reset();
+      return;
+    }
     this.camera.position.set(4.3, 2.9, 5.5);
     this.controls.target.set(0, 0.8, 0);
     this.controls.update();
   }
   zoom(factor: number) {
+    if (this.blueprintMode) {
+      this.blueprint.zoom(factor);
+      return;
+    }
     const offset = this.camera.position.clone().sub(this.controls.target);
     offset.setLength(T.MathUtils.clamp(offset.length() * factor, 4, 17));
     this.camera.position.copy(this.controls.target).add(offset);
@@ -166,6 +193,27 @@ export class ShipPreview {
       !document.hidden &&
       time - this.last > (graphicsQuality() === "economy" ? 66 : 33)
     ) {
+      if (this.blueprintMode) {
+        if (this.blueprintDirty && this.ship) {
+          const result = drawShipBlueprint(
+            this.renderer,
+            this.ship,
+            this.design,
+            this.environment.texture,
+          );
+          this.blueprint.setCanvas(result.canvas);
+          this.host.dataset.blueprintDesign = JSON.stringify(
+            shipConfiguration(this.design),
+          );
+          this.host.dataset.dimensions = JSON.stringify(result.dimensions);
+          this.host.dataset.blueprintRevision = this.host.dataset.revision;
+          this.host.setAttribute("aria-busy", "false");
+          this.blueprintDirty = false;
+        }
+        this.last = time;
+        this.frame = requestAnimationFrame(this.animate);
+        return;
+      }
       this.controls.update();
       for (const object of this.turntable)
         object.visible = this.camera.position.y > 0.05;
@@ -185,6 +233,7 @@ export class ShipPreview {
     cancelAnimationFrame(this.frame);
     this.resize.disconnect();
     this.controls.dispose();
+    this.blueprint.dispose();
     this.scene.traverse((o) => {
       if (o instanceof T.InstancedMesh) o.dispose();
     });

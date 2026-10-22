@@ -166,7 +166,15 @@ describe("automatic foundations and detailed colony buildings", () => {
         else if (o instanceof T.Mesh) parts++;
       });
       expect(parts, kind).toBeGreaterThan(25);
-      expect(model.userData.architecture).toBe("panelled-pressure-module");
+      expect(model.userData.architecture).toBe(
+        (
+          {
+            house: "asymmetric-inhabited-service-tower",
+            headquarters: "stepped-command-courtyard",
+            warehouse: "barrel-vault-cargo-terminal",
+          } as Record<string, string>
+        )[kind] ?? "panelled-pressure-module",
+      );
     }
     kit.dispose();
   });

@@ -1,3 +1,4 @@
+import { SHIP_FRAMES, shipFrame } from "../../shared/shipFrames";
 import { ShipPreview } from "./ShipPreview";
 import {
   SHIP_LIVERIES,
@@ -194,10 +195,10 @@ export class ColonyPanels {
           .join(
             "",
           )}<div class="dock-note"><span class="eyebrow">ПРОИЗВОДСТВО</span><p>Готовый корабль появится в инвентаре. Разместите его вместе со взлётной площадкой.</p></div></aside>
-        <section class="ship-preview"><div class="preview-heading"><span><i></i> LIVE / 3D ASSEMBLY</span><b id="preview-name">${esc(design.name)}</b></div><div id="ship-stage" class="ship-stage"></div><div class="preview-toolbar"><span>Перетащите для вращения · щипок для масштаба</span><button type="button" id="ship-zoom-out" aria-label="Отдалить корабль">−</button><button type="button" id="ship-zoom-in" aria-label="Приблизить корабль">+</button><button type="button" id="ship-reset-view">Сбросить вид</button></div><div id="ship-metrics" class="ship-metrics"></div></section>
+        <section class="ship-preview"><div class="preview-heading"><span><i></i> LIVE / 3D ASSEMBLY</span><b id="preview-name">${esc(design.name)}</b></div><div class="ship-view-tabs"><button type="button" id="ship-view-model" aria-pressed="true">3D / Ангар</button><button type="button" id="ship-view-blueprint" aria-pressed="false">Чертёж / 5 видов</button></div><div id="ship-stage" class="ship-stage"></div><div class="preview-toolbar"><span>Перетащите для вращения · щипок для масштаба</span><button type="button" id="ship-zoom-out" aria-label="Отдалить корабль">−</button><button type="button" id="ship-zoom-in" aria-label="Приблизить корабль">+</button><button type="button" id="ship-reset-view">Сбросить вид</button></div><div id="ship-metrics" class="ship-metrics"></div></section>
         <form id="ship-form" class="dock-configuration"><span class="eyebrow">02 / КОНФИГУРАЦИЯ</span><label class="ship-field"><span>Позывной</span><input id="ship-name" maxlength="40" value="${esc(design.name)}" autocomplete="off"></label>
         ${select("class", "Класс", SHIP_CLASS_NAMES, design.class)}
-        ${select("model", "Платформа", { "1": "MK I · Pathfinder", "2": "MK II · Vanguard", "3": "MK III · Horizon" }, String(design.model))}
+        ${select("model", "Платформа", Object.fromEntries(SHIP_FRAMES[design.class].map((f, i) => [String(i + 1), f.name])), String(design.model))}
         <div class="dock-divider">КОНСТРУКЦИЯ</div>
         ${select("hull", "Фюзеляж", { needle: "Стрела / обтекаемый", armored: "Цитадель / бронированный", freighter: "Атлас / транспортный" }, design.hull)}
         ${select("wings", "Крылья", { swept: "Стреловидные", delta: "Дельта", twin: "Двойной киль" }, design.wings)}
@@ -206,7 +207,7 @@ export class ColonyPanels {
         <p id="ship-module-note" class="configuration-note"></p><div class="dock-divider">МАТЕРИАЛЫ И ОКРАСКА</div>
         ${select("finish", "Покрытие корпуса", names(SHIP_FINISHES), design.finish)}
         ${select("livery", "Ливрея / оператор", names(SHIP_LIVERIES), design.livery)}
-        ${select("color", "Палитра", { ivory: "Полярный белый", graphite: "Графит", cobalt: "Кобальт", ember: "Оксид меди", emerald: "Изумруд" }, design.color)}
+        ${select("color", "Палитра", { ivory: "Полярный белый", ochre: "Промышленный жёлтый", graphite: "Графит", cobalt: "Кобальт", ember: "Оксид меди", emerald: "Изумруд" }, design.color)}
         <div class="ship-swatches">${Object.entries(SHIP_COLORS)
           .map(
             ([c, value]) =>
@@ -247,6 +248,9 @@ export class ColonyPanels {
       const d = { ...read(), id: "preview" },
         stats = SHIP_STATS(d);
       if (rebuild) preview.setDesign(d);
+      const models = this.ui.el("ship-model") as HTMLSelectElement;
+      SHIP_FRAMES[d.class].forEach((f, i) => (models.options[i].text = f.name));
+      this.ui.el("preview-name").title = shipFrame(d).name;
       this.ui.el("preview-name").textContent = d.name;
       this.ui.el("ship-metrics").innerHTML = (
         [
@@ -326,6 +330,17 @@ export class ColonyPanels {
             if (project) this.shipyard(id, project);
           }),
       );
+    const setView = (mode: "model" | "blueprint") => {
+      preview.setMode(mode);
+      this.ui
+        .el("ship-view-model")
+        .setAttribute("aria-pressed", String(mode === "model"));
+      this.ui
+        .el("ship-view-blueprint")
+        .setAttribute("aria-pressed", String(mode === "blueprint"));
+    };
+    this.ui.button("ship-view-model", () => setView("model"));
+    this.ui.button("ship-view-blueprint", () => setView("blueprint"));
     this.ui.button("ship-zoom-in", () => preview.zoom(0.8));
     this.ui.button("ship-zoom-out", () => preview.zoom(1.25));
     this.ui.button("ship-reset-view", () => preview.reset());

@@ -1,9 +1,16 @@
+import { graphicsQuality } from "./Graphics";
 import * as T from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { IndustrialSurface } from "./IndustrialSurface";
 /** Original outpost architecture: panelled pressure modules on exposed service chassis. */
 export class IndustrialArchitecture {
-  private surface = new IndustrialSurface(1024);
+  private surface = new IndustrialSurface(
+    graphicsQuality() === "high"
+      ? 1024
+      : graphicsQuality() === "economy"
+        ? 256
+        : 512,
+  );
   private boxGeo = new RoundedBoxGeometry(1, 1, 1, 2, 0.035);
   private cylinder = new T.CylinderGeometry(1, 1, 1, 24);
   private sphere = new T.SphereGeometry(1, 24, 12);
@@ -31,15 +38,27 @@ export class IndustrialArchitecture {
           normalScale: new T.Vector2(0.12, 0.12),
           roughnessMap: glow ? null : this.surface.roughness,
           aoMap: glow ? null : this.surface.ao,
+          metalnessMap: glow ? null : this.surface.metalness,
           aoMapIntensity: 0.4,
           emissive: glow ? color : 0,
           emissiveIntensity: glow ? 1.5 : 0,
           clearcoat: 0.08,
         }),
       );
-    return this.materials.get(key)!;
+    const material = this.materials.get(key)!;
+    if (glow) {
+      material.userData.architectureFixture = true;
+      material.userData.baseGlow = 1.5;
+    }
+    return material;
   }
   build(kind: string, level = 1) {
+    if (
+      ["house", "headquarters", "warehouse", "refinery", "scanner"].includes(
+        kind,
+      )
+    )
+      return this.specialized(kind, level);
     const root = new T.Group(),
       main = new T.Group(),
       detail = new T.Group();
@@ -497,10 +516,451 @@ export class IndustrialArchitecture {
     lod.addLevel(new T.Group(), 35);
     root.add(lod);
     if (kind === "scanner") root.scale.setScalar(1 + (level - 1) * 0.11);
+    this.addLighting(root, 1.8, d / 2);
     root.userData.architecture = "panelled-pressure-module";
     root.userData.kind = kind;
     root.userData.level = level;
     return root;
+  }
+  /** Different floor plans and load paths, rather than one pressure box with accessories. */
+  private specialized(kind: string, level: number) {
+    const root = new T.Group(),
+      main = new T.Group(),
+      detail = new T.Group();
+    root.add(main);
+    root.name = `outpost-${kind}`;
+    const paint = this.mat(0xb6c0b9, 0.35, 0.75),
+      dark = this.mat(0x303b3b, 0.72, 0.65),
+      metal = this.mat(0x778b86, 0.85, 0.55),
+      accent = this.mat(0x547c75, 0.55, 0.64),
+      rust = this.mat(0x846552, 0.65, 0.8),
+      warm = this.mat(0xffc471, 0, 0.5, true),
+      cool = this.mat(0x8bc8c4, 0, 0.5, true),
+      black = this.mat(0x182321, 0.1, 0.9);
+    const mesh = (
+      g: T.Group,
+      geo: T.BufferGeometry,
+      mat: T.Material,
+      x: number,
+      y: number,
+      z: number,
+      w: number,
+      h: number,
+      d: number,
+    ) => {
+      const m = new T.Mesh(geo, mat);
+      m.position.set(x, y, z);
+      m.scale.set(w, h, d);
+      m.castShadow = m.receiveShadow = true;
+      g.add(m);
+      return m;
+    };
+    const b = (
+      g: T.Group,
+      mat: T.Material,
+      x: number,
+      y: number,
+      z: number,
+      w: number,
+      h: number,
+      d: number,
+    ) => mesh(g, this.boxGeo, mat, x, y, z, w, h, d);
+    const c = (
+      g: T.Group,
+      mat: T.Material,
+      x: number,
+      y: number,
+      z: number,
+      r: number,
+      h: number,
+    ) => mesh(g, this.cylinder, mat, x, y, z, r, h, r);
+    const beam = (
+      g: T.Group,
+      mat: T.Material,
+      a: number[],
+      v: number[],
+      r: number,
+    ) => {
+      const av = new T.Vector3(...a),
+        bv = new T.Vector3(...v),
+        m = c(g, mat, 0, 0, 0, r, av.distanceTo(bv));
+      m.position.copy(av).add(bv).multiplyScalar(0.5);
+      m.quaternion.setFromUnitVectors(
+        new T.Vector3(0, 1, 0),
+        bv.sub(av).normalize(),
+      );
+    };
+    const window = (
+      x: number,
+      y: number,
+      z: number,
+      w: number,
+      h: number,
+      side = false,
+    ) => {
+      const group = new T.Group();
+      group.position.set(x, y, z);
+      if (side) group.rotation.y = Math.PI / 2;
+      main.add(group);
+      b(group, metal, 0, 0, 0, w + 0.12, h + 0.13, 0.12);
+      b(group, black, 0, 0, 0.065, w, h, 0.05);
+      b(group, warm, 0, 0, 0.095, w - 0.065, h - 0.055, 0.014);
+      // Recessed glowing panes, mullions, interior silhouette and an outside sill.
+      for (let i = 1; i < 4; i++)
+        b(group, dark, -w / 2 + (i * w) / 4, 0, 0.11, 0.022, h, 0.024);
+      b(group, dark, 0, -h * 0.1, 0.115, w, 0.025, 0.03);
+      b(detail, metal, x, y - h * 0.55, z + 0.08, w + 0.18, 0.04, 0.24);
+    };
+    const door = (x: number, z: number, y = 0.3) => {
+      b(main, dark, x, y + 0.65, z, 0.64, 1.3, 0.12);
+      b(main, accent, x, y + 0.65, z + 0.07, 0.52, 1.15, 0.045);
+      b(detail, cool, x + 0.19, y + 0.78, z + 0.1, 0.03, 0.2, 0.018);
+      b(main, warm, x, y + 1.37, z + 0.06, 0.67, 0.04, 0.15);
+      for (let i = 0; i < 4; i++)
+        b(
+          main,
+          metal,
+          x,
+          0.06 + i * 0.07,
+          z + 0.58 - i * 0.15,
+          0.8,
+          0.09,
+          0.18,
+        );
+    };
+    const rails = (x: number, y: number, z: number, w: number) => {
+      beam(
+        detail,
+        metal,
+        [x - w / 2, y + 0.48, z],
+        [x + w / 2, y + 0.48, z],
+        0.018,
+      );
+      for (let i = 0; i < 4; i++)
+        beam(
+          detail,
+          metal,
+          [x - w / 2 + (i * w) / 3, y, z],
+          [x - w / 2 + (i * w) / 3, y + 0.48, z],
+          0.018,
+        );
+    };
+    const vent = (x: number, y: number, z: number, r = 0.25) => {
+      const g = new T.Group();
+      g.position.set(x, y, z);
+      g.rotation.x = Math.PI / 2;
+      detail.add(g);
+      c(g, black, 0, 0, 0, r * 1.2, 0.11);
+      c(g, metal, 0, 0.065, 0, r, 0.035);
+      for (let j = 0; j < 6; j++) {
+        const a = (j * Math.PI) / 3;
+        const m = b(
+          g,
+          dark,
+          Math.cos(a) * r * 0.42,
+          0.09,
+          Math.sin(a) * r * 0.42,
+          r * 0.65,
+          0.02,
+          r * 0.19,
+        );
+        m.rotation.y = -a;
+      }
+      c(g, black, 0, 0.11, 0, r * 0.19, 0.04);
+    };
+    const equipment = (x: number, y: number, z: number) => {
+      b(main, dark, x, y, z, 0.47, 0.65, 0.27);
+      b(detail, metal, x, y, z + 0.15, 0.42, 0.6, 0.035);
+      for (let j = 0; j < 8; j++)
+        b(detail, black, x, y - 0.22 + j * 0.063, z + 0.178, 0.32, 0.022, 0.02);
+      b(detail, cool, x + 0.14, y + 0.22, z + 0.19, 0.04, 0.025, 0.01);
+    };
+    let height = 3,
+      front = 1.4,
+      architecture = "";
+    if (kind === "warehouse") {
+      architecture = "barrel-vault-cargo-terminal";
+      height = 2.9;
+      front = 1.65;
+      b(main, dark, 0, 0.18, 0, 3.3, 0.35, 3.5);
+      const shell = this.extraGeo("vault", () => {
+        const g = new T.CylinderGeometry(1, 1, 1, 32, 1, true, 0, Math.PI);
+        g.rotateZ(Math.PI / 2);
+        g.rotateY(Math.PI / 2);
+        return g;
+      });
+      mesh(main, shell, paint, 0, 1.35, 0, 1.55, 1.55, 3.1);
+      b(main, dark, 0, 1.1, -1.5, 2.8, 1.8, 0.16);
+      for (const s of [-1, 1]) {
+        b(main, paint, s * 1.43, 0.95, 0, 0.16, 1.5, 3.1);
+        for (let j = 0; j < 7; j++)
+          b(detail, metal, s * 1.54, 1, -1.35 + j * 0.45, 0.07, 1.65, 0.07);
+        b(main, metal, s * 1.2, 1.5, 1.58, 0.27, 2.3, 0.22);
+        for (let j = 0; j < 6; j++)
+          b(
+            detail,
+            s % 2 ? accent : rust,
+            s * 1.9,
+            0.65,
+            -1.15 + j * 0.38,
+            0.5,
+            0.7,
+            0.32,
+          );
+      }
+      b(main, metal, 0, 2.6, 1.56, 2.9, 0.25, 0.23);
+      for (let j = 0; j < 14; j++)
+        b(
+          main,
+          j < 4 ? dark : metal,
+          0,
+          0.44 + j * 0.13,
+          1.59,
+          2.1,
+          0.085,
+          0.08,
+        );
+      b(main, warm, 0, 2.34, 1.73, 1.8, 0.045, 0.09);
+      // Offset dispatch cabin and external loading rollers.
+      b(main, accent, -1.25, 2.28, -0.5, 0.7, 0.85, 1.4);
+      window(-1.25, 2.35, 0.22, 0.5, 0.35);
+      for (let j = 0; j < 6; j++) {
+        const roll = c(main, metal, 0, 0.43, 1.95 + j * 0.17, 0.065, 1.8);
+        roll.rotation.z = Math.PI / 2;
+      }
+      rails(0, 0.36, 2.95, 2.4);
+      door(-1.25, 1.78);
+    } else if (kind === "refinery") {
+      architecture = "open-frame-pressure-plant";
+      height = 4.4;
+      front = 1.65;
+      b(main, dark, 0, 0.2, 0, 3.5, 0.4, 3);
+      for (const x of [-0.9, 0.7]) {
+        c(main, dark, x, 0.65, -0.25, 0.55, 0.6);
+        c(main, metal, x, 2.25, -0.25, 0.5, 2.7);
+        mesh(main, this.sphere, paint, x, 3.6, -0.25, 0.5, 0.26, 0.5);
+        for (let j = 0; j < 6; j++)
+          c(detail, j % 2 ? rust : dark, x, 1 + j * 0.45, -0.25, 0.535, 0.065);
+        for (const z of [-0.7, 0.7])
+          beam(main, dark, [x, 0.3, z], [x, 3.7, z], 0.07);
+        beam(main, rust, [x, 2.5, 0.25], [x, 2.5, 1.1], 0.09);
+        beam(main, rust, [x, 2.5, 1.1], [x, 0.5, 1.1], 0.09);
+        c(main, dark, x, 3.4, -1.05, 0.12, 2);
+        c(detail, metal, x, 4.4, -1.05, 0.18, 0.1);
+        for (let j = 0; j < 3; j++)
+          b(main, metal, x, 1.2 + j * 0.8, 0.72, 0.9, 0.06, 0.65);
+      }
+      b(main, accent, 1.25, 1.15, 1.1, 1.2, 1.6, 0.75);
+      window(1.25, 1.5, 1.51, 0.87, 0.52);
+      door(1.25, 1.53);
+      b(main, metal, -0.1, 2, 0.7, 3.2, 0.09, 0.6);
+      rails(-0.1, 2, 1.02, 3.2);
+      for (let j = 0; j < 12; j++)
+        b(detail, metal, -1.6, 0.4 + j * 0.14, 1.05, 0.045, 0.025, 0.33);
+      beam(detail, dark, [-1.6, 0.4, 0.85], [-1.6, 2.3, 0.85], 0.025);
+      for (let j = 0; j < 3; j++) equipment(-0.9 + j * 0.6, 0.9, 1.2);
+      b(main, cool, 0.4, 3.75, -0.3, 0.12, 0.06, 0.2);
+    } else if (kind === "scanner") {
+      architecture = "octagonal-observatory-array";
+      height = 5.6 + level * 0.08;
+      front = 1.35;
+      const oct = this.extraGeo(
+        "octagon",
+        () => new T.CylinderGeometry(1, 1, 1, 8),
+      );
+      mesh(main, oct, dark, 0, 0.2, 0, 1.7, 0.4, 1.7);
+      mesh(main, oct, paint, 0, 0.9, 0, 1.4, 1.2, 1.4);
+      mesh(main, oct, accent, 0, 1.55, 0, 1.47, 0.15, 1.47);
+      door(0, 1.33);
+      window(0.93, 1.05, 0.98, 0.53, 0.4);
+      for (const s of [-1, 1]) {
+        beam(main, metal, [s * 1.2, 0.5, -0.6], [s * 0.4, 3.5, -0.2], 0.13);
+        b(main, dark, s * 0.42, 2.5, -0.2, 0.2, 2.3, 0.3);
+        for (let j = 0; j < level + 2; j++) {
+          const z = -1 + j * 0.25;
+          c(
+            main,
+            metal,
+            s * 1.2,
+            2.0 + (j % 3) * 0.15,
+            z,
+            0.025,
+            1.4 + (j % 3) * 0.3,
+          );
+          b(main, accent, s * 1.2, 1.7, z, 0.18, 0.5, 0.09);
+        }
+      }
+      const dish = new T.Group();
+      dish.position.set(0, 3.6, -0.2);
+      dish.rotation.z = 0.5;
+      main.add(dish);
+      mesh(dish, this.dishGeo, paint, 0, 0, 0, 1.8, 1.8, 1.8);
+      c(dish, metal, 0, 0.75, 0, 0.04, 1.4);
+      c(dish, cool, 0, 1.45, 0, 0.1, 0.12);
+      for (let i = 0; i < 8; i++) {
+        const a = (i * Math.PI) / 4;
+        beam(
+          detail,
+          metal,
+          [Math.cos(a) * 1.1, 3.6, -0.2 + Math.sin(a) * 1.1],
+          [0, 4.7, -0.2],
+          0.023,
+        );
+      }
+      equipment(-1.2, 0.75, 0.6);
+    } else if (kind === "house") {
+      architecture = "asymmetric-inhabited-service-tower";
+      height = 5.8;
+      front = 1.2;
+      b(main, dark, 0, 0.2, 0, 2.6, 0.4, 2.45);
+      // Offset floors, exposed service spine, balconies and warm habitation windows.
+      for (let floor = 0; floor < 3; floor++) {
+        const y = 0.55 + floor * 1.55,
+          x = floor === 1 ? 0.18 : -0.12;
+        b(main, dark, x, y + 0.65, 0, 2.05, 1.4, 2);
+        for (const s of [-1, 1]) {
+          b(main, paint, x + s * 0.85, y + 0.65, 0, 0.25, 1.3, 2.05);
+          window(x + s * 0.45, y + 0.75, 1.035, 0.65, 0.62);
+          window(x + s * 1.01, y + 0.8, -0.3, 0.7, 0.62, true);
+        }
+        b(main, metal, x, y + 1.4, 0, 2.3, 0.12, 2.25);
+        b(main, dark, x, y + 0.12, 1.27, 2.4, 0.08, 0.55);
+        rails(x, y + 0.15, 1.53, 2.4);
+        for (let j = 0; j < 4; j++)
+          b(detail, metal, x - 0.83 + j * 0.55, y + 0.1, 1.2, 0.06, 0.15, 0.65);
+      }
+      door(0, 1.07);
+      height = 5.8;
+      for (let j = 0; j < 3; j++) {
+        equipment(-1.15, 1 + j * 1.5, 1.13);
+        const x = 1.22 + j * 0.08;
+        beam(
+          main,
+          j % 2 ? rust : metal,
+          [x, 0.5, -0.7],
+          [x, 5.35, -0.7],
+          0.035,
+        );
+      }
+      for (let j = 0; j < 4; j++) {
+        c(main, metal, -0.7 + j * 0.45, 5.7, -0.5, 0.022, 0.7 + (j % 2) * 0.5);
+      }
+      b(main, metal, 1.38, 3.7, 0.8, 0.3, 2.3, 0.13);
+      b(
+        main,
+        this.mat(0xee8eaf, 0, 0.5, true),
+        1.38,
+        3.7,
+        0.89,
+        0.22,
+        2.1,
+        0.025,
+      );
+      vent(-0.5, 4.9, 1.2, 0.3);
+      vent(0.52, 3.4, 1.2, 0.23);
+    } else {
+      architecture = "stepped-command-courtyard";
+      height = 3.8;
+      front = 1.6;
+      b(main, dark, 0, 0.2, 0, 3.6, 0.4, 3);
+      b(main, paint, -0.8, 1.15, 0, 1.6, 1.6, 2.8);
+      b(main, paint, 0.6, 1.15, -0.7, 1.3, 1.6, 1.4);
+      b(main, dark, -0.7, 2.25, -0.6, 1.9, 0.6, 1.4);
+      for (let j = 0; j < 3; j++)
+        window(-1.1 + j * 0.55, 2.3, 0.12, 0.43, 0.37);
+      b(main, paint, -0.7, 2.65, -0.6, 2, 0.15, 1.55);
+      door(-0.8, 1.43);
+      window(0.6, 1.35, 0.05, 0.9, 0.58);
+      b(main, dark, 0.8, 0.47, 0.8, 1.15, 0.1, 1.1);
+      rails(0.8, 0.52, 1.33, 1.1);
+      equipment(-1.6, 1.1, 0.5);
+      vent(-1.1, 1.4, 1.49, 0.24);
+      c(main, metal, -0.95, 3.18, -0.8, 0.025, 1.05);
+      for (let j = 0; j < 3; j++)
+        b(main, dark, 0.7, 2.2, -1 + j * 0.4, 0.65, 0.35, 0.3);
+    }
+    // Purpose-labelled luminous sign and small warning stencils on genuine mounted panels.
+    const names: Record<string, string> = {
+      warehouse: "ГРУЗОВОЙ ТЕРМИНАЛ",
+      refinery: "ПЕРЕРАБОТКА",
+      scanner: "ДАЛЬНИЙ КОНТАКТ",
+      house: "ЖИЛОЙ СЕКТОР",
+      headquarters: "ЦЕНТР КОЛОНИИ",
+    };
+    const label = this.sign(kind, names[kind] ?? kind);
+    const sy =
+      kind === "house"
+        ? 4.9
+        : kind === "scanner"
+          ? 1.65
+          : kind === "refinery"
+            ? 1.8
+            : 2.55;
+    b(main, dark, 0, sy, front + 0.05, 1.35, 0.36, 0.12);
+    mesh(main, this.plane, label, 0, sy, front + 0.12, 1.25, 0.3125, 1);
+    this.batch(main);
+    this.batch(detail);
+    const lod = new T.LOD();
+    lod.addLevel(detail, 0);
+    lod.addLevel(new T.Group(), 30);
+    root.add(lod);
+    if (kind === "scanner") root.scale.setScalar(1 + (level - 1) * 0.11);
+    this.addLighting(root, Math.min(height * 0.5, 2), front);
+    root.userData = { kind, level, architecture };
+    return root;
+  }
+  private extraGeometries = new Map<string, T.BufferGeometry>();
+  private extraGeo(key: string, make: () => T.BufferGeometry) {
+    if (!this.extraGeometries.has(key)) this.extraGeometries.set(key, make());
+    return this.extraGeometries.get(key)!;
+  }
+  private sign(kind: string, title: string) {
+    const key = `sign:${kind}`;
+    if (!this.materials.has(key)) {
+      let texture: T.Texture | null = null;
+      if (typeof document !== "undefined") {
+        const canvas = document.createElement("canvas");
+        canvas.width = 1024;
+        canvas.height = 256;
+        const c = canvas.getContext("2d")!;
+        c.fillStyle = "#172d2b";
+        c.fillRect(0, 0, 1024, 256);
+        c.strokeStyle = "#8eaba1";
+        c.lineWidth = 3;
+        c.strokeRect(9, 9, 1006, 238);
+        c.fillStyle = "#d8d6a5";
+        c.font = "600 52px sans-serif";
+        c.fillText(title, 28, 96, 970);
+        c.fillStyle = "#8bb3aa";
+        c.font = "30px monospace";
+        c.fillText("AURORA / 07   •   КОЛОНИЯ", 30, 158);
+        c.font = "22px monospace";
+        c.fillText("SERVICE ACCESS  •  АВТОМАТИКА ВКЛЮЧЕНА", 30, 210);
+        texture = new T.CanvasTexture(canvas);
+        texture.colorSpace = T.SRGBColorSpace;
+        texture.anisotropy = 4;
+        this.labels.set(key, texture);
+      }
+      const m = new T.MeshStandardMaterial({
+        map: texture,
+        color: 0xffffff,
+        emissive: 0xffffff,
+        emissiveMap: texture,
+        emissiveIntensity: 0.6,
+        roughness: 0.7,
+      });
+      m.userData.architectureFixture = true;
+      m.userData.baseGlow = 0.6;
+      this.materials.set(key, m);
+    }
+    return this.materials.get(key)!;
+  }
+  private addLighting(root: T.Group, y: number, z: number) {
+    const lamp = new T.PointLight(0xffc98b, 0, 4, 2);
+    lamp.position.set(0, y, z + 0.3);
+    lamp.visible = false;
+    lamp.userData.colonyFixture = true;
+    root.add(lamp);
   }
   drill(width: number, height: number, level: number) {
     const root = new T.Group(),
@@ -682,6 +1142,7 @@ export class IndustrialArchitecture {
     lod.addLevel(detail, 0);
     lod.addLevel(new T.Group(), width * 4);
     root.add(lod);
+    this.addLighting(root, Math.min(height * 0.2, 3), depth * 0.4);
     root.userData = {
       architecture: "tapered-extraction-platform",
       level,
@@ -717,6 +1178,7 @@ export class IndustrialArchitecture {
   }
   dispose() {
     this.surface.dispose();
+    this.extraGeometries.forEach((g) => g.dispose());
     [this.boxGeo, this.cylinder, this.sphere, this.dishGeo, this.plane].forEach(
       (g) => g.dispose(),
     );

@@ -44,7 +44,7 @@ if (conf.HOST !== "127.0.0.1" || conf.PORT !== "8003")
 if (!conf.BOT_TOKEN)
   fail("BOT_TOKEN is missing in the existing .env. No changes made.");
 const database = conf.DATABASE_PATH;
-const archive = join(source, "releases/little-planets-outpost-v15.tar.gz"),
+const archive = join(source, "releases/little-planets-atlas-v16.tar.gz"),
   expected = readFileSync(`${archive}.sha256`, "utf8").trim().split(/\s+/)[0];
 if (
   createHash("sha256").update(readFileSync(archive)).digest("hex") !== expected
