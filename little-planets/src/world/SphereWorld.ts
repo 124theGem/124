@@ -1,6 +1,6 @@
 import { STORY_PLANTS, STORY_ROBOT, STORY_METEOR } from "../../shared/prologue";
 import { gardenBeds } from "../../shared/model";
-import { voxelCell, surfaceHeight } from "../../shared/voxel";
+import { voxelCell, surfaceHeight, offsetPoint } from "../../shared/voxel";
 import { landingPad } from "../../shared/model";
 import * as T from "three";
 import { Models } from "./Models";
@@ -328,8 +328,7 @@ export class SphereWorld {
       this.ground.geometry = this.geometry;
     }
     if (this.homeSign) {
-      const start = ship("home");
-      const point = { x: start.x - 3, z: start.z - 2.5 };
+      const point = offsetPoint(ship("home"), -3, 1.5, this.id);
       this.homeSign.root.position.copy(spherePoint(point, 0.02, this.id));
       this.homeSign.root.quaternion.setFromUnitVectors(
         T.Object3D.DEFAULT_UP,

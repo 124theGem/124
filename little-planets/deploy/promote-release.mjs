@@ -73,6 +73,17 @@ try {
   );
   if (pkg.version !== channel.version)
     throw new Error("Published source version differs from channel");
+  const manifest = JSON.parse(
+    execFileSync("tar", ["-xOf", file, `${prefix}/deploy/artifact.json`], {
+      encoding: "utf8",
+    }),
+  );
+  if (
+    manifest.version !== channel.version ||
+    manifest.archive !== channel.archive ||
+    manifest.sha256 !== channel.sha256
+  )
+    throw new Error("Installer artifact manifest differs from promoted release");
   const payload = join(work, "payload.tar.gz");
   writeFileSync(payload, bytes);
   const artifact = JSON.parse(

@@ -2,7 +2,9 @@ import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 mkdirSync("releases", { recursive: true });
-const file = "releases/little-planets-earth-sign-v17.tar.gz";
+const version = JSON.parse(readFileSync("package.json", "utf8")).version;
+const archive = `little-planets-server-v${version.replaceAll(".", "")}.tar.gz`;
+const file = `releases/${archive}`;
 execFileSync("tar", [
   "-czf",
   file,
@@ -15,5 +17,9 @@ execFileSync("tar", [
   "ASSETS.md",
 ]);
 const sha = createHash("sha256").update(readFileSync(file)).digest("hex");
-writeFileSync(`${file}.sha256`, `${sha}  little-planets-earth-sign-v17.tar.gz\n`);
+writeFileSync(`${file}.sha256`, `${sha}  ${archive}\n`);
+writeFileSync(
+  "deploy/artifact.json",
+  JSON.stringify({ version, archive, sha256: sha }, null, 2) + "\n",
+);
 console.log(`${file}: ${sha}`);

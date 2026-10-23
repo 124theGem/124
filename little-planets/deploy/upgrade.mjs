@@ -44,12 +44,29 @@ if (conf.HOST !== "127.0.0.1" || conf.PORT !== "8003")
 if (!conf.BOT_TOKEN)
   fail("BOT_TOKEN is missing in the existing .env. No changes made.");
 const database = conf.DATABASE_PATH;
-const archive = join(source, "releases/little-planets-atlas-v16.tar.gz"),
+const artifact = JSON.parse(readFileSync(join(source, "deploy/artifact.json"), "utf8"));
+const sourceVersion = JSON.parse(readFileSync(join(source, "package.json"), "utf8")).version;
+if (
+  artifact.version !== sourceVersion ||
+  typeof artifact.archive !== "string" ||
+  !/^little-planets-[a-z0-9-]+-v\d+\.tar\.gz$/.test(artifact.archive) ||
+  typeof artifact.sha256 !== "string" ||
+  !/^[a-f0-9]{64}$/.test(artifact.sha256)
+)
+  fail("Invalid release artifact manifest. No changes made.");
+const archive = join(source, "releases", artifact.archive),
   expected = readFileSync(`${archive}.sha256`, "utf8").trim().split(/\s+/)[0];
 if (
+  expected !== artifact.sha256 ||
   createHash("sha256").update(readFileSync(archive)).digest("hex") !== expected
 )
   fail("Package SHA-256 mismatch. No changes made.");
+const artifactVersion = JSON.parse(
+  execFileSync("tar", ["-xOf", archive, "package.json"], { encoding: "utf8" }),
+).version;
+if (artifactVersion !== sourceVersion)
+  fail("Package version differs from source. No changes made.");
+console.log(`Installing release ${artifact.version}: ${artifact.archive}`);
 const uid = Number(
     execFileSync("id", ["-u", unit], { encoding: "utf8" }).trim(),
   ),
