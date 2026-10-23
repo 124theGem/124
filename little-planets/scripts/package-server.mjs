@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 mkdirSync("releases", { recursive: true });
-const file = "releases/little-planets-atlas-v16.tar.gz";
+const file = "releases/little-planets-earth-sign-v17.tar.gz";
 execFileSync("tar", [
   "-czf",
   file,
@@ -15,5 +15,5 @@ execFileSync("tar", [
   "ASSETS.md",
 ]);
 const sha = createHash("sha256").update(readFileSync(file)).digest("hex");
-writeFileSync(`${file}.sha256`, `${sha}  little-planets-atlas-v16.tar.gz\n`);
+writeFileSync(`${file}.sha256`, `${sha}  little-planets-earth-sign-v17.tar.gz\n`);
 console.log(`${file}: ${sha}`);

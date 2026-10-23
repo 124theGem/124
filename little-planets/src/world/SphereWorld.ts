@@ -24,6 +24,7 @@ import { tiledSphere } from "./TiledSphere";
 import { SphereNature } from "./SphereNature";
 import { graphicsQuality } from "./Graphics";
 import { PrologueEffects } from "./PrologueEffects";
+import { HomeSign } from "./HomeSign";
 import {
   surfacePoint,
   surfaceCoordinates,
@@ -57,6 +58,7 @@ export class SphereWorld {
   readonly id: PlanetId;
   private storyProps = new T.Group();
   private storyKey = "";
+  private homeSign?: HomeSign;
   private cropsInWind: { root: T.Group; phase: number }[] = [];
   private storyInWind: { root: T.Group; phase: number }[] = [];
   readonly prologueEffects = new PrologueEffects();
@@ -149,6 +151,10 @@ export class SphereWorld {
     this.ship.position.copy(spherePoint(pad, 0.14, this.id));
     this.ship.quaternion.copy(base.quaternion);
     this.root.add(this.ship);
+    if (this.id === "home") {
+      this.homeSign = new HomeSign();
+      this.root.add(this.homeSign.root);
+    }
     this.rebuild(save, now);
   }
   highlightBlock(point: { x: number; z: number; level?: number } | null) {
@@ -320,6 +326,15 @@ export class SphereWorld {
       this.geometry.dispose();
       this.geometry = tile.geometry;
       this.ground.geometry = this.geometry;
+    }
+    if (this.homeSign) {
+      const start = ship("home");
+      const point = { x: start.x - 3, z: start.z - 2.5 };
+      this.homeSign.root.position.copy(spherePoint(point, 0.02, this.id));
+      this.homeSign.root.quaternion.setFromUnitVectors(
+        T.Object3D.DEFAULT_UP,
+        sphereUp(point, this.id),
+      );
     }
     const buildingKey =
       terrainKey +
@@ -500,6 +515,7 @@ export class SphereWorld {
     this.blockHighlight.material.dispose();
     this.nature.dispose();
     this.prologueEffects.dispose();
+    this.homeSign?.dispose();
     this.root.traverse((o) => {
       if (o instanceof T.InstancedMesh) o.dispose();
     });
