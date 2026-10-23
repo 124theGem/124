@@ -1,8 +1,9 @@
 {
   "schema": 1,
-  "release": 16,
-  "version": "0.16.0",
-  "commit": "7cccb796aeea62cd77e1def682acb98064d271e0",
-  "archive": "little-planets-atlas-v16.tar.gz",
-  "sha256": "e8f6b818be04af6bb182c286b09e1c49a8afd5213b63bebdb55aacbc43b41f0a"
+  "release": 17,
+  "version": "0.16.1",
+  "commit": "3ea62f19a6d0cbcf2f81b5a52d75c7147865bce1",
+  "archive": "little-planets-earth-sign-v17.tar.gz",
+  "sha256": "b4d2bd5521ef5e75b6076a65b807e9408cf166ff225e5b6eb02dc06df3522b7d",
+  "enabled": true
 }
