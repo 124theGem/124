@@ -1,0 +1,21 @@
+[Unit]
+Description=Install explicitly promoted Little Planets GitHub releases
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=/opt/little-planets/.env
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/opt/little-planets-node/bin/node /opt/little-planets-updater/pull-release.mjs
+Environment=PATH=/opt/little-planets-node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=NPM_CONFIG_CACHE=/var/lib/little-planets-updater/npm-cache
+UMask=0077
+Nice=10
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+NoNewPrivileges=true
+TimeoutStartSec=infinity
+TimeoutStopSec=infinity

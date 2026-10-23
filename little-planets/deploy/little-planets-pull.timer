@@ -1,0 +1,12 @@
+[Unit]
+Description=Check the Little Planets verified release channel every two minutes
+
+[Timer]
+OnActiveSec=2min
+OnUnitInactiveSec=2min
+RandomizedDelaySec=15s
+AccuracySec=15s
+Unit=little-planets-pull.service
+
+[Install]
+WantedBy=timers.target
