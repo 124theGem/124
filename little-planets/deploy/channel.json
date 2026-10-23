@@ -1,9 +1,9 @@
 {
   "schema": 1,
-  "release": 17,
-  "version": "0.16.1",
-  "commit": "3ea62f19a6d0cbcf2f81b5a52d75c7147865bce1",
-  "archive": "little-planets-earth-sign-v17.tar.gz",
-  "sha256": "b4d2bd5521ef5e75b6076a65b807e9408cf166ff225e5b6eb02dc06df3522b7d",
+  "release": 18,
+  "version": "0.16.2",
+  "commit": "9a3211786a062fedc1ada79cb1251ae55a6eadd5",
+  "archive": "little-planets-server-v0162.tar.gz",
+  "sha256": "ab76b8f8f3225d322c7523f3d7141b676c50e62755c73651b5c0188b3e5ee46b",
   "enabled": true
 }
