@@ -48,7 +48,7 @@ async function start(viewport) {
       localStorage.setItem("little-planets-v6", JSON.stringify(s));
   }, save);
   await page.goto(
-    (process.env.GAME_URL || "http://127.0.0.1:5174") + "/?debug=1",
+    (process.env.GAME_URL || "http://127.0.0.1:5174") + "/?mode=colony&debug=1",
   );
   await page.waitForFunction(
     () => window.__planets?.snapshot().triangles > 1000,

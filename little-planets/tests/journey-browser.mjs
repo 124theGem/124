@@ -37,7 +37,7 @@ const launch = async (viewport, fixture) => {
     if (!localStorage.getItem("little-planets-v6"))
       localStorage.setItem("little-planets-v6", s);
   }, JSON.stringify(fixture));
-  await page.goto(url + "/?debug=1");
+  await page.goto(url + "/?mode=colony&debug=1");
   await page.waitForFunction(
     () => window.__planets?.snapshot().triangles > 1000,
   );

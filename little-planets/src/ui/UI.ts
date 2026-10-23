@@ -74,6 +74,8 @@ const costs = (cost: Record<string, number>, save: Save) =>
         )
         .join("");
 export class UI {
+  private abort = new AbortController();
+  private stopStrike = () => {};
   readonly root = document.createElement("div");
   onAutomation = () => {};
   onBoardShip = () => {};
@@ -232,7 +234,8 @@ export class UI {
     };
     for (const event of ["pointerup", "pointercancel", "lostpointercapture"])
       strike.addEventListener(event, stopStrike);
-    window.addEventListener("blur", stopStrike);
+    this.stopStrike = stopStrike;
+    window.addEventListener("blur", stopStrike, { signal: this.abort.signal });
     strike.onclick = (e) => {
       if (e.detail === 0) this.onMineStrike();
     };
@@ -417,6 +420,13 @@ export class UI {
     this.galaxyMap = undefined;
     this.el("modal").classList.add("hidden");
     this.activeModal = null;
+  }
+  dispose() {
+    this.stopStrike();
+    this.abort.abort();
+    clearTimeout(this.toastTimer);
+    this.close();
+    this.root.remove();
   }
   panel(html: string, section = "facility") {
     this.activeModal = null;

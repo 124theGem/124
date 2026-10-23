@@ -1,6 +1,6 @@
 {
   "name": "little-planets",
-  "version": "0.16.2",
+  "version": "0.17.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -32,7 +32,9 @@
     "test:horizon": "node --import tsx tests/horizon-browser.mjs",
     "test:outpost": "node --import tsx tests/outpost-browser.mjs",
     "test:atlas": "node --import tsx tests/atlas-browser.mjs",
-    "test:atlas-models": "node --import tsx tests/atlas-models-browser.mjs"
+    "test:atlas-models": "node --import tsx tests/atlas-models-browser.mjs",
+    "test:nexus": "vitest run tests/nexus.test.ts",
+    "test:nexus-browser": "node --import tsx tests/nexus-browser.mjs"
   },
   "dependencies": {
     "three": "^0.180.0",

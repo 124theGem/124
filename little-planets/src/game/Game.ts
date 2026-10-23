@@ -220,6 +220,7 @@ export class Game {
   constructor(
     private store: Persistence,
     private telegram: Telegram,
+    onNexus?: () => void,
   ) {
     this.position = { ...store.state.position };
     document.querySelector("#app")!.innerHTML = "";
@@ -240,6 +241,22 @@ export class Game {
     );
     document.querySelector("#app")!.append(this.renderer.domElement);
     this.ui = new UI(store.local);
+    const nexusButton = document.createElement("button");
+    nexusButton.id = "return-nexus";
+    nexusButton.title = "NEXUS — хаб и другие миры";
+    nexusButton.setAttribute("aria-label", "Вернуться в хаб NEXUS");
+    nexusButton.textContent = "NEXUS ↗";
+    nexusButton.style.cssText = "font-size:10px;letter-spacing:.08em;padding:8px 10px;width:auto";
+    this.ui.el("settings").parentElement!.prepend(nexusButton);
+    nexusButton.onclick = async () => {
+      if (!onNexus || this.busy || this.flying || this.observation) return;
+      this.busy = true;
+      this.input.clear();
+      this.path = [];
+      this.sphereDestination = undefined;
+      try { await this.flushMove(); onNexus(); }
+      catch (error) { this.ui.toast((error as Error).message); this.busy = false; }
+    };
     this.introVeil.className = "arrival-veil";
     this.introVeil.setAttribute("aria-hidden", "true");
     this.introVeil.hidden = store.state.prologue.phase !== "arrival";
@@ -2781,7 +2798,7 @@ export class Game {
   dispose() {
     this.renderer.setAnimationLoop(null);
     this.abort.abort();
-    this.ui.close();
+    this.ui.dispose();
     this.environment?.dispose();
     this.input.dispose();
     this.audio.dispose();
@@ -2807,5 +2824,6 @@ export class Game {
     });
     this.introVeil.remove();
     this.renderer.dispose();
+    this.renderer.forceContextLoss();
   }
 }

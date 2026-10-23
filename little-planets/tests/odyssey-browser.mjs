@@ -38,7 +38,7 @@ try {
     await page.addInitScript({
       content: `if(!localStorage.getItem('little-planets-v4'))localStorage.setItem('little-planets-v4',${JSON.stringify(JSON.stringify(save))});`,
     });
-    await page.goto(`${base}/?debug=1`);
+    await page.goto(`${base}/?mode=colony&debug=1`);
     await page.waitForFunction(
       () => window.__planets?.snapshot().sphere?.tiles > 4000,
     );

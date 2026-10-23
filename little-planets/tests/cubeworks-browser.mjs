@@ -64,7 +64,7 @@ try {
         await page.locator("#menu-toggle").click();
       await page.locator("#" + id).click();
     };
-    await page.goto(base + "/?debug=1");
+    await page.goto(base + "/?mode=colony&debug=1");
     await page.waitForFunction(
       () => window.__planets?.snapshot().art?.frameCalls > 0,
     );
@@ -244,7 +244,7 @@ try {
       (s) => localStorage.setItem("little-planets-v6", s),
       JSON.stringify(fixture),
     );
-    await page.goto(base + "/?debug=1");
+    await page.goto(base + "/?mode=colony&debug=1");
     await page.waitForFunction(
       () =>
         window.__planets?.snapshot().weather.type === "hurricane" &&
@@ -289,7 +289,7 @@ try {
     (s) => localStorage.setItem("little-planets-v6", s),
     JSON.stringify(fixture),
   );
-  await p.goto(base + "/?debug=1");
+  await p.goto(base + "/?mode=colony&debug=1");
   await p.waitForFunction(() => window.__planets?.snapshot().triangles > 1000);
   await p.waitForTimeout(1200);
   const first = await p.evaluate(() => window.__planets.snapshot());

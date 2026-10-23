@@ -131,7 +131,7 @@ try {
     tgWebAppPlatform: "android",
     tgWebAppData: initData,
   });
-  const gameUrl = `${url}?debug=1#${hash}`;
+  const gameUrl = `${url}?mode=colony&debug=1#${hash}`;
   await phone.goto(gameUrl);
   await phone.waitForFunction(() =>
     Boolean(

@@ -7,6 +7,7 @@ import { z, ZodError } from "zod";
 import { verifyTelegram } from "./auth";
 import { Store, Conflict } from "./store";
 import { RuleError } from "../shared/model";
+import { NexusServer } from "./nexus";
 export async function createApp(options: {
   botToken: string;
   databasePath: string;
@@ -18,8 +19,9 @@ export async function createApp(options: {
     trustProxy: ["127.0.0.1", "::1"],
   });
   const store = new Store(options.databasePath);
+  const nexus = new NexusServer(options.databasePath);
   await app.register(rateLimit, { max: 180, timeWindow: "1 minute" });
-  app.addHook("onClose", async () => store.close());
+  app.addHook("onClose", async () => { nexus.close(); store.close(); });
   app.addHook("onSend", async (_req, reply, payload) => {
     reply.header("X-Content-Type-Options", "nosniff");
     // Telegram embeds this app; frame-ancestors must permit Telegram web clients.
@@ -32,6 +34,19 @@ export async function createApp(options: {
       throw new Error("Откройте игру через Telegram");
     return verifyTelegram(header.slice(4), options.botToken);
   };
+  app.post("/api/nexus", { config: { rateLimit: { max: 1200, timeWindow: "1 minute" } } }, async (req, reply) => {
+    let user;
+    try { user = authenticate(req.headers.authorization); }
+    catch { return reply.code(401).send({ error: "Откройте игру через Telegram заново." }); }
+    reply.header("Cache-Control", "no-store");
+    try { return nexus.request(user.id, user.first_name, req.body); }
+    catch (error) {
+      if (error instanceof ZodError) return reply.code(400).send({ error: "Некорректная команда хаба." });
+      const code = (error as { statusCode?: number }).statusCode;
+      if (code && code >= 400 && code <= 503) return reply.code(code).send({ error: (error as Error).message });
+      throw error;
+    }
+  });
   app.get("/api/state", async (req, reply) => {
     let user;
     try {

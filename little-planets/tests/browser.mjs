@@ -43,7 +43,7 @@ try {
     );
     await page.mouse.click(point.x, point.y);
   };
-  await page.goto(`${base}/?debug=1`);
+  await page.goto(`${base}/?mode=colony&debug=1`);
   await wait(() => window.__planets?.snapshot().triangles > 1000);
   await wait(() =>
     document
@@ -201,7 +201,7 @@ try {
     phone = await mobile.newPage();
   phone.setDefaultTimeout(60000);
   phone.on("pageerror", (e) => errors.push(e.message));
-  await phone.goto(`${base}/?debug=1`);
+  await phone.goto(`${base}/?mode=colony&debug=1`);
   await phone.waitForFunction(
     () => window.__planets?.snapshot().triangles > 1000,
   );
