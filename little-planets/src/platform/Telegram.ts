@@ -12,6 +12,8 @@ interface App {
   setBackgroundColor?(color: string): void;
   onEvent?(event: string, handler: () => void): void;
   offEvent?(event: string, handler: () => void): void;
+  openTelegramLink?(url: string): void;
+  openInvoice?(url: string, callback?: (status: string) => void): void;
 }
 export class Telegram {
   readonly app = (window as Window & { Telegram?: { WebApp?: App } }).Telegram

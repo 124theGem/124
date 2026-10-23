@@ -15,6 +15,9 @@ execFileSync("tar", [
   "package-lock.json",
   ".env.example",
   "ASSETS.md",
+  "RIFT-RAID.md",
+  "scripts/raid-metrics.mjs",
+  "deploy/raid-stars.mjs",
 ]);
 const sha = createHash("sha256").update(readFileSync(file)).digest("hex");
 writeFileSync(`${file}.sha256`, `${sha}  ${archive}\n`);
