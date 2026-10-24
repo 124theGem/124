@@ -1,5 +1,5 @@
 import { direction, distance, inObstacle, lineClear } from '../core/math';
-import type { GameMap, Vec2 } from '../core/types';
+import type { GameMap, Vec2, Obstacle } from '../core/types';
 export function navigable(map: GameMap, p: Vec2, pad = 0.5) {
   return (
     Math.abs(p.x) < map.width / 2 - pad &&
@@ -8,7 +8,12 @@ export function navigable(map: GameMap, p: Vec2, pad = 0.5) {
   );
 }
 export function waypoint(map: GameMap, from: Vec2, to: Vec2): Vec2 {
-  const blockers = map.obstacles.map((o) => ({ ...o, w: o.w + 1, d: o.d + 1 }));
+  const blockers: Obstacle[] = map.obstacles.map((o) => ({
+    ...o,
+    kind: o.kind === 'river' ? 'wall' : o.kind,
+    w: o.w + 1,
+    d: o.d + 1,
+  }));
   if (lineClear(from, to, blockers)) return to;
   const size = 2,
     key = (p: Vec2) => `${p.x},${p.z}`;

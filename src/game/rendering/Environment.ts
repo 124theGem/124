@@ -8,6 +8,7 @@ import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { PointLight } from '@babylonjs/core/Lights/pointLight';
 import { buildLandmarks } from './Landmarks';
+import { buildRiverCastles } from './RiverCastles';
 import type { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture';
 import type { GameMap, Vec2 } from '../core/types';
 import { seeded } from '../core/math';
@@ -20,6 +21,7 @@ export class Environment {
   private effects: Mesh[] = [];
   private ownedMaterials: (PBRMaterial | StandardMaterial)[] = [];
   private textures: DynamicTexture[] = [];
+  private riverFlow?: DynamicTexture;
   private lights: PointLight[] = [];
   private torchPositions: Vec2[] = [];
   constructor(
@@ -214,9 +216,14 @@ export class Environment {
     const landmarks = await buildLandmarks(this.scene, this.root, map, place);
     this.ownedMaterials.push(...landmarks.materials);
     this.textures.push(...landmarks.textures);
+    const landscape = await buildRiverCastles(this.scene, this.root, map, place);
+    this.ownedMaterials.push(...landscape.materials);
+    this.textures.push(...landscape.textures);
+    this.riverFlow = landscape.flow;
     await Promise.all(jobs);
   }
   update(time: number, focus?: Vec2) {
+    if (this.riverFlow) this.riverFlow.uOffset = (time * 0.035) % 1;
     for (let i = 0; i < this.effects.length; i++) {
       const f = this.effects[i];
       f.scaling.setAll(1 + Math.sin(time * 7 + i) * 0.15);

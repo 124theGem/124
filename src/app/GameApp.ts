@@ -382,10 +382,6 @@ export class GameApp {
                 : 'Захватите нейтральную точку',
       );
     }
-    const landmark = s.map.landmarks
-      ?.filter((l) => distance(l.position, p.position) < l.radius + 7)
-      .sort((a, b) => distance(a.position, p.position) - distance(b.position, p.position))[0];
-    text('zone-name', landmark?.name ?? s.map.name);
     text('player-hp', `${Math.ceil(p.hp)} / ${p.maxHp}`);
     width('hp-fill', (p.hp / p.maxHp) * 100);
     width('shield-fill', (p.shield / p.maxHp) * 100);
@@ -446,56 +442,6 @@ export class GameApp {
         s.mode === 'raid'
           ? 'Герой пал. Союзники продолжают бой.'
           : `Возрождение через ${Math.max(0, Math.ceil(p.respawnAt - s.time))} с`;
-    }
-    this.minimap();
-  }
-  private minimap() {
-    const canvas = document.getElementById('minimap') as HTMLCanvasElement | null,
-      ctx = canvas?.getContext('2d');
-    if (!ctx || !canvas) return;
-    const s = this.simulation.state,
-      w = canvas.width,
-      h = canvas.height;
-    const to = (p: { x: number; z: number }) => ({
-      x: (p.x / s.map.width + 0.5) * w,
-      y: (0.5 - p.z / s.map.depth) * h,
-    });
-    ctx.clearRect(0, 0, w, h);
-    ctx.strokeStyle = '#73917b35';
-    ctx.strokeRect(1, 1, w - 2, h - 2);
-    ctx.fillStyle = '#83937c40';
-    for (const o of s.map.obstacles) {
-      const a = to({ x: o.x - o.w / 2, z: o.z + o.d / 2 });
-      ctx.fillRect(a.x, a.y, (o.w / s.map.width) * w, (o.d / s.map.depth) * h);
-    }
-    for (const p of s.points) {
-      const a = to(p.position);
-      ctx.strokeStyle = p.owner === 'A' ? '#96c5a6' : p.owner === 'B' ? '#e29b86' : '#d3c493';
-      ctx.beginPath();
-      ctx.arc(a.x, a.y, 9, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    for (const e of s.entities.filter(
-      (e) =>
-        e.alive &&
-        !e.statuses.some((t) => t.kind === 'stealth') &&
-        (e.team === 'A' ||
-          s.entities.some(
-            (a) => a.team === 'A' && a.alive && distance(a.position, e.position) < 18,
-          )),
-    )) {
-      const a = to(e.position);
-      ctx.fillStyle =
-        e.controller === 'HUMAN_LOCAL' ? '#f4e6ba' : e.team === 'A' ? '#95c8ab' : '#d88370';
-      ctx.beginPath();
-      ctx.arc(
-        a.x,
-        a.y,
-        e.kind === 'boss' ? 4 : e.controller === 'HUMAN_LOCAL' ? 3 : 2,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
     }
   }
   private updateLabels(dt: number) {

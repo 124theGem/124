@@ -4621,3 +4621,85 @@ body {
     padding: 3px 5px;
   }
 }
+
+/* Clear playfield: compact objective and four standalone skill icons. */
+.mission-strip {
+  position: absolute;
+  top: calc(8px + var(--safe-top));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(340px, calc(100vw - 160px - var(--safe-left) - var(--safe-right)));
+  height: 25px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 3px 8px;
+  background: #0b20354d;
+  border-radius: 3px;
+  color: #f1e9d6;
+  text-shadow: 0 1px 3px #071729;
+  pointer-events: none;
+}
+.mission-strip .battle-timer {
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  flex: 0 0 37px;
+}
+.mission-strip > b {
+  font-size: 10px;
+  font-weight: 600;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.mission-strip .objective-bar {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 0;
+  height: 2px;
+  margin: 0;
+  border: 0;
+  background: #08172b44;
+}
+.mission-strip .objective-bar > span {
+  display: block;
+  height: 100%;
+  background: #d1bc85bb;
+}
+.battle-hud .icons-only.ability-dock {
+  --slot-size: clamp(44px, 12vh, 58px);
+  display: block;
+  bottom: calc(8px + var(--safe-bottom));
+  max-width: none;
+  width: max-content;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.battle-hud .icons-only.ability-dock:before,
+.battle-hud .icons-only.ability-dock:after {
+  display: none;
+}
+.battle-hud .icons-only .skill-buttons {
+  grid-template-columns: repeat(4, var(--slot-size));
+  padding: 0;
+  gap: 8px;
+}
+.battle-hud .icons-only .skill-button,
+.battle-hud .icons-only .ultimate-button {
+  margin: 0;
+}
+.battle-hud .combat-controls {
+  width: var(--attack-size);
+  height: var(--attack-size);
+  bottom: calc(28px + var(--safe-bottom));
+}
+.battle-hud .attack-button {
+  bottom: 0;
+}
+.battle-hud .skill-callout {
+  bottom: calc(79px + var(--safe-bottom));
+}

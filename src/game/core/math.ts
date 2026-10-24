@@ -15,6 +15,7 @@ export const inObstacle = (p: Vec2, o: Obstacle, pad = 0) =>
 export function lineClear(a: Vec2, b: Vec2, obstacles: Obstacle[]): boolean {
   // Segment/AABB slabs: continuous checks also block fast projectiles through thin walls.
   return !obstacles.some((o) => {
+    if (o.kind === 'river') return false;
     let lo = 0,
       hi = 1;
     for (const [v, d, c, half] of [
