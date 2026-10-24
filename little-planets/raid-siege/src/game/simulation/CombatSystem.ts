@@ -29,6 +29,13 @@ export class CombatSystem {
     this.state.events.push({ ...event, position: { ...event.position }, id: ++this.serial });
   }
   animate(e: Entity, animation: AnimationState, duration = 0.55) {
+    const casting = e.animation.startsWith('skill') || e.animation === 'ultimate';
+    if (
+      casting &&
+      e.animationUntil > this.state.time &&
+      (animation === 'attack' || animation === 'hit')
+    )
+      return;
     e.animation = animation;
     e.animationUntil = this.state.time + duration;
     e.animationSerial++;
@@ -107,6 +114,8 @@ export class CombatSystem {
         position: target.position,
         value: Math.round(actual),
         color: target.team === 'A' ? '#fa9d92' : '#f4e5bc',
+        sourceId: source.id,
+        classId: source.classId,
       });
       if (target.animationUntil < this.state.time) this.animate(target, 'hit', 0.16);
     }
@@ -258,6 +267,10 @@ export class CombatSystem {
       position: e.position,
       target: { ...t.position },
       color: getClass(e.classId).color,
+      sourceId: e.id,
+      classId: e.classId,
+      origin: { ...e.position },
+      facing: e.facing,
     });
   }
   cast(e: Entity, index: number, targetId?: string, aim?: Vec2): boolean {
@@ -311,6 +324,14 @@ export class CombatSystem {
       color: a.color,
       ultimate: a.ultimate,
       name: a.name,
+      sourceId: e.id,
+      classId: e.classId,
+      abilityId: a.id,
+      origin: { ...e.position },
+      radius: a.radius,
+      duration: a.duration,
+      delay: a.delay,
+      facing: e.facing,
     });
     if ((a.delay ?? 0) > 0 || a.duration > 0) {
       const totem = e.classId === 'shaman' && index === 1 ? 1.25 : 1;

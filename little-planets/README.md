@@ -1,4 +1,6 @@
-# RAID & SIEGE · размещение 0.20.0
+# RAID & SIEGE · размещение 0.21.0
+
+Яркий мультяшный стиль, исправленные анимации навыков и резкость на Retina-экранах.
 
 Главный адрес Mini App бота @LittlePlanets_bot теперь предназначен для новой 3D Action RPG. См. [RAID-SIEGE.md](RAID-SIEGE.md). Серверный API, SQLite и сохранения прежних игр сохранены. Их входы: `?mode=emberfall`, `?mode=raid`, `?mode=colony`.
 

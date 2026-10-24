@@ -3338,3 +3338,461 @@ select {
     min-height: 30px;
   }
 }
+
+/* Bright toy-fantasy direction: strong shapes and readable mobile combat. */
+:root {
+  --gold: #ffe16a;
+  --gold-dim: #ffbe4c;
+  --teal: #61f0d0;
+  --muted: #badcff;
+  --border: #78baff55;
+  color: #fff;
+  background: #1855b0;
+}
+.menu-screen {
+  background:
+    linear-gradient(90deg, #124b9bdc 0%, #164a8f85 34%, #155e9b05 64%, #163f852b),
+    linear-gradient(0deg, #103b92 0%, #174990d9 13%, #164b8b00 58%);
+}
+.topbar {
+  background: linear-gradient(#124c9de8, #13438ccc);
+  border-bottom: 2px solid #87bdff55;
+}
+.brand {
+  font-family: Manrope, Arial, sans-serif;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  color: #fff;
+  text-shadow: 0 2px 0 #143474;
+}
+.brand-mark {
+  background: #ffcb3d;
+  color: #183b76;
+  border-color: #fff099;
+}
+.brand small,
+.account-name small,
+.topnav button {
+  color: #d8e9ff;
+}
+.topnav button.active {
+  color: #ffe66a;
+}
+.hero-copy h1 {
+  font-family: Manrope, Arial, sans-serif;
+  font-weight: 800;
+  letter-spacing: -2px;
+  line-height: 1.08;
+  color: #fff;
+  text-shadow:
+    0 4px 0 #153976,
+    0 7px 15px #0d326d66;
+}
+.hero-copy h1 em {
+  color: #ffe66a;
+}
+.hero-copy p,
+.hero-meta > span,
+.hero-meta svg {
+  color: #f0f7ff;
+}
+.hero-copy p {
+  font-weight: 600;
+  text-shadow: 0 1px 3px #153777;
+}
+.eyebrow,
+.hero-copy .text-button,
+.chapter {
+  color: #fff2ac;
+}
+.section-label {
+  color: #e2f2ff;
+}
+.section-label > span {
+  color: #b9daff;
+}
+.party-panel {
+  background: linear-gradient(135deg, #2264bfe8, #214898f2);
+  border: 2px solid #78a9f2;
+  backdrop-filter: none;
+  box-shadow: 0 5px 0 #12357955;
+}
+.party-member {
+  background: #2c6ec579;
+  border-color: #73a9ee6b;
+}
+.party-member.local {
+  background: #4187d955;
+  border-color: #ffe16a;
+}
+.member-info small,
+.member-badge,
+.party-note,
+.local-note,
+.member-info b {
+  color: #e5f5ff;
+}
+.party-member > svg {
+  color: #b5d7ff;
+}
+.portrait {
+  border-width: 2px;
+  background: radial-gradient(
+    ellipse at bottom,
+    color-mix(in srgb, var(--class, #7ad8e8) 50%, #204b92),
+    #1b4380
+  );
+  border-color: color-mix(in srgb, var(--class, #7ad8e8) 80%, white);
+}
+.mode-card {
+  border: 2px solid #6e9ae0;
+  background: #2058a9;
+  box-shadow: 0 4px 0 #102e6e55;
+}
+.mode-card.selected {
+  border-color: #ffe16a;
+  box-shadow: 0 4px 0 #72501966;
+}
+.mode-art:after {
+  background: linear-gradient(0deg, #2058a9, transparent 82%);
+}
+.map-illustration {
+  opacity: 1;
+}
+.mode-info h3 {
+  font-family: Manrope, Arial, sans-serif;
+  font-weight: 800;
+  color: #fff;
+}
+.selected .mode-info h3 {
+  color: #fff2a5;
+}
+.mode-info small,
+.mode-tag,
+.selected .mode-tag {
+  color: #d1e8ff;
+}
+.mode-symbol,
+.mode-info > svg {
+  color: #e0f4ff;
+}
+.primary {
+  background: linear-gradient(#ffe36e, #ffba3c);
+  border: 2px solid #593a35;
+  box-shadow: 0 4px 0 #805039;
+  color: #263c68;
+  border-radius: 7px;
+  font-weight: 800;
+}
+.primary:hover {
+  background: linear-gradient(#ffec93, #ffcc54);
+}
+.embark span {
+  font-family: Manrope, Arial, sans-serif;
+  font-weight: 800;
+  font-size: 24px;
+}
+.embark small {
+  font-weight: 800;
+}
+.current-hero small,
+.current-hero b > span,
+.menu-footer > span,
+.menu-footer button {
+  color: #c6e1ff;
+}
+.menu-footer {
+  border-color: #88bafc66;
+}
+.secondary,
+.icon-button {
+  background: #2968b9bb;
+  border-color: #88baff;
+  color: #fff;
+}
+.panel-page {
+  background: radial-gradient(ellipse at top right, #346fd3, #163e8e 80%);
+}
+.panel-page .topbar {
+  background: #194b9df5;
+}
+.page-heading h2,
+.modal h2,
+.detail-top h2,
+.results-panel h2 {
+  font-family: Manrope, Arial, sans-serif;
+  font-weight: 800;
+}
+.page-heading p {
+  color: #d1e4ff;
+}
+.class-card {
+  background: radial-gradient(
+    ellipse at bottom,
+    color-mix(in srgb, var(--class) 27%, transparent),
+    #2454a4
+  );
+  border: 2px solid #6c9cdf;
+  border-radius: 8px;
+}
+.class-card.chosen {
+  border-color: #ffe16a;
+}
+.class-card small,
+.class-number {
+  color: #d0e8ff;
+}
+.hero-detail,
+.equipment-panel,
+.item-detail {
+  background: #214f9c;
+  border: 2px solid #71a3ec;
+  border-radius: 8px;
+}
+.hero-detail > p,
+.hero-stats > span,
+.passive p,
+.ability-description small,
+.asset-disclosure,
+.equipped-item small {
+  color: #cde6ff;
+}
+.hero-stats b {
+  color: #fff;
+}
+.ability-description .skill-meta {
+  color: #a8d3fb;
+}
+.item-card {
+  background: radial-gradient(
+    ellipse at top,
+    color-mix(in srgb, var(--rarity) 25%, transparent),
+    #204b96
+  );
+  border-width: 2px;
+}
+.item-card strong,
+.item-detail h3 {
+  color: #fff;
+}
+.inventory-hint {
+  color: #c4e0ff;
+}
+.modal,
+.results-panel {
+  background: linear-gradient(135deg, #2865bf, #173e8c);
+  border: 2px solid #91beff;
+}
+.modal p,
+.setting-row small,
+.results-panel > p {
+  color: #cee7ff;
+}
+.result-stats strong {
+  color: #fff;
+}
+.result-stats small,
+.reward-row small {
+  color: #c0dfff;
+}
+.notice {
+  background: #164288;
+  color: #deeeff;
+  border-color: #759dd2;
+}
+.battle-top {
+  background: linear-gradient(#0b316d98, transparent);
+}
+.battle-mode b {
+  font-family: Manrope, Arial, sans-serif;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 2px 2px #18375d;
+}
+.battle-mode small,
+.objective-panel > small {
+  color: #fff;
+  text-shadow: 0 1px 3px #153858;
+}
+.battle-timer,
+.objective-panel > b {
+  color: #fff;
+  text-shadow: 0 2px 2px #18375d;
+}
+.objective-bar {
+  background: #173977aa;
+  height: 5px;
+  border: 1px solid #13346b;
+}
+.objective-bar > span {
+  background: #ffe35c;
+}
+.team-row b,
+.team-row b small,
+.team-hp {
+  color: #fff;
+  text-shadow: 0 1px 2px #14324e;
+}
+.health-track {
+  border: 1px solid #173557;
+  background: #233d65aa;
+  height: 6px;
+}
+.health-track i {
+  background: #80eb52;
+}
+.player-vitals > span,
+.player-vitals > span b {
+  color: #fff;
+  font-weight: 800;
+  text-shadow: 0 1px 2px #142d4c;
+}
+.player-health {
+  height: 10px;
+  border: 2px solid #193756;
+  border-radius: 3px;
+  background: #333d64;
+}
+.player-health i:first-child {
+  background: linear-gradient(#b3ff61, #6fd741);
+}
+.player-resource i {
+  background: #72d7ff;
+}
+.joystick {
+  border: 3px solid #b7edff8c;
+  background: #1b89d355;
+  box-shadow: 0 0 0 8px #a2e6ff2c;
+}
+.joystick-knob {
+  background: linear-gradient(#7ce5ff, #29a3e9);
+  border: 2px solid #dcfaff;
+  color: #fff;
+  box-shadow: 0 4px 0 #1468a17a;
+}
+.joystick > small {
+  color: #fff;
+  text-shadow: 0 1px 2px #1b4365;
+}
+.skill-button {
+  background: linear-gradient(#499ae8, #2865be);
+  border: 2px solid #163d79;
+  box-shadow: 0 3px 0 #132f66;
+  color: #fff;
+  border-radius: 12px;
+}
+.skill-button:after {
+  border-color: #c9f1ff66;
+}
+.skill-button > small {
+  background: #174a92;
+  color: #fff;
+  border-color: #91d0ff;
+}
+.skill-name,
+.ult-label,
+.dodge-button > small {
+  color: #fff;
+  font-weight: 800;
+  text-shadow: 0 1px 3px #15334f;
+}
+.ultimate-button {
+  border: 3px solid #a06820;
+  background: radial-gradient(circle at 35% 25%, #fff095, #ffc52f 75%);
+  color: #75541a;
+  border-radius: 50%;
+}
+.ultimate-button > small {
+  background: #a47521;
+  border-color: #ffed8c;
+}
+.attack-button {
+  border: 3px solid #892e40;
+  background: linear-gradient(140deg, #ff9781, #f64d65);
+  color: #fff;
+  box-shadow: 0 4px 0 #8a3047;
+}
+.attack-button > small {
+  color: #fff;
+  font-weight: 800;
+}
+.dodge-button {
+  border: 2px solid #075d96;
+  background: #42cfe9;
+  color: #fff;
+}
+.cooldown {
+  background: #11335bc9;
+  color: #fff;
+}
+.on-cooldown .cooldown {
+  font-size: 20px;
+}
+.world-health {
+  height: 6px;
+  border: 1px solid #132d49;
+  background: #1a3259;
+  width: 58px;
+  border-radius: 2px;
+}
+.world-health > i {
+  background: #ff5b73;
+}
+.world-health.ally > i {
+  background: #93f45a;
+}
+.world-health > small {
+  font-size: 9px;
+  color: #fff;
+  font-weight: 800;
+}
+.minimap {
+  background: #164389bf;
+  border: 2px solid #79b7f0;
+}
+
+.skill-callout {
+  position: absolute;
+  left: 50%;
+  top: 27%;
+  transform: translateX(-50%) rotate(-2deg);
+  padding: 9px 20px;
+  border: 2px solid #123469;
+  border-radius: 8px;
+  background: #368ee4e8;
+  box-shadow: 0 4px 0 #153b68;
+  color: #fff;
+  font-weight: 800;
+  font-size: 14px;
+  white-space: nowrap;
+  text-shadow: 0 2px 0 #205187;
+  pointer-events: none;
+}
+.skill-callout.super {
+  background: #ffdb53;
+  color: #6c3c19;
+  box-shadow: 0 4px 0 #8b551d;
+  text-shadow: none;
+  font-size: 18px;
+}
+@media (orientation: landscape) and (max-height: 560px) {
+  .embark span {
+    font-size: 18px;
+  }
+  .skill-callout {
+    font-size: 12px;
+    padding: 6px 13px;
+  }
+  .skill-callout.super {
+    font-size: 15px;
+  }
+}
+
+/* Cast names are shown above the hero; avoid tiny overlapping labels under touch buttons. */
+.skill-name {
+  display: none;
+}
+.ult-label {
+  font-size: 7px;
+  letter-spacing: 1px;
+}

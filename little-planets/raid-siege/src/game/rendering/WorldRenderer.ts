@@ -14,18 +14,15 @@ import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation';
 import { Plane } from '@babylonjs/core/Maths/math.plane';
+import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imageProcessingConfiguration';
+import { CombatVfx } from './CombatVfx';
+import { FrameEvents, renderPixelRatio } from './RenderQuality';
 import { ActorView } from '../animation/ActorView';
 import { AssetLibrary } from './assets';
 import { Environment } from './Environment';
 import { getClass } from '../classes/catalog';
 import type { Entity, GameEvent, MatchState, Vec2, Zone } from '../core/types';
 export type Quality = 'low' | 'medium' | 'high';
-interface VisualEffect {
-  mesh: Mesh;
-  age: number;
-  life: number;
-  scale: number;
-}
 export class WorldRenderer {
   engine: Engine;
   scene: Scene;
@@ -36,7 +33,8 @@ export class WorldRenderer {
   private projectiles = new Map<number, Mesh>();
   private zoneViews = new Map<number, Mesh>();
   private pointViews: Mesh[] = [];
-  private effects: VisualEffect[] = [];
+  private vfx: CombatVfx;
+  private pendingEvents = new FrameEvents<GameEvent>();
   private shadow: ShadowGenerator;
   private glow: GlowLayer;
   private selected?: Mesh;
@@ -45,8 +43,6 @@ export class WorldRenderer {
   private mode: 'menu' | 'battle' = 'menu';
   private quality: Quality = 'medium';
   private follow = new Vector3(0, 1, -24);
-  private adaptive = 0;
-  private frames = 0;
   private lastEvent = 0;
   private navigation: Mesh[] = [];
   private chest?: TransformNode;
@@ -58,22 +54,27 @@ export class WorldRenderer {
       canvas,
       true,
       {
-        preserveDrawingBuffer: true,
+        preserveDrawingBuffer: false,
         stencil: true,
         powerPreference: 'high-performance',
         audioEngine: false,
       },
-      true,
+      false,
     );
     this.scene = new Scene(this.engine);
-    this.scene.clearColor = Color4.FromHexString('#111f27ff');
-    this.scene.fogMode = Scene.FOGMODE_EXP2;
-    this.scene.fogDensity = 0.017;
-    this.scene.fogColor = Color3.FromHexString('#17282e');
+    this.scene.clearColor = Color4.FromHexString('#65b9e0ff');
+    this.scene.fogMode = Scene.FOGMODE_NONE;
+    this.scene.fogDensity = 0.0045;
+    this.scene.fogColor = Color3.FromHexString('#426779');
+    const image = this.scene.imageProcessingConfiguration;
+    image.toneMappingEnabled = false;
+    image.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
+    image.exposure = 1.05;
+    image.contrast = 1.1;
     this.camera = new ArcRotateCamera(
       'camera',
       -Math.PI / 2,
-      0.88,
+      1.0,
       29,
       this.follow.clone(),
       this.scene,
@@ -84,28 +85,34 @@ export class WorldRenderer {
     this.camera.fov = 0.72;
     this.camera.inputs.clear();
     const hemi = new HemisphericLight('sky', new Vector3(0, 1, 0), this.scene);
-    hemi.intensity = 0.9;
-    hemi.diffuse = Color3.FromHexString('#c4dbd9');
-    hemi.groundColor = Color3.FromHexString('#2e3b40');
+    hemi.intensity = 0.85;
+    hemi.diffuse = Color3.FromHexString('#cce7ff');
+    hemi.groundColor = Color3.FromHexString('#6e8065');
     const sun = new DirectionalLight('moon', new Vector3(-0.5, -1, 0.6), this.scene);
     sun.position.set(20, 35, -20);
-    sun.intensity = 2.1;
+    sun.intensity = 1.15;
     sun.diffuse = Color3.FromHexString('#f6e3bd');
     this.shadow = new ShadowGenerator(1024, sun);
-    this.shadow.useBlurExponentialShadowMap = true;
-    this.shadow.blurKernel = 16;
+    this.shadow.usePercentageCloserFiltering = true;
+    this.shadow.filteringQuality = ShadowGenerator.QUALITY_LOW;
+    this.shadow.bias = 0.0015;
+    this.shadow.normalBias = 0.05;
     this.shadow.darkness = 0.35;
     this.glow = new GlowLayer('magic-glow', this.scene, {
       blurKernelSize: 32,
       mainTextureRatio: 0.5,
     });
-    this.glow.intensity = 0.42;
+    this.glow.intensity = 0.3;
+    this.vfx = new CombatVfx(this.scene);
     this.markerMat = this.material('player-ring', '#a8d8cc', 0.8);
     this.assets = new AssetLibrary(this.scene);
     this.instrumentation = new SceneInstrumentation(this.scene);
     this.instrumentation.captureFrameTime = true;
     this.setQuality('medium');
-    window.addEventListener('resize', () => this.engine.resize());
+    window.addEventListener('resize', () => {
+      this.setQuality(this.quality);
+      this.engine.resize();
+    });
   }
   private material(name: string, color: string, alpha = 1) {
     const m = new StandardMaterial(name, this.scene);
@@ -133,8 +140,8 @@ export class WorldRenderer {
     this.zoneViews.clear();
     this.pointViews = [];
     this.navigation = [];
-    for (const e of this.effects) e.mesh.dispose(false, true);
-    this.effects = [];
+    this.vfx.clear();
+    this.pendingEvents.clear();
     this.selected?.dispose();
     this.chest?.dispose();
     this.chest = undefined;
@@ -143,7 +150,7 @@ export class WorldRenderer {
     const hero = state.entities.find((e) => e.controller === 'HUMAN_LOCAL')!;
     this.follow.set(hero.position.x, 1, hero.position.z + 2);
     this.camera.setTarget(this.follow);
-    this.camera.radius = menu ? 27 : 25;
+    this.camera.radius = menu ? 23 : this.battleRadius();
     await Promise.all([
       this.environment.build(state.map),
       ...state.entities.map((e) => this.addActor(e)),
@@ -185,8 +192,14 @@ export class WorldRenderer {
   }
   setQuality(q: Quality) {
     this.quality = q;
-    const scale = { low: 1.7, medium: 1.25, high: 1 }[q];
-    this.engine.setHardwareScalingLevel(Math.max(scale, window.devicePixelRatio / 1.5));
+    const ratio = renderPixelRatio(
+      q,
+      window.devicePixelRatio,
+      this.canvas.clientWidth,
+      this.canvas.clientHeight,
+    );
+    this.engine.setHardwareScalingLevel(1 / ratio);
+    this.vfx.quality = q;
     this.shadow.getShadowMap()?.resize(q === 'high' ? 2048 : 1024);
     this.scene.shadowsEnabled = q !== 'low';
     this.glow.isEnabled = q !== 'low';
@@ -201,7 +214,8 @@ export class WorldRenderer {
     Vector3.LerpToRef(this.follow, target, 1 - Math.exp(-dt * 5), this.follow);
     this.camera.setTarget(this.follow);
     this.camera.radius +=
-      ((this.mode === 'menu' ? 24 : 25) - this.camera.radius) * Math.min(1, dt * 4);
+      ((this.mode === 'menu' ? 22 : this.battleRadius()) - this.camera.radius) *
+      Math.min(1, dt * 4);
     for (const e of state.entities) {
       const view = this.actors.get(e.id);
       if (view) {
@@ -227,11 +241,52 @@ export class WorldRenderer {
     for (const p of state.projectiles) {
       let mesh = this.projectiles.get(p.id);
       if (!mesh) {
-        mesh = MeshBuilder.CreateSphere('projectile', { diameter: 0.25, segments: 6 }, this.scene);
-        mesh.material = this.material('bolt', p.color);
+        const caster = state.entities.find((e) => e.id === p.source);
+        const magic = caster ? getClass(caster.classId).model === 'Mage' : false;
+        mesh = new Mesh('projectile-root', this.scene);
+        const mat = this.material('visible-projectile', magic || p.effects ? p.color : '#fff0a2');
+        if (magic) {
+          const core = MeshBuilder.CreateSphere(
+            'magic-bolt-core',
+            { diameter: 0.44, segments: 10 },
+            this.scene,
+          );
+          core.material = mat;
+          core.parent = mesh;
+        } else {
+          const shaft = MeshBuilder.CreateCylinder(
+            'arrow-shaft',
+            { height: 0.95, diameter: 0.065, tessellation: 6 },
+            this.scene,
+          );
+          shaft.parent = mesh;
+          shaft.material = mat;
+          const tip = MeshBuilder.CreateCylinder(
+            'arrow-tip',
+            { height: 0.25, diameterBottom: 0.19, diameterTop: 0, tessellation: 4 },
+            this.scene,
+          );
+          tip.parent = mesh;
+          tip.position.y = 0.54;
+          tip.material = mat;
+        }
+        const trail = MeshBuilder.CreateCylinder(
+          'bolt-streak',
+          {
+            height: magic ? 0.9 : 0.7,
+            diameterBottom: 0,
+            diameterTop: magic ? 0.25 : 0.12,
+            tessellation: 6,
+          },
+          this.scene,
+        );
+        trail.parent = mesh;
+        trail.position.y = -0.55;
+        trail.material = mat;
         this.projectiles.set(p.id, mesh);
       }
       mesh.position.set(p.position.x, 1.25, p.position.z);
+      mesh.rotation.set(Math.PI / 2, Math.atan2(p.direction.x, p.direction.z), 0);
     }
     for (const [id, m] of this.projectiles)
       if (!state.projectiles.some((p) => p.id === id)) {
@@ -280,34 +335,25 @@ export class WorldRenderer {
         })
         .catch((error) => this.onError?.(String(error)));
     }
-    for (const event of state.events)
+    this.pendingEvents.push(state.events);
+    for (const event of this.pendingEvents.drain())
       if (event.id > this.lastEvent) {
-        this.effect(event);
+        this.vfx.emit(event, state);
         this.lastEvent = event.id;
       }
-    for (const fx of this.effects) {
-      fx.age += dt;
-      const t = fx.age / fx.life;
-      fx.mesh.scaling.setAll(fx.scale * (0.3 + t * 1.4));
-      (fx.mesh.material as StandardMaterial).alpha = (1 - t) * 0.8;
-      fx.mesh.rotation.y += dt * 2;
-    }
-    this.effects = this.effects.filter((fx) => {
-      if (fx.age >= fx.life) {
-        fx.mesh.dispose(false, true);
-        return false;
-      }
-      return true;
-    });
-    this.environment?.update(state.time);
+    this.vfx.update(dt, state);
+    this.environment?.update(state.time, hero.position);
+    this.scene.animationTimeScale = Math.min(
+      1,
+      dt / Math.max(0.001, this.engine.getDeltaTime() / 1000),
+    );
     this.scene.render();
-    if (this.mode === 'battle' && ++this.frames % 120 === 0) {
-      const fps = this.engine.getFps();
-      if (fps < 28 && this.adaptive < 1) {
-        this.adaptive += 0.15;
-        this.engine.setHardwareScalingLevel(this.engine.getHardwareScalingLevel() + 0.15);
-      }
-    }
+  }
+  enqueueEvents(events: readonly GameEvent[]) {
+    this.pendingEvents.push(events);
+  }
+  private battleRadius() {
+    return this.canvas.clientWidth / this.canvas.clientHeight < 0.8 ? 22 : 18.5;
   }
   private createZoneMesh(z: Zone) {
     if (z.shape !== 'cone') {
@@ -343,43 +389,6 @@ export class WorldRenderer {
     mesh.edgesWidth = 2;
     return mesh;
   }
-  private effect(event: GameEvent) {
-    if (this.effects.length > (this.quality === 'low' ? 15 : 50)) return;
-    if (event.type === 'cast' || event.type === 'dodge' || event.type === 'death') {
-      const mesh = MeshBuilder.CreateTorus(
-        'spell-ring',
-        {
-          diameter: 1,
-          thickness: event.ultimate ? 0.1 : 0.045,
-          tessellation: this.quality === 'low' ? 20 : 40,
-        },
-        this.scene,
-      );
-      mesh.position.set(event.position.x, 0.15, event.position.z);
-      mesh.material = this.material('spell-light', event.color);
-      this.effects.push({
-        mesh,
-        age: 0,
-        life: event.ultimate ? 1 : 0.45,
-        scale: event.ultimate ? 4 : 1.5,
-      });
-      if (event.ultimate)
-        for (let i = 0; i < 8; i++) {
-          const spark = MeshBuilder.CreateSphere(
-            'spark',
-            { diameter: 0.14, segments: 4 },
-            this.scene,
-          );
-          spark.position.set(
-            event.position.x + Math.cos(i) * 2,
-            1 + i * 0.2,
-            event.position.z + Math.sin(i) * 2,
-          );
-          spark.material = this.material('spark-mat', event.color);
-          this.effects.push({ mesh: spark, age: 0, life: 0.8, scale: 1 });
-        }
-    }
-  }
   screenPosition(p: Vec2, height = 2.65) {
     const projected = Vector3.Project(
       new Vector3(p.x, height, p.z),
@@ -407,6 +416,12 @@ export class WorldRenderer {
   get metrics() {
     return {
       fps: Math.round(this.engine.getFps()),
+      renderWidth: this.engine.getRenderWidth(),
+      renderHeight: this.engine.getRenderHeight(),
+      cssWidth: this.canvas.clientWidth,
+      cssHeight: this.canvas.clientHeight,
+      pixelRatio: 1 / this.engine.getHardwareScalingLevel(),
+      activeVfx: this.vfx.activeCount,
       drawCalls: this.scene.getEngine()._drawCalls.current,
       meshes: this.scene.getActiveMeshes().length,
       frameMs: Math.round(this.instrumentation.frameTimeCounter.current * 10) / 10,
@@ -429,6 +444,7 @@ export class WorldRenderer {
   }
   dispose() {
     for (const a of this.actors.values()) a.dispose();
+    this.vfx.dispose();
     this.instrumentation.dispose();
     this.environment?.dispose();
     void this.assets.dispose();

@@ -214,6 +214,14 @@ export interface GameEvent {
   color: string;
   ultimate?: boolean;
   name?: string;
+  sourceId?: string;
+  classId?: string;
+  abilityId?: string;
+  origin?: Vec2;
+  radius?: number;
+  duration?: number;
+  delay?: number;
+  facing?: number;
 }
 export interface MatchState {
   version: 1;

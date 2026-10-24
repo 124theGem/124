@@ -26,6 +26,11 @@ export async function createApp(options: {
   const raid = new RaidServer(options.databasePath);
   const payments = new RaidPayments(raid, options.botToken, options.raidPayments);
   await payments.initialize();
+  // Public shader/model files are not API calls. Reopening the Mini App must not
+  // exhaust the authenticated API budget while loading the modular renderer.
+  app.addHook("onRoute", (route) => {
+    if (route.url === "/*") route.config = { ...route.config, rateLimit: false };
+  });
   await app.register(rateLimit, { max: 180, timeWindow: "1 minute" });
   app.addHook("onClose", async () => { raid.close(); nexus.close(); store.close(); });
   app.addHook("onSend", async (_req, reply, payload) => {
