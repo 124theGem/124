@@ -185,6 +185,7 @@ export interface Projectile {
   remaining: number;
   damage: number;
   targetId?: string;
+  abilityId?: string;
   color: string;
   effects?: EffectSpec[];
 }
@@ -202,6 +203,7 @@ export interface Zone {
   color: string;
   telegraph: boolean;
   shape?: 'circle' | 'cone';
+  abilityId?: string;
   facing?: number;
   arc?: number;
 }

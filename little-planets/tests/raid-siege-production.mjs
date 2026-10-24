@@ -31,11 +31,11 @@ try {
   await context.close();
   console.log('PASS: /planets/ models/fonts, real combat, pause, existing API, production restrictions.');
 
-  const telegram=await browser.newContext({viewport:{width:844,height:390},hasTouch:true,isMobile:true});
+  const telegram=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true});
   await telegram.addInitScript(()=>{
-    window.nativeEvents=[];
+    window.nativeEvents=[];window.nativePayloads=[];
     window.TelegramWebviewProxy={postEvent(type,json){
-      window.nativeEvents.push(type);
+      window.nativeEvents.push(type);window.nativePayloads.push({type,data:json?JSON.parse(json):{}});
       const reply=(eventType,eventData)=>queueMicrotask(()=>window.dispatchEvent(new MessageEvent('message',{source:window.parent,data:JSON.stringify({eventType,eventData})})));
       if(type==='web_app_request_viewport'||type==='web_app_expand')reply('viewport_changed',{height:innerHeight,width:innerWidth,is_state_stable:true,is_expanded:true});
       if(type==='web_app_request_safe_area')reply('safe_area_changed',{top:0,bottom:0,left:0,right:0});
@@ -48,9 +48,18 @@ try {
   const hash=new URLSearchParams({tgWebAppVersion:'8.0',tgWebAppPlatform:'android',tgWebAppThemeParams:JSON.stringify({bg_color:'#101b22',button_color:'#d9bd84'})});
   await tg.goto(base+'#'+hash);await tg.waitForSelector('[data-action="start"]',{timeout:90000});
   const events=await tg.evaluate(()=>window.nativeEvents);assert(events.includes('web_app_ready'));assert(events.includes('web_app_expand'));assert(events.includes('web_app_setup_swipe_behavior'));
+  await tg.waitForSelector('#landscape-gate',{state:'visible'});
+  assert(!(await tg.evaluate(()=>window.nativePayloads.some(p=>p.type==='web_app_toggle_orientation_lock'&&p.data.locked))));
+  await tg.setViewportSize({width:844,height:390});
+  await tg.waitForSelector('#landscape-gate',{state:'hidden'});
+  await tg.waitForFunction(()=>window.nativePayloads.some(p=>p.type==='web_app_toggle_orientation_lock'&&p.data.locked));
   await tg.locator('[data-action="start"]').tap();await tg.waitForSelector('.battle-hud',{timeout:60000});
-  assert((await tg.evaluate(()=>window.nativeEvents)).includes('web_app_request_fullscreen'));assert.deepEqual(tgErrors,[]);await telegram.close();
-  console.log('PASS: mocked Telegram 8.0 SDK ready, viewport, gestures, fullscreen, game startup.');
+  assert((await tg.evaluate(()=>window.nativeEvents)).includes('web_app_request_fullscreen'));assert.deepEqual(tgErrors,[]);
+  await tg.setViewportSize({width:390,height:844});await tg.waitForSelector('#landscape-gate',{state:'visible'});
+  await tg.waitForSelector('[data-action="resume"]',{state:'attached'});
+  await tg.setViewportSize({width:844,height:390});await tg.waitForSelector('[data-action="resume"]');
+  await telegram.close();
+  console.log('PASS: mocked Telegram 8.0 SDK ready, fullscreen on launch, landscape lock (never portrait), rotation gate/pause, game startup.');
 
   const legacy=await browser.newPage();
   await legacy.goto(base+'?mode=emberfall#preserved-launch-data');await legacy.waitForURL(/legacy\.html\?mode=emberfall#preserved-launch-data/,{timeout:30000});

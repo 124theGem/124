@@ -7,6 +7,7 @@ declare global {
       simulation: any;
       metrics: any;
       renderer: any;
+      input: any;
       debug(action: string): void;
     };
   }
@@ -132,7 +133,7 @@ test('touch landscape: simultaneous joystick and held attack, skills, release an
   expect(errors).toEqual([]);
   await context.close();
 });
-test('portrait menus expose every mode, items equip, settings save, no overflow', async ({
+test('portrait requests rotation; landscape menus, equipment and settings persist', async ({
   browser,
 }) => {
   const context = await browser.newContext({
@@ -146,6 +147,9 @@ test('portrait menus expose every mode, items equip, settings save, no overflow'
   await expect(page.locator('[data-action="start"]')).toBeVisible();
   await expect(page.locator('[data-mode]')).toHaveCount(3);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  await expect(page.locator('#landscape-gate')).toBeVisible();
+  await page.setViewportSize({ width: 844, height: 390 });
+  await expect(page.locator('#landscape-gate')).toBeHidden();
   await page.locator('.party-member.local').tap();
   await expect(page.locator('[data-class]')).toHaveCount(15);
   await page.locator('[data-class="priest"]').tap();

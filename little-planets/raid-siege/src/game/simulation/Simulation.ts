@@ -112,7 +112,7 @@ export class Simulation {
       if (command.move && Number.isFinite(command.move.x) && Number.isFinite(command.move.z))
         this.combat.move(e, command.move, dt);
       if (command.dodge && e.dodgeCooldown <= 0 && !has(e, 'stun') && !has(e, 'root')) {
-        e.dodgeCooldown = 5;
+        e.dodgeCooldown = 3;
         e.statuses.push({ kind: 'invulnerable', power: 1, remaining: 0.35, source: e.id, tick: 0 });
         this.combat.animate(e, 'dodge', 0.4);
         const v =
@@ -124,7 +124,7 @@ export class Simulation {
       }
       if (command.ability !== undefined)
         this.combat.cast(e, command.ability, command.targetId, command.aim);
-      if (command.attack) this.combat.attack(e, command.targetId);
+      if (command.attack) this.combat.attack(e, command.targetId, command.aim);
     }
     this.separate();
     if (s.mode === 'raid') {
@@ -159,7 +159,8 @@ export class Simulation {
     if (s.stage === 4) {
       const b = makeEntity('boss', 'guardian', 'PVE', { x: 0, z: 27 }, 'BOT', 'Хранитель руин');
       b.kind = 'boss';
-      b.maxHp = b.hp = 45000;
+      b.maxHp = b.hp = 22000;
+      b.interval = 1.1;
       b.attack = 115;
       b.range = 3.5;
       b.speed = 2.7;
@@ -184,6 +185,7 @@ export class Simulation {
       m.speed = 3;
       m.range = i === 2 ? 8 : 2;
       m.armor = 8;
+      m.interval = 0.95;
       m.ultimate = 0;
       s.entities.push(m);
     }

@@ -3,7 +3,7 @@ import type { Vec2 } from '../core/types';
 export function bindControls(
   root: HTMLElement,
   controller: HumanController,
-  aimAt: (x: number, y: number) => Vec2 | undefined,
+  aimAt: (dx: number, dy: number, index: number) => Vec2 | undefined,
   onPause: () => void,
   onDebug: () => void,
 ) {
@@ -66,64 +66,60 @@ export function bindControls(
       },
       { signal },
     );
-  root.querySelectorAll<HTMLElement>('[data-skill]').forEach((button) => {
-    let point: { x: number; y: number } | null = null;
+  // Each action owns its pointer. Movement stays independent during a right-thumb drag.
+  root.querySelectorAll<HTMLElement>('[data-skill], [data-attack]').forEach((button) => {
+    const index = button.hasAttribute('data-attack') ? -1 : Number(button.dataset.skill);
+    let pointer: number | null = null;
+    let origin = { x: 0, y: 0 };
+    let aim: Vec2 | undefined;
+    const update = (e: PointerEvent) => {
+      if (e.pointerId !== pointer) return;
+      const dx = e.clientX - origin.x,
+        dy = e.clientY - origin.y;
+      const length = Math.hypot(dx, dy),
+        scale = Math.min(1, 42 / Math.max(1, length));
+      aim = length > 10 ? aimAt(dx, dy, index) : undefined;
+      controller.preview = { index, aim, drag: length > 10 ? { x: dx, y: dy } : undefined };
+      button.style.setProperty('--aim-x', `${dx * scale}px`);
+      button.style.setProperty('--aim-y', `${dy * scale}px`);
+      button.classList.toggle('aiming', length > 10);
+    };
+    const clear = () => {
+      pointer = null;
+      aim = undefined;
+      if (controller.preview?.index === index) controller.preview = undefined;
+      button.classList.remove('pressed', 'aiming');
+      button.style.removeProperty('--aim-x');
+      button.style.removeProperty('--aim-y');
+    };
     button.addEventListener(
       'pointerdown',
       (e) => {
+        if (pointer !== null) return;
         e.preventDefault();
+        pointer = e.pointerId;
+        origin = { x: e.clientX, y: e.clientY };
         button.setPointerCapture(e.pointerId);
-        point = { x: e.clientX, y: e.clientY };
         button.classList.add('pressed');
+        update(e);
       },
       { signal },
     );
+    button.addEventListener('pointermove', update, { signal });
     button.addEventListener(
       'pointerup',
       (e) => {
-        if (!point) return;
-        const dx = e.clientX - point.x,
-          dy = e.clientY - point.y;
-        const rect = button.getBoundingClientRect();
-        const centerX = window.innerWidth / 2,
-          centerY = window.innerHeight / 2;
-        const aim = Math.hypot(dx, dy) > 20 ? aimAt(centerX + dx * 3, centerY + dy * 3) : undefined;
-        void rect;
-        controller.useAbility(Number(button.dataset.skill), aim);
-        point = null;
-        button.classList.remove('pressed');
+        if (e.pointerId !== pointer) return;
+        update(e);
+        if (index < 0) controller.fire(aim);
+        else controller.useAbility(index, aim);
+        clear();
       },
       { signal },
     );
-    button.addEventListener(
-      'pointercancel',
-      () => {
-        point = null;
-        button.classList.remove('pressed');
-      },
-      { signal },
-    );
+    for (const type of ['pointercancel', 'lostpointercapture'])
+      button.addEventListener(type, clear, { signal });
   });
-  const attack = root.querySelector<HTMLElement>('[data-attack]')!;
-  attack.addEventListener(
-    'pointerdown',
-    (e) => {
-      e.preventDefault();
-      attack.setPointerCapture(e.pointerId);
-      controller.attack = true;
-      attack.classList.add('pressed');
-    },
-    { signal },
-  );
-  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture'])
-    attack.addEventListener(
-      type,
-      () => {
-        controller.attack = false;
-        attack.classList.remove('pressed');
-      },
-      { signal },
-    );
   root.querySelector('[data-dodge]')!.addEventListener(
     'pointerdown',
     (e) => {

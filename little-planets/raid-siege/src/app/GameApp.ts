@@ -99,6 +99,9 @@ export class GameApp {
         get renderer() {
           return app.renderer;
         },
+        get input() {
+          return app.human;
+        },
         get state() {
           return app.simulation.state;
         },
@@ -199,13 +202,7 @@ export class GameApp {
     this.controlsCleanup = bindControls(
       this.root,
       this.human,
-      (x, y) => {
-        const center = this.renderer.screenPosition(this.simulation.player.position, 0);
-        return this.renderer.aimAt(
-          x - window.innerWidth / 2 + center.x,
-          y - window.innerHeight / 2 + center.y,
-        );
-      },
+      (dx, dy, index) => this.renderer.dragAim(this.simulation.player, dx, dy, index),
       () => this.pause(),
       () => this.toggleDebug(),
     );
@@ -283,6 +280,15 @@ export class GameApp {
         void this.loadWorld(true);
       }
     }
+    const preview = this.human.preview;
+    if (preview?.drag)
+      preview.aim = this.renderer.dragAim(
+        this.simulation.player,
+        preview.drag.x,
+        preview.drag.y,
+        preview.index,
+      );
+    this.renderer.setAim(this.screen === 'battle' && !this.paused ? this.human.preview : undefined);
     if (
       this.screen === 'home' ||
       this.screen === 'battle' ||

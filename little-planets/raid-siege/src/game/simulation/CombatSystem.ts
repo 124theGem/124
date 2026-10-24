@@ -236,11 +236,31 @@ export class CombatSystem {
       }
     }
   }
-  attack(e: Entity, targetId?: string) {
+  private aimedTarget(e: Entity, range: number, aim: Vec2, friendly = false) {
+    const dir = direction(e.position, aim);
+    return this.state.entities
+      .filter((t) => {
+        if (!t.alive || (friendly ? t.team !== e.team : t.team === e.team || has(t, 'stealth')))
+          return false;
+        const dx = t.position.x - e.position.x,
+          dz = t.position.z - e.position.z;
+        const along = dx * dir.x + dz * dir.z;
+        return (
+          along >= 0 &&
+          along <= range &&
+          Math.abs(dx * dir.z - dz * dir.x) <= (t.kind === 'boss' ? 1.4 : 0.85) &&
+          lineClear(e.position, t.position, this.state.map.obstacles)
+        );
+      })
+      .sort((a, b) => distance(e.position, a.position) - distance(e.position, b.position))[0];
+  }
+  attack(e: Entity, targetId?: string, aim?: Vec2) {
     if (e.attackCooldown > 0 || has(e, 'stun')) return;
-    const t = this.target(e, e.range, targetId);
-    if (!t) return;
-    const dir = direction(e.position, t.position);
+    const manual =
+      aim && Number.isFinite(aim.x) && Number.isFinite(aim.z) && distance(e.position, aim) > 0.01;
+    const t = manual ? this.aimedTarget(e, e.range, aim) : this.target(e, e.range, targetId);
+    if (!t && !manual) return;
+    const dir = direction(e.position, manual ? aim : t!.position);
     e.facing = Math.atan2(dir.x, dir.z);
     this.animate(e, 'attack');
     e.attackCooldown =
@@ -254,18 +274,17 @@ export class CombatSystem {
         team: e.team,
         position: { ...e.position },
         direction: dir,
-        speed: 19,
-        remaining: e.range / 19 + 0.2,
+        speed: 27,
+        remaining: e.range / 27,
         damage: e.attack,
-        targetId: t.id,
+        targetId: manual ? undefined : t?.id,
         color: getClass(e.classId).color,
       });
-    else this.damage(e, t, e.attack);
-    if (e.classId === 'icemage') this.effects(e, t, [{ kind: 'slow', power: 0.15, duration: 1.5 }]);
+    else if (t) this.damage(e, t, e.attack);
     this.event({
       type: 'cast',
       position: e.position,
-      target: { ...t.position },
+      target: t ? { ...t.position } : add(e.position, dir, e.range),
       color: getClass(e.classId).color,
       sourceId: e.id,
       classId: e.classId,
@@ -284,12 +303,22 @@ export class CombatSystem {
       (a.ultimate && e.ultimate < 100)
     )
       return false;
+    const manual =
+      aim &&
+      !targetId &&
+      Number.isFinite(aim.x) &&
+      Number.isFinite(aim.z) &&
+      distance(e.position, aim) > 0.01;
     let target: Entity | undefined;
     let center = { ...e.position };
     if (a.target === 'enemy' || a.target === 'ally') {
-      target = this.target(e, a.range, targetId, a.target === 'ally');
-      if (!target) return false;
-      center = { ...target.position };
+      target = manual
+        ? this.aimedTarget(e, a.range, aim, a.target === 'ally')
+        : this.target(e, a.range, targetId, a.target === 'ally');
+      if (!target && !manual) return false;
+      center = manual
+        ? add(e.position, direction(e.position, aim), Math.min(a.range, distance(e.position, aim)))
+        : { ...target!.position };
     }
     if (a.target === 'ground' || a.target === 'line') {
       target = this.target(e, Math.max(a.range, a.radius), targetId);
@@ -348,6 +377,7 @@ export class CombatSystem {
         friendly: a.target === 'team',
         color: a.color,
         telegraph: !!a.delay,
+        abilityId: a.id,
       });
     } else if (a.target === 'self') this.effects(e, e, a.effects);
     else if (a.target === 'team') {
@@ -366,17 +396,18 @@ export class CombatSystem {
         );
         if (!wasAlive && ally.alive) revived = true;
       }
-    } else if (a.type === 'projectile' && target) {
+    } else if (a.type === 'projectile' && (target || manual)) {
       this.state.projectiles.push({
         id: ++this.serial,
         source: e.id,
         team: e.team,
         position: { ...e.position },
-        direction: direction(e.position, target.position),
-        speed: 21,
-        remaining: a.range / 21 + 0.25,
+        direction: direction(e.position, manual ? aim : target!.position),
+        speed: 28,
+        remaining: a.range / 28,
         damage: 0,
-        targetId: target.id,
+        targetId: manual ? undefined : target?.id,
+        abilityId: a.id,
         color: a.color,
         effects: a.effects,
       });
@@ -452,19 +483,38 @@ export class CombatSystem {
     }
     for (const p of [...s.projectiles]) {
       const source = s.entities.find((e) => e.id === p.source);
+      const travel = Math.min(dt, p.remaining);
       p.remaining -= dt;
       const before = { ...p.position };
       const t = s.entities.find((e) => e.id === p.targetId && e.alive);
       if (t) p.direction = direction(p.position, t.position);
-      p.position = add(p.position, p.direction, p.speed * dt);
+      p.position = add(p.position, p.direction, p.speed * travel);
       if (!lineClear(before, p.position, s.map.obstacles)) p.remaining = 0;
-      if (p.remaining > 0) {
-        const hit = s.entities.find(
-          (e) => e.alive && e.team !== p.team && distance(e.position, p.position) < 0.9,
-        );
+      if (lineClear(before, p.position, s.map.obstacles)) {
+        const hit = s.entities.find((e) => {
+          if (!e.alive || e.team === p.team) return false;
+          const dx = p.position.x - before.x,
+            dz = p.position.z - before.z;
+          const length2 = dx * dx + dz * dz;
+          const t = length2
+            ? clamp(
+                ((e.position.x - before.x) * dx + (e.position.z - before.z) * dz) / length2,
+                0,
+                1,
+              )
+            : 0;
+          return (
+            distance(e.position, { x: before.x + dx * t, z: before.z + dz * t }) <
+            (e.kind === 'boss' ? 1.4 : 0.75)
+          );
+        });
         if (hit && source) {
           if (p.effects) this.effects(source, hit, p.effects);
-          else this.damage(source, hit, p.damage);
+          else {
+            this.damage(source, hit, p.damage);
+            if (source.classId === 'icemage')
+              this.effects(source, hit, [{ kind: 'slow', power: 0.15, duration: 1.5 }]);
+          }
           p.remaining = 0;
         }
       }
@@ -498,7 +548,18 @@ export class CombatSystem {
           }
           this.effects(source, e, z.effects);
         }
-        this.event({ type: 'cast', position: z.position, color: z.color, ultimate: z.telegraph });
+        // Persistent zones already have an effect; replay only the actual boss impact.
+        if (z.telegraph && !z.abilityId)
+          this.event({
+            type: 'cast',
+            position: z.position,
+            color: z.color,
+            sourceId: source.id,
+            classId: source.classId,
+            abilityId: 'boss-slam',
+            radius: z.radius,
+            facing: z.facing,
+          });
       }
     }
     s.zones = s.zones.filter((z) => z.remaining > 0);

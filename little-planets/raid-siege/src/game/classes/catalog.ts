@@ -104,9 +104,9 @@ function hero(
     attack: role === 'healer' ? 48 : 72,
     armor: role === 'tank' ? 28 : 12,
     resist: 12,
-    speed: role === 'melee' ? 5.7 : 5.2,
+    speed: role === 'melee' ? 7.2 : 6.6,
     range: ['ranged', 'healer', 'support'].includes(role) ? 8 : 2.3,
-    interval: 0.8,
+    interval: 0.58,
     ...stats,
     abilities: skills.map((s, i) => ({
       ...s,
@@ -206,7 +206,7 @@ export const CLASSES: ClassDef[] = [
       a('Скрытность', 'eye', 'self', [e('stealth', 1, 5), e('haste', 0.35, 5)], { cooldown: 18 }),
       ult(a('Казнь из тени', 'dagger', 'enemy', [damage(650), e('stun', 1, 1)], { range: 4 })),
     ],
-    { interval: 0.6 },
+    { interval: 0.46 },
   ),
   hero(
     'duelist',
@@ -239,7 +239,7 @@ export const CLASSES: ClassDef[] = [
         }),
       ),
     ],
-    { interval: 0.65 },
+    { interval: 0.5 },
   ),
   hero(
     'lancer',
@@ -315,7 +315,7 @@ export const CLASSES: ClassDef[] = [
       }),
       ult(a('Последний аргумент', 'crossbow', 'line', [damage(600)], { range: 18, radius: 1.4 })),
     ],
-    { interval: 1, attack: 90 },
+    { interval: 0.72, attack: 90 },
   ),
   hero(
     'firemage',

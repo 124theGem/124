@@ -154,6 +154,8 @@ export class ActorView {
   }
   update(entity: Entity, dt: number, time: number, alpha: number) {
     this.entity = entity;
+    if (!entity.alive && !this.deadAt) this.deadAt = time;
+    if (entity.alive) this.deadAt = 0;
     const p = entity.position,
       prev = entity.previous;
     this.root.position.set(prev.x + (p.x - prev.x) * alpha, 0, prev.z + (p.z - prev.z) * alpha);
@@ -233,14 +235,15 @@ export class ActorView {
         this.fading = undefined;
       }
     }
-    if (!entity.alive && !this.deadAt) this.deadAt = time;
-    if (entity.alive) this.deadAt = 0;
     for (const mesh of this.meshes)
       mesh.visibility = entity.statuses.some((t) => t.kind === 'stealth')
         ? 0.28
         : this.deadAt
           ? Math.max(0, 1 - (time - this.deadAt - 2) * 0.8)
           : 1;
+  }
+  isFaded(time: number) {
+    return this.deadAt > 0 && time - this.deadAt > 3.5;
   }
   get meshList() {
     return this.meshes;
