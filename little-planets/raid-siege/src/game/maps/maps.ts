@@ -90,6 +90,70 @@ function layout(mode: Mode): GameMap {
 
 export function createMap(mode: Mode): GameMap {
   const map = layout(mode);
+  map.rivers = [
+    {
+      z: mode === 'raid' ? 13 : mode === 'siege' ? 16 : -7,
+      depth: mode === 'hill' ? 4 : 5,
+      bridges: [
+        { x: -(mode === 'hill' ? 18 : mode === 'raid' ? 11 : 15), width: 5 },
+        { x: 0, width: 8 },
+        { x: mode === 'hill' ? 18 : mode === 'raid' ? 11 : 15, width: 5 },
+      ],
+    },
+  ];
+  map.castles =
+    mode === 'raid'
+      ? [{ position: { x: 0, z: 43 }, width: 22, depth: 16 }]
+      : mode === 'siege'
+        ? [{ position: { x: 0, z: 37 }, width: 26, depth: 18 }]
+        : [
+            { position: { x: -21, z: 18 }, width: 10, depth: 10 },
+            { position: { x: 21, z: -18 }, width: 10, depth: 10 },
+          ];
+  if (mode === 'hill')
+    map.obstacles = map.obstacles.filter((o) => !(o.kind === 'wall' && o.x === -21 && o.z === -7));
+  for (const river of map.rivers) {
+    let edge = -map.width / 2;
+    for (const bridge of [...river.bridges].sort((a, b) => a.x - b.x)) {
+      const left = bridge.x - bridge.width / 2;
+      if (left > edge)
+        map.obstacles.push({
+          x: (left + edge) / 2,
+          z: river.z,
+          w: left - edge,
+          d: river.depth,
+          kind: 'river',
+          landmark: true,
+        });
+      edge = bridge.x + bridge.width / 2;
+    }
+    if (edge < map.width / 2)
+      map.obstacles.push({
+        x: (edge + map.width / 2) / 2,
+        z: river.z,
+        w: map.width / 2 - edge,
+        d: river.depth,
+        kind: 'river',
+        landmark: true,
+      });
+  }
+  for (const castle of map.castles) {
+    const { x, z } = castle.position,
+      w = castle.width,
+      d = castle.depth;
+    const add = (x: number, z: number, w: number, d: number) =>
+      map.obstacles.push({ x, z, w, d, kind: 'wall', landmark: true });
+    add(x, z + d / 2, w, 1.4);
+    add(x - w / 2, z, 1.4, d);
+    add(x + w / 2, z, 1.4, d);
+    const gate = Math.min(8, w * 0.55),
+      wing = (w - gate) / 2;
+    add(x - (gate + wing) / 2, z - d / 2, wing, 1.4);
+    add(x + (gate + wing) / 2, z - d / 2, wing, 1.4);
+    for (const side of [-1, 1])
+      for (const end of [-1, 1]) add(x + (side * w) / 2, z + (end * d) / 2, 3.4, 3.4);
+  }
+
   for (const landmark of map.landmarks ?? []) {
     const { x, z } = landmark.position,
       r = landmark.radius;

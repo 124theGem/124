@@ -1,3 +1,4 @@
+import { Camera } from '@babylonjs/core/Cameras/camera';
 import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
@@ -142,6 +143,7 @@ export class WorldRenderer {
     this.ready = false;
     this.environmentMap = state.map;
     this.mode = menu ? 'menu' : 'battle';
+    this.updateCameraProjection();
     this.environment?.dispose();
     for (const a of this.actors.values()) a.dispose();
     this.actors.clear();
@@ -226,6 +228,7 @@ export class WorldRenderer {
   }
   setMenu(menu: boolean) {
     this.mode = menu ? 'menu' : 'battle';
+    this.updateCameraProjection();
   }
   setQuality(q: Quality) {
     this.quality = q;
@@ -252,13 +255,29 @@ export class WorldRenderer {
     this.engine.setHardwareScalingLevel(1 / ratio);
     // Babylon's camera projection must use the same aspect as the CSS canvas.
     this.engine.resize();
+    this.updateCameraProjection();
+  }
+  private updateCameraProjection() {
+    if (this.mode === 'menu') {
+      this.camera.mode = Camera.PERSPECTIVE_CAMERA;
+      this.camera.beta = 1.0;
+      return;
+    }
+    this.camera.mode = Camera.ORTHOGRAPHIC_CAMERA;
+    this.camera.beta = 0.6;
+    const aspect = this.canvas.clientWidth / Math.max(1, this.canvas.clientHeight);
+    const halfHeight = aspect > 1.8 ? 7.5 : 9.5;
+    this.camera.orthoLeft = -halfHeight * aspect;
+    this.camera.orthoRight = halfHeight * aspect;
+    this.camera.orthoTop = halfHeight;
+    this.camera.orthoBottom = -halfHeight;
   }
   render(state: MatchState, dt: number, alpha = 1) {
     const hero = state.entities.find((e) => e.controller === 'HUMAN_LOCAL')!;
     const target = new Vector3(
       hero.position.x + (this.mode === 'menu' ? -3.8 : 0),
       1,
-      hero.position.z + (this.mode === 'menu' ? -3 : 2.8),
+      hero.position.z + (this.mode === 'menu' ? -3 : -1.2),
     );
     Vector3.LerpToRef(this.follow, target, 1 - Math.exp(-dt * 5), this.follow);
     this.camera.setTarget(this.follow);

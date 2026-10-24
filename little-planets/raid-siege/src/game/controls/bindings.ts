@@ -121,7 +121,7 @@ export function bindControls(
     for (const type of ['pointercancel', 'lostpointercapture'])
       button.addEventListener(type, clear, { signal });
   });
-  root.querySelector('[data-dodge]')!.addEventListener(
+  root.querySelector('[data-dodge]')?.addEventListener(
     'pointerdown',
     (e) => {
       e.preventDefault();

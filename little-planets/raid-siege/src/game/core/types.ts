@@ -154,7 +154,7 @@ export interface Obstacle {
   z: number;
   w: number;
   d: number;
-  kind: 'wall' | 'pillar' | 'rock';
+  kind: 'wall' | 'pillar' | 'rock' | 'river';
   landmark?: boolean;
 }
 export interface GameMap {
@@ -163,6 +163,8 @@ export interface GameMap {
   width: number;
   depth: number;
   obstacles: Obstacle[];
+  rivers?: { z: number; depth: number; bridges: { x: number; width: number }[] }[];
+  castles?: { position: Vec2; width: number; depth: number }[];
   landmarks?: {
     name: string;
     kind: 'gate' | 'garden' | 'fountain' | 'altar' | 'camp';
