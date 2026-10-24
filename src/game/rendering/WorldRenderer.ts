@@ -14,6 +14,7 @@ import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation';
 import '@babylonjs/core/Culling/ray';
+import '@babylonjs/core/Rendering/edgesRenderer';
 import { Plane } from '@babylonjs/core/Maths/math.plane';
 import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imageProcessingConfiguration';
 import { AimView } from './AimView';
