@@ -1,9 +1,9 @@
 {
   "schema": 1,
-  "release": 28,
-  "version": "0.25.0",
-  "commit": "b3e5cedd23bab6418e79828b9d899b3325171a2a",
-  "archive": "little-planets-server-v0250.tar.gz",
-  "sha256": "97ce79a64c5b319356f9cddc7829b26b719770a96f3d9b8d1bcd2407cc8d4c48",
+  "release": 29,
+  "version": "0.26.0",
+  "commit": "ac669b6c0cd658dd9b4fdfa01061b0d103ff0ad5",
+  "archive": "little-planets-server-v0260.tar.gz",
+  "sha256": "b4b7ed79bbf6e3257622abf67ed9089d3a972b08337b2ed4dd20051b550c715a",
   "enabled": true
 }
