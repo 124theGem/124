@@ -343,7 +343,7 @@ export class CombatVfx {
     });
   }
   private slash(p: Vec2, facing: number, color: string, radius = 2.2, delay = 0, spin = false) {
-    this.visual(0.52 + delay, (root, materials) => {
+    this.visual(0.78 + delay, (root, materials) => {
       root.position.copyFrom(point(p, 0.9));
       root.rotation.y = facing;
       const mat = this.material('weapon-trail', color, 0.9);
@@ -371,7 +371,7 @@ export class CombatVfx {
       blade.material = mat;
       return (age, t) => {
         root.setEnabled(age >= delay);
-        const u = Math.max(0, (age - delay) / 0.52);
+        const u = Math.max(0, (age - delay) / 0.78);
         root.rotation.y = facing + (spin ? u * Math.PI * 2 : (u - 0.5) * 0.65);
         root.scaling.setAll(0.75 + Math.min(1, u) * 0.3);
         mat.alpha = 0.95 * (1 - Math.min(1, u));
@@ -379,7 +379,7 @@ export class CombatVfx {
     });
   }
   private beam(from: Vec2, to: Vec2, color: string, lightning = false) {
-    this.visual(lightning ? 0.65 : 0.4, (root, materials) => {
+    this.visual(lightning ? 0.9 : 0.65, (root, materials) => {
       const mat = this.material(lightning ? 'lightning' : 'beam', color, 0.95);
       materials.push(mat);
       const path: Vector3[] = [];
@@ -441,7 +441,7 @@ export class CombatVfx {
     radius: number,
     duration: number,
   ) {
-    this.visual(rain ? Math.min(5.5, duration || 3) : 0.75, (root, materials) => {
+    this.visual(rain ? Math.min(5.5, duration || 3) : 1.1, (root, materials) => {
       const mat = this.material('enchanted-arrows', color, 1);
       materials.push(mat);
       const arrows: { mesh: Mesh; offset: number; end: Vector3 }[] = [];
@@ -465,8 +465,8 @@ export class CombatVfx {
       return (age, t) => {
         for (const arrow of arrows) {
           const local = rain ? (((age - arrow.offset) % 1.3) + 1.3) % 1.3 : age - arrow.offset;
-          arrow.mesh.setEnabled(age >= arrow.offset && local < 0.6);
-          const f = Math.min(1, Math.max(0, local / 0.6));
+          arrow.mesh.setEnabled(age >= arrow.offset && local < 0.9);
+          const f = Math.min(1, Math.max(0, local / 0.9));
           const start = rain ? arrow.end.add(new Vector3(-2, 10, -1)) : point(from, 1.4);
           Vector3.LerpToRef(start, arrow.end, f, arrow.mesh.position);
           const d = arrow.end.subtract(start);
@@ -576,7 +576,7 @@ export class CombatVfx {
       radius = Math.max(1.2, a.radius || 2),
       facing = event.facing ?? 0;
     const source = state.entities.find((e) => e.id === event.sourceId);
-    const life = a.duration ? Math.min(8, a.duration) : event.ultimate ? 1.7 : 0.85;
+    const life = a.duration ? Math.min(8, a.duration) : event.ultimate ? 2.2 : 1.25;
     this.burst(origin, c.color, event.ultimate ? 24 : 10, 1.1);
     if (a.delay && style !== 'meteor' && event.delay !== 0) {
       const delay = event.delay ?? a.delay;

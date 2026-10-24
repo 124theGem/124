@@ -78,16 +78,17 @@ export function bindControls(
         dy = e.clientY - origin.y;
       const length = Math.hypot(dx, dy),
         scale = Math.min(1, 42 / Math.max(1, length));
-      aim = length > 10 ? aimAt(dx, dy, index) : undefined;
-      controller.preview = { index, aim, drag: length > 10 ? { x: dx, y: dy } : undefined };
+      controller.pointAim(index, dx, dy);
+      controller.smoothAim(1 / 120, aimAt);
+      aim = controller.preview?.aim;
       button.style.setProperty('--aim-x', `${dx * scale}px`);
       button.style.setProperty('--aim-y', `${dy * scale}px`);
-      button.classList.toggle('aiming', length > 10);
+      button.classList.toggle('aiming', length > 20);
     };
     const clear = () => {
       pointer = null;
       aim = undefined;
-      if (controller.preview?.index === index) controller.preview = undefined;
+      controller.clearAim(index);
       button.classList.remove('pressed', 'aiming');
       button.style.removeProperty('--aim-x');
       button.style.removeProperty('--aim-y');

@@ -8,6 +8,7 @@ export class HumanController implements Controller {
   private dodge = false;
   private shot = false;
   preview: { index: number; aim?: Vec2; drag?: { x: number; y: number } } | undefined;
+  private aimTarget?: { x: number; y: number };
   aim: Vec2 | undefined;
   keys = new Set<string>();
   reset() {
@@ -17,8 +18,32 @@ export class HumanController implements Controller {
     this.dodge = false;
     this.shot = false;
     this.preview = undefined;
+    this.aimTarget = undefined;
     this.keys.clear();
     this.aim = undefined;
+  }
+  pointAim(index: number, x: number, y: number) {
+    if (!this.preview || this.preview.index !== index) this.preview = { index };
+    this.aimTarget = Math.hypot(x, y) > 20 ? { x, y } : undefined;
+    if (!this.aimTarget) {
+      this.preview.drag = undefined;
+      this.preview.aim = undefined;
+    }
+  }
+  smoothAim(dt: number, project: (x: number, y: number, index: number) => Vec2 | undefined) {
+    if (!this.preview || !this.aimTarget) return;
+    const prev = this.preview.drag ?? { x: 0, y: 0 };
+    const blend = 1 - Math.exp(-Math.max(0, dt) / 0.085);
+    this.preview.drag = {
+      x: prev.x + (this.aimTarget.x - prev.x) * blend,
+      y: prev.y + (this.aimTarget.y - prev.y) * blend,
+    };
+    this.preview.aim = project(this.preview.drag.x, this.preview.drag.y, this.preview.index);
+  }
+  clearAim(index: number) {
+    if (this.preview?.index !== index) return;
+    this.preview = undefined;
+    this.aimTarget = undefined;
   }
   useAbility(index: number, aim?: Vec2) {
     this.ability = index;

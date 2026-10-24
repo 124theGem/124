@@ -208,11 +208,11 @@ export class ActorView {
         const nativeDuration = (next.to - next.from) / fps;
         const visualDuration =
           entity.animation === 'ultimate'
-            ? 1.05
+            ? 1.55
             : entity.animation.startsWith('skill')
-              ? 0.6
+              ? 1.0
               : entity.animation === 'attack'
-                ? 0.48
+                ? Math.min(0.74, entity.interval * 0.96)
                 : 0.4;
         const speed = looping
           ? entity.animation === 'run'
@@ -227,7 +227,7 @@ export class ActorView {
       this.serial = entity.animationSerial;
     }
     if (this.blend < 1) {
-      this.blend = Math.min(1, this.blend + dt * 14);
+      this.blend = Math.min(1, this.blend + dt * 10);
       this.active?.setWeightForAllAnimatables(this.blend);
       this.fading?.setWeightForAllAnimatables(1 - this.blend);
       if (this.blend === 1) {

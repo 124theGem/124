@@ -280,14 +280,9 @@ export class GameApp {
         void this.loadWorld(true);
       }
     }
-    const preview = this.human.preview;
-    if (preview?.drag)
-      preview.aim = this.renderer.dragAim(
-        this.simulation.player,
-        preview.drag.x,
-        preview.drag.y,
-        preview.index,
-      );
+    this.human.smoothAim(dt, (x, y, index) =>
+      this.renderer.dragAim(this.simulation.player, x, y, index),
+    );
     this.renderer.setAim(this.screen === 'battle' && !this.paused ? this.human.preview : undefined);
     if (
       this.screen === 'home' ||
@@ -387,6 +382,10 @@ export class GameApp {
                 : 'Захватите нейтральную точку',
       );
     }
+    const landmark = s.map.landmarks
+      ?.filter((l) => distance(l.position, p.position) < l.radius + 7)
+      .sort((a, b) => distance(a.position, p.position) - distance(b.position, p.position))[0];
+    text('zone-name', landmark?.name ?? s.map.name);
     text('player-hp', `${Math.ceil(p.hp)} / ${p.maxHp}`);
     width('hp-fill', (p.hp / p.maxHp) * 100);
     width('shield-fill', (p.shield / p.maxHp) * 100);
@@ -426,6 +425,10 @@ export class GameApp {
       const charge = i === 3 && p.ultimate < 100;
       button.classList.toggle('on-cooldown', cooldown > 0 || charge);
       button.classList.toggle('no-resource', p.resource < abilities[i].cost);
+      button.style.setProperty(
+        '--readiness',
+        `${i === 3 ? p.ultimate : 100 * (1 - cooldown / abilities[i].cooldown)}%`,
+      );
       button.classList.toggle('ready', i === 3 && p.ultimate >= 100 && cooldown <= 0);
       button.querySelector('.cooldown')!.textContent =
         cooldown > 0 ? Math.ceil(cooldown).toString() : charge ? `${Math.floor(p.ultimate)}%` : '';

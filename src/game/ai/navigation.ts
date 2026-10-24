@@ -8,14 +8,8 @@ export function navigable(map: GameMap, p: Vec2, pad = 0.5) {
   );
 }
 export function waypoint(map: GameMap, from: Vec2, to: Vec2): Vec2 {
-  if (
-    lineClear(
-      from,
-      to,
-      map.obstacles.map((o) => ({ ...o, w: o.w + 1, d: o.d + 1 })),
-    )
-  )
-    return to;
+  const blockers = map.obstacles.map((o) => ({ ...o, w: o.w + 1, d: o.d + 1 }));
+  if (lineClear(from, to, blockers)) return to;
   const size = 2,
     key = (p: Vec2) => `${p.x},${p.z}`;
   const start = { x: Math.round(from.x / size), z: Math.round(from.z / size) },
@@ -49,11 +43,7 @@ export function waypoint(map: GameMap, from: Vec2, to: Vec2): Vec2 {
       if (
         closed.has(key(next)) ||
         !navigable(map, world, 0.75) ||
-        !lineClear(
-          curWorld,
-          world,
-          map.obstacles.map((o) => ({ ...o, w: o.w + 1, d: o.d + 1 })),
-        )
+        !lineClear(curWorld, world, blockers)
       )
         continue;
       const n = cost.get(key(current))! + Math.hypot(dx, dz);

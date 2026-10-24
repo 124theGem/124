@@ -10,7 +10,7 @@ export function finish(s: MatchState, winner: Team | 'draw') {
       e.animation = 'victory';
       e.animationSerial++;
     }
-  if (s.mode === 'raid' && winner === 'A') s.chest = { x: 0, z: 27 };
+  if (s.mode === 'raid' && winner === 'A') s.chest = { ...s.map.spawns.B };
 }
 export function safeSpawn(s: MatchState, team: 'A' | 'B'): Vec2 {
   let base = s.map.spawns[team];

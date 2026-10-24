@@ -7,7 +7,7 @@ import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { PointLight } from '@babylonjs/core/Lights/pointLight';
-import { VertexBuffer } from '@babylonjs/core/Buffers/buffer';
+import { buildLandmarks } from './Landmarks';
 import type { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture';
 import type { GameMap, Vec2 } from '../core/types';
 import { seeded } from '../core/math';
@@ -40,7 +40,9 @@ export class Environment {
     ground.receiveShadows = true;
     const mat = new PBRMaterial('foundation-stone', this.scene);
     this.ownedMaterials.push(mat);
-    mat.albedoColor = Color3.FromHexString('#384544');
+    mat.albedoColor = Color3.FromHexString(
+      map.id === 'titan-sanctuary' ? '#487b64' : map.id === 'ash-fortress' ? '#62535b' : '#5a7567',
+    ).toLinearSpace();
     mat.roughness = 1;
     ground.material = mat;
     const names = [
@@ -54,6 +56,12 @@ export class Environment {
       'torch_lit',
       'banner_blue',
       'chest_gold',
+      'banner_red',
+      'column',
+      'stairs_wide',
+      'barrel_large',
+      'chest',
+      'floor_tile_small_broken_A',
     ];
     await Promise.all(names.map((n) => this.assets.load(n)));
     if (this.disposed) return;
@@ -66,15 +74,22 @@ export class Environment {
     floor.metallic = 0.04;
     floor.albedoColor.setAll(1);
     this.ownedMaterials.push(floor);
-    for (const mesh of (await this.assets.load('floor_tile_large')).meshes) {
-      const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
-      if (!positions) continue;
-      const uv: number[] = [];
-      for (let i = 0; i < positions.length; i += 3)
-        uv.push(positions[i] / 4 + 0.5, positions[i + 2] / 4 + 0.5);
-      mesh.setVerticesData(VertexBuffer.UVKind, uv);
-      mesh.material = floor;
-    }
+    stoneMaps.albedo.uScale = stoneMaps.normal.uScale = map.width / 4;
+    stoneMaps.albedo.vScale = stoneMaps.normal.vScale = map.depth / 4;
+    if (map.id === 'titan-sanctuary')
+      floor.albedoColor = Color3.FromHexString('#b1d5bf').toLinearSpace();
+    if (map.id === 'ash-fortress')
+      floor.albedoColor = Color3.FromHexString('#d4aeaa').toLinearSpace();
+    const paving = MeshBuilder.CreateGround(
+      'continuous-flagstone-arena',
+      { width: map.width, height: map.depth },
+      this.scene,
+    );
+    paving.parent = this.root;
+    paving.position.y = -0.04;
+    paving.material = floor;
+    paving.receiveShadows = true;
+    paving.isPickable = false;
     const place = async (
       name: string,
       x: number,
@@ -102,10 +117,8 @@ export class Environment {
       return r;
     };
     const jobs: Promise<unknown>[] = [];
-    for (let x = -map.width / 2 + 2; x < map.width / 2; x += 4)
-      for (let z = -map.depth / 2 + 2; z < map.depth / 2; z += 4)
-        jobs.push(place('floor_tile_large', x, z, 1, 1, 1, random() > 0.5 ? Math.PI : 0));
     for (const o of map.obstacles) {
+      if (o.landmark) continue;
       if (o.kind === 'pillar') jobs.push(place('pillar_decorated', o.x, o.z, 0.75, 1.1, 0.75));
       else if (o.kind === 'rock') jobs.push(place('rubble_large', o.x, o.z, 1.4, 1.4, 1.4));
       else
@@ -198,31 +211,9 @@ export class Environment {
           gem.rotation.z = side * 0.2;
           gem.material = gemMat;
         }
-    // A raised rune dais and concentric inlays establish the destination.
-    const z = map.points[0]?.z ?? 25;
-    const stone = MeshBuilder.CreateCylinder(
-      'dais',
-      { diameter: 11, height: 0.16, tessellation: 64 },
-      this.scene,
-    );
-    stone.parent = this.root;
-    stone.position.set(0, -0.025, z);
-    stone.material = mat;
-    stone.receiveShadows = true;
-    for (const diameter of [9, 10.4]) {
-      const ring = MeshBuilder.CreateTorus(
-        'inlay',
-        { diameter, thickness: 0.035, tessellation: 80 },
-        this.scene,
-      );
-      ring.parent = this.root;
-      ring.position.set(0, 0.07, z);
-      const rmat = new StandardMaterial('rune', this.scene);
-      this.ownedMaterials.push(rmat);
-      rmat.emissiveColor = Color3.FromHexString('#7d9f98').scale(0.5);
-      rmat.diffuseColor = Color3.FromHexString('#829d93');
-      ring.material = rmat;
-    }
+    const landmarks = await buildLandmarks(this.scene, this.root, map, place);
+    this.ownedMaterials.push(...landmarks.materials);
+    this.textures.push(...landmarks.textures);
     await Promise.all(jobs);
   }
   update(time: number, focus?: Vec2) {

@@ -157,7 +157,14 @@ export class Simulation {
   private spawnRaidStage() {
     const s = this.state;
     if (s.stage === 4) {
-      const b = makeEntity('boss', 'guardian', 'PVE', { x: 0, z: 27 }, 'BOT', 'Хранитель руин');
+      const b = makeEntity(
+        'boss',
+        'guardian',
+        'PVE',
+        { ...s.map.spawns.B },
+        'BOT',
+        'Хранитель руин',
+      );
       b.kind = 'boss';
       b.maxHp = b.hp = 22000;
       b.interval = 1.1;
@@ -169,7 +176,7 @@ export class Simulation {
       s.entities.push(b);
       return;
     }
-    const z = [-20, -11, 4, 15][s.stage];
+    const z = [-31, -16, 7, 25][s.stage];
     for (let i = 0; i < 3 + (s.stage === 3 ? 1 : 0); i++) {
       const m = makeEntity(
         `monster-${this.monsterId++}`,
