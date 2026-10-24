@@ -3942,3 +3942,106 @@ body {
     min-height: 48px;
   }
 }
+
+/* Thumb zones: movement left, attack right, super and dodge below the attack. */
+.battle-hud .combat-controls {
+  --attack-size: clamp(72px, 18vh, 100px);
+  --super-size: clamp(60px, 15vh, 78px);
+  --aux-size: clamp(38px, 10vh, 48px);
+  position: absolute;
+  display: block;
+  width: 236px;
+  height: clamp(178px, 50vh, 228px);
+  right: max(24px, var(--safe-right));
+  bottom: calc(24px + var(--safe-bottom));
+  pointer-events: none;
+}
+.battle-hud .skill-buttons {
+  display: contents;
+}
+.battle-hud .combat-controls button {
+  position: absolute;
+  pointer-events: auto;
+  margin: 0;
+}
+.battle-hud .attack-button {
+  width: var(--attack-size);
+  height: var(--attack-size);
+  right: 0;
+  bottom: clamp(58px, 16vh, 80px);
+  border-radius: 50%;
+}
+.battle-hud .attack-button > svg {
+  width: 42%;
+  height: 42%;
+}
+.battle-hud .attack-button > small {
+  font-size: 5px;
+  bottom: 13%;
+}
+.battle-hud .ultimate-button {
+  width: var(--super-size);
+  height: var(--super-size);
+  right: calc(var(--attack-size) * 0.92);
+  bottom: 0;
+  top: auto;
+  left: auto;
+  border-radius: 50%;
+}
+.battle-hud .ultimate-button > svg {
+  width: 46%;
+  height: 46%;
+}
+.battle-hud .dodge-button {
+  width: clamp(44px, 12vh, 56px);
+  height: clamp(44px, 12vh, 56px);
+  right: 6px;
+  bottom: 0;
+  top: auto;
+  background: radial-gradient(circle at 35% 25%, #a0fb8e, #35bd66 78%);
+  border: 3px solid #187244;
+  border-radius: 50%;
+  box-shadow: 0 4px 0 #155c39;
+}
+.battle-hud .dodge-button > small {
+  display: none;
+}
+.battle-hud .skill-button:not(.ultimate-button) {
+  width: var(--aux-size);
+  height: var(--aux-size);
+  border-radius: 50%;
+  bottom: auto;
+  right: auto;
+}
+.battle-hud [data-skill='0'] {
+  left: 0;
+  top: 45px;
+}
+.battle-hud [data-skill='1'] {
+  left: 47px;
+  top: 14px;
+}
+.battle-hud [data-skill='2'] {
+  left: 97px;
+  top: 0;
+}
+.battle-hud .skill-button:not(.ultimate-button):after {
+  border-radius: 50%;
+}
+.battle-hud .joystick {
+  width: clamp(96px, 26vh, 132px);
+  height: clamp(96px, 26vh, 132px);
+  left: max(32px, var(--safe-left));
+  bottom: calc(30px + var(--safe-bottom));
+}
+.battle-hud .joystick:before {
+  width: 68%;
+  height: 68%;
+}
+.battle-hud .joystick-knob {
+  width: 42%;
+  height: 42%;
+}
+.battle-hud .joystick > small {
+  display: none;
+}

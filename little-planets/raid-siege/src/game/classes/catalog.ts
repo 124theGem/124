@@ -104,7 +104,7 @@ function hero(
     attack: role === 'healer' ? 48 : 72,
     armor: role === 'tank' ? 28 : 12,
     resist: 12,
-    speed: role === 'melee' ? 7.2 : 6.6,
+    speed: role === 'melee' ? 5.04 : 4.62,
     range: ['ranged', 'healer', 'support'].includes(role) ? 8 : 2.3,
     interval: 0.58,
     ...stats,
