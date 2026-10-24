@@ -451,7 +451,8 @@ export class WorldRenderer {
     const world = this.aimAt(center.x + dx, center.y + dy);
     if (!world) return undefined;
     const spec = aimSpec(hero, index);
-    const magnitude = spec.shape === 'area' ? Math.min(1, Math.hypot(dx, dy) / 70) : 1;
+    const pull = Math.min(1, Math.hypot(dx, dy) / 110);
+    const magnitude = spec.shape === 'area' ? pull * pull * (3 - 2 * pull) : 1;
     const end = add(
       hero.position,
       direction(hero.position, world),

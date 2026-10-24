@@ -262,7 +262,7 @@ export class CombatSystem {
     if (!t && !manual) return;
     const dir = direction(e.position, manual ? aim : t!.position);
     e.facing = Math.atan2(dir.x, dir.z);
-    this.animate(e, 'attack');
+    this.animate(e, 'attack', Math.min(0.8, e.interval));
     e.attackCooldown =
       (e.interval / (1 + strength(e, 'haste'))) *
       (e.classId === 'duelist' && e.combo % 3 === 2 ? 0.75 : 1);
@@ -274,8 +274,8 @@ export class CombatSystem {
         team: e.team,
         position: { ...e.position },
         direction: dir,
-        speed: 27,
-        remaining: e.range / 27,
+        speed: 18,
+        remaining: e.range / 18,
         damage: e.attack,
         targetId: manual ? undefined : t?.id,
         color: getClass(e.classId).color,
@@ -340,7 +340,7 @@ export class CombatSystem {
     this.animate(
       e,
       (['skill1', 'skill2', 'skill3', 'ultimate'] as const)[index],
-      a.ultimate ? 1.1 : 0.65,
+      a.ultimate ? 1.6 : 1.05,
     );
     if (distance(e.position, center) > 0.2) {
       const dir = direction(e.position, center);
@@ -403,8 +403,8 @@ export class CombatSystem {
         team: e.team,
         position: { ...e.position },
         direction: direction(e.position, manual ? aim : target!.position),
-        speed: 28,
-        remaining: a.range / 28,
+        speed: 19,
+        remaining: a.range / 19,
         damage: 0,
         targetId: manual ? undefined : target?.id,
         abilityId: a.id,

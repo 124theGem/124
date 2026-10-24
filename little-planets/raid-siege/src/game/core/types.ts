@@ -155,6 +155,7 @@ export interface Obstacle {
   w: number;
   d: number;
   kind: 'wall' | 'pillar' | 'rock';
+  landmark?: boolean;
 }
 export interface GameMap {
   id: string;
@@ -162,6 +163,12 @@ export interface GameMap {
   width: number;
   depth: number;
   obstacles: Obstacle[];
+  landmarks?: {
+    name: string;
+    kind: 'gate' | 'garden' | 'fountain' | 'altar' | 'camp';
+    position: Vec2;
+    radius: number;
+  }[];
   spawns: Record<'A' | 'B', Vec2>;
   points: Vec2[];
 }
