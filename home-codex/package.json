@@ -1,0 +1,14 @@
+{
+  "name": "home-codex",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "bash start.sh",
+    "setup": "bash configure.sh",
+    "test": "node --test tests/*.test.mjs"
+  }
+}
