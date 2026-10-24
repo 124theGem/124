@@ -647,8 +647,10 @@ export class GameApp {
       return;
     }
     if (target.dataset.mode) {
+      const scrollTop = this.root.querySelector('.menu-screen')?.scrollTop ?? 0;
       this.mode = target.dataset.mode as Mode;
       void this.showHome();
+      this.root.querySelector('.menu-screen')?.scrollTo(0, scrollTop);
       return;
     }
     if (target.dataset.ally !== undefined) {

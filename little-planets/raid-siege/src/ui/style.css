@@ -3876,3 +3876,69 @@ body {
     display: none !important;
   }
 }
+
+/* Menus own native scrolling; the combat canvas only owns combat gestures. */
+#app .menu-screen {
+  pointer-events: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+.menu-screen .home-main {
+  flex: 1 0 auto;
+  min-height: min-content;
+}
+.menu-screen .menu-footer {
+  min-height: calc(39px + var(--safe-bottom));
+}
+@media (orientation: landscape) and (max-height: 560px) {
+  .menu-screen .topbar {
+    height: auto;
+    min-height: calc(54px + var(--safe-top));
+    padding: calc(8px + var(--safe-top)) max(16px, var(--safe-right)) 8px
+      max(16px, var(--safe-left));
+  }
+  .menu-screen .home-main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 190px;
+    gap: 14px 20px;
+    margin: 0;
+    padding: 12px max(16px, var(--safe-right)) 16px max(16px, var(--safe-left));
+  }
+  .menu-screen .chapter {
+    display: none;
+  }
+  .menu-screen .expedition {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+  }
+  .menu-screen .hero-copy {
+    grid-row: 2;
+    margin: 0;
+    max-width: 100%;
+  }
+  .menu-screen .party-panel {
+    position: static;
+    grid-row: 2;
+    width: auto;
+    align-self: start;
+  }
+  .menu-screen .mode-grid {
+    gap: 8px;
+  }
+  .menu-screen .mode-info h3 {
+    font-size: 16px;
+  }
+  .menu-screen .embark-row {
+    gap: 12px;
+  }
+  .menu-screen .embark {
+    flex-shrink: 0;
+    min-height: 48px;
+  }
+}

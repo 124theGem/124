@@ -51,6 +51,9 @@ export class WorldRenderer {
   private markerMat: StandardMaterial;
   private instrumentation: SceneInstrumentation;
   private mode: 'menu' | 'battle' = 'menu';
+  private resizeObserver: ResizeObserver;
+  private resizeCanvas = () => this.syncCanvasSize();
+  private canvasSize = { width: 0, height: 0, dpr: 0 };
   private quality: Quality = 'medium';
   private follow = new Vector3(0, 1, -24);
   private lastEvent = 0;
@@ -120,10 +123,10 @@ export class WorldRenderer {
     this.instrumentation = new SceneInstrumentation(this.scene);
     this.instrumentation.captureFrameTime = true;
     this.setQuality('medium');
-    window.addEventListener('resize', () => {
-      this.setQuality(this.quality);
-      this.engine.resize();
-    });
+    this.resizeObserver = new ResizeObserver(this.resizeCanvas);
+    this.resizeObserver.observe(canvas);
+    window.addEventListener('resize', this.resizeCanvas);
+    window.visualViewport?.addEventListener('resize', this.resizeCanvas);
   }
   private material(name: string, color: string, alpha = 1) {
     const m = new StandardMaterial(name, this.scene);
@@ -225,17 +228,29 @@ export class WorldRenderer {
   }
   setQuality(q: Quality) {
     this.quality = q;
-    const ratio = renderPixelRatio(
-      q,
-      window.devicePixelRatio,
-      this.canvas.clientWidth,
-      this.canvas.clientHeight,
-    );
-    this.engine.setHardwareScalingLevel(1 / ratio);
+    this.syncCanvasSize(true);
     this.vfx.quality = q;
     this.shadow.getShadowMap()?.resize(q === 'high' ? 2048 : 1024);
     this.scene.shadowsEnabled = q !== 'low';
     this.glow.isEnabled = q !== 'low';
+  }
+  private syncCanvasSize(force = false) {
+    const width = this.canvas.clientWidth,
+      height = this.canvas.clientHeight,
+      dpr = window.devicePixelRatio || 1;
+    if (!width || !height) return;
+    if (
+      !force &&
+      width === this.canvasSize.width &&
+      height === this.canvasSize.height &&
+      dpr === this.canvasSize.dpr
+    )
+      return;
+    this.canvasSize = { width, height, dpr };
+    const ratio = renderPixelRatio(this.quality, dpr, width, height);
+    this.engine.setHardwareScalingLevel(1 / ratio);
+    // Babylon's camera projection must use the same aspect as the CSS canvas.
+    this.engine.resize();
   }
   render(state: MatchState, dt: number, alpha = 1) {
     const hero = state.entities.find((e) => e.controller === 'HUMAN_LOCAL')!;
@@ -538,6 +553,9 @@ export class WorldRenderer {
     }
   }
   dispose() {
+    this.resizeObserver.disconnect();
+    window.removeEventListener('resize', this.resizeCanvas);
+    window.visualViewport?.removeEventListener('resize', this.resizeCanvas);
     for (const a of this.actors.values()) a.dispose();
     this.dormantBoss?.dispose();
     this.aimView.dispose();
