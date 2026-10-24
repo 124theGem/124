@@ -564,12 +564,32 @@ export class CombatVfx {
       this.burst(to, '#ffc857', 45);
       return;
     }
+    if (event.abilityId === 'demolitionist-mine' || event.abilityId === 'paladin-block') {
+      this.burst(to, event.color, event.abilityId === 'paladin-block' ? 12 : 38, 0.5);
+      if (event.abilityId === 'demolitionist-mine')
+        this.sculpt('fire-eruption', to, '#ffb45b', event.radius ?? 2, 0.65);
+      return;
+    }
     const c = getClass(event.classId ?? 'guardian'),
       index = c.abilities.findIndex((a) => a.id === event.abilityId),
       a = c.abilities[index];
     if (!a) {
       if (event.sourceId && c.range <= 5)
         this.slash(origin, event.facing ?? 0, c.color, Math.min(3, c.range));
+      return;
+    }
+    if (event.castStage === 'windup') {
+      this.burst(origin, c.color, event.ultimate ? 18 : 8, 1.2, true);
+      return;
+    }
+    if (a.delivery === 'wall' || a.delivery === 'seeker') return;
+    if (a.delivery === 'repulse') {
+      this.sculpt('holy-shield', origin, c.color, 1.5, 1, event.facing, event.sourceId);
+      return;
+    }
+    if (a.delivery === 'jump') {
+      this.sculpt('boss-slam', to, c.color, a.radius, 1.2, event.facing);
+      this.burst(to, '#ffdca1', 65, 0.3);
       return;
     }
     const style = skillVisual(c.id, index)!,
@@ -592,8 +612,18 @@ export class CombatVfx {
       return;
     }
     if (a.type === 'projectile') return; // The real simulated projectile supplies travel and impact.
+    if (style === 'volley' && event.castStage === 'impact') {
+      this.sculpt('spear-rain', to, c.color, radius, 0.8);
+      this.burst(to, c.color, 28);
+      return;
+    }
     if (style === 'arrow-rain' || style === 'volley') {
       this.arrows(origin, to, c.color, style === 'arrow-rain', radius, a.duration);
+      return;
+    }
+    if (style === 'meteor' && event.castStage === 'impact') {
+      this.sculpt('fire-eruption', to, c.color, radius, 1.2);
+      this.burst(to, '#ffad42', 65);
       return;
     }
     if (style === 'meteor') {

@@ -1,4 +1,5 @@
 const paths: Record<string, string> = {
+  bomb: 'M13 7a8 8 0 1 0 4 3l-4-3Zm1-1 3-3 4 4-3 3M18 2l1-2m3 8 2-1M6 11l-2 4',
   sword: 'm15 3 6-1-1 6L9 19l-4-4ZM4 14l6 6M3 21l4-4',
   swords: 'm3 3 3 1 14 14-2 2L4 6Zm18 0-3 1-6 6m-2 4-6 6-2-2 6-6M2 16l6 6m8-2 4-4',
   shield: 'M12 3 3 7v6c0 5 9 9 9 9s9-4 9-9V7ZM8 12l3 3 5-6',

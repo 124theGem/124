@@ -70,6 +70,29 @@ export function equipClassAccessories(
     blade.position.y = 0.2 + 0.55 * scale;
     blade.material = metal;
   };
+  if (c.weapon === 'bombs')
+    for (const slot of [right, left].filter(Boolean) as TransformNode[]) {
+      const body = MeshBuilder.CreateSphere('hand-bomb', { diameter: 0.35, segments: 10 }, scene);
+      body.parent = slot;
+      body.position.y = 0.1;
+      body.material = metal;
+      const band = MeshBuilder.CreateTorus(
+        'hand-bomb-band',
+        { diameter: 0.34, thickness: 0.035, tessellation: 12 },
+        scene,
+      );
+      band.parent = slot;
+      band.position.y = 0.1;
+      band.material = magic;
+      const fuse = MeshBuilder.CreateCylinder(
+        'hand-bomb-fuse',
+        { height: 0.18, diameter: 0.035, tessellation: 6 },
+        scene,
+      );
+      fuse.parent = slot;
+      fuse.position.y = 0.34;
+      fuse.material = magic;
+    }
   if (c.weapon === 'swords') {
     sword(right);
     if (left) sword(left, 0.85);

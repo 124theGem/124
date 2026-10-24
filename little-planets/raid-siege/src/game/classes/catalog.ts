@@ -1,3 +1,4 @@
+import { COMBAT_SPEED, combatDuration } from '../core/tempo';
 import type { AbilityDef, ClassDef, EffectSpec, Role } from '../core/types';
 const e = (kind: EffectSpec['kind'], power: number, duration?: number): EffectSpec => ({
   kind,
@@ -40,7 +41,8 @@ const ult = (s: AbilityDef) => ({
   sound: 'ultimate',
 });
 const skillClips: Record<string, string[]> = {
-  guardian: ['Block_Attack', 'Spellcast_Raise', 'Spellcast_Long', 'Spellcast_Raise'],
+  demolitionist: ['Spellcast_Shoot', 'Spellcast_Raise', 'Spellcast_Shoot', 'Spellcast_Long'],
+  guardian: ['Block_Attack', 'Spellcast_Raise', 'Spellcast_Long', 'Dodge_Forward'],
   berserker: [
     '2H_Melee_Attack_Slice',
     '2H_Melee_Attack_Chop',
@@ -104,12 +106,13 @@ function hero(
     attack: role === 'healer' ? 48 : 72,
     armor: role === 'tank' ? 28 : 12,
     resist: 12,
-    speed: role === 'melee' ? 5.04 : 4.62,
+    speed: (role === 'melee' ? 5.04 : 4.62) * COMBAT_SPEED,
     range: ['ranged', 'healer', 'support'].includes(role) ? 8 : 2.3,
-    interval: 0.82,
+    interval: combatDuration(0.82),
     ...stats,
     abilities: skills.map((s, i) => ({
       ...s,
+      cooldown: combatDuration(s.cooldown),
       id: `${id}-${i + 1}`,
       animation: skillClips[id]?.[i] ?? s.animation,
       color,
@@ -118,13 +121,64 @@ function hero(
         s.effects
           .map(
             (f) =>
-              `${{ damage: 'Урон', heal: 'Лечение', shield: 'Щит', stun: 'Оглушение', slow: 'Замедление', root: 'Корни', poison: 'Яд', burn: 'Горение', defense: 'Защита', power: 'Сила', haste: 'Скорость', stealth: 'Скрытность', weakness: 'Ослабление', taunt: 'Провокация', invulnerable: 'Неуязвимость', cleanse: 'Очищение', revive: 'Возрождение', dash: 'Рывок', blink: 'Теневой шаг', knockback: 'Отбрасывание', summon: 'Призыв', reset: 'Перезарядка' }[f.kind]} ${f.power}${f.duration ? ` · ${f.duration} с` : ''}`,
+              `${{ damage: 'Урон', heal: 'Лечение', shield: 'Щит', stun: 'Оглушение', slow: 'Замедление', root: 'Корни', poison: 'Яд', burn: 'Горение', defense: 'Защита', power: 'Сила', haste: 'Скорость', stealth: 'Скрытность', weakness: 'Ослабление', taunt: 'Провокация', invulnerable: 'Неуязвимость', cleanse: 'Очищение', revive: 'Возрождение', dash: 'Рывок', blink: 'Теневой шаг', knockback: 'Отбрасывание', summon: 'Призыв', reset: 'Перезарядка', barrier: 'Защитная стена' }[f.kind]} ${f.power}${f.duration ? ` · ${f.duration} с` : ''}`,
           )
           .join(' / '),
     })) as ClassDef['abilities'],
   };
 }
 export const CLASSES: ClassDef[] = [
+  hero(
+    'demolitionist',
+    'Минёр',
+    'Мастер живых мин',
+    'ranged',
+    '#ffb45b',
+    'bomb',
+    'Rogue',
+    'bombs',
+    'Кассетный арсенал: обычная атака разбрасывает три взводящиеся мины.',
+    [
+      a('Кассетный залп', 'bomb', 'ground', [damage(105)], {
+        range: 14,
+        radius: 3.8,
+        cooldown: 10,
+        cost: 22,
+        delivery: 'mines',
+        mineCount: 6,
+        description:
+          'Бросает кассету из 6 мин. Каждая взводится за 0,5 с и взрывается при приближении врага или через 5 с.',
+      }),
+      a('Последний рубеж', 'burst', 'self', [e('invulnerable', 1, 1)], {
+        cooldown: 18,
+        cost: 20,
+        delivery: 'repulse',
+        ai: 'defense',
+        description:
+          'На 1 с становится неуязвимым, затем отбрасывает врагов взрывом на 4 м и наносит 150 урона.',
+      }),
+      a('Минное поле', 'target', 'ground', [damage(85)], {
+        range: 12,
+        radius: 4.5,
+        cooldown: 16,
+        cost: 25,
+        delivery: 'mines',
+        mineCount: 8,
+        description:
+          'Оставляет на выбранном участке 8 отдельных мин, которые взрываются при приближении противника.',
+      }),
+      ult(
+        a('Самоходный заряд', 'skull', 'self', [damage(440)], {
+          delivery: 'seeker',
+          ai: 'offense',
+          description:
+            'Выпускает управляемый заряд с 260 HP: он ищет врага до 8 с и взрывается рядом с ним. Заряд можно уничтожить.',
+        }),
+      ),
+    ],
+    { hp: 780, attack: 120, range: 14, interval: combatDuration(1.6) },
+  ),
+
   hero(
     'guardian',
     'Страж',
@@ -148,9 +202,13 @@ export const CLASSES: ClassDef[] = [
       }),
       a('Железная защита', 'armor', 'self', [e('defense', 0.65, 5)], { cooldown: 16 }),
       ult(
-        a('Несокрушимая крепость', 'fortress', 'team', [e('defense', 0.6, 8), e('shield', 240)], {
-          radius: 12,
-          duration: 8,
+        a('Прыжок титана', 'meteor', 'ground', [damage(320), e('stun', 1, 3)], {
+          range: 16,
+          radius: 5.5,
+          delivery: 'jump',
+          arenaDuration: 5,
+          description:
+            'Дальний прыжок: 320 урона при приземлении, оглушение врагов на 3 с и арена на 5 с. Через границу арены нельзя выйти.',
         }),
       ),
     ],
@@ -206,7 +264,7 @@ export const CLASSES: ClassDef[] = [
       a('Скрытность', 'eye', 'self', [e('stealth', 1, 5), e('haste', 0.35, 5)], { cooldown: 18 }),
       ult(a('Казнь из тени', 'dagger', 'enemy', [damage(650), e('stun', 1, 1)], { range: 4 })),
     ],
-    { interval: 0.64 },
+    { interval: combatDuration(0.64) },
   ),
   hero(
     'duelist',
@@ -239,7 +297,7 @@ export const CLASSES: ClassDef[] = [
         }),
       ),
     ],
-    { interval: 0.7 },
+    { interval: combatDuration(0.7) },
   ),
   hero(
     'lancer',
@@ -315,7 +373,7 @@ export const CLASSES: ClassDef[] = [
       }),
       ult(a('Последний аргумент', 'crossbow', 'line', [damage(600)], { range: 18, radius: 1.4 })),
     ],
-    { interval: 1, attack: 90 },
+    { interval: combatDuration(1), attack: 90 },
   ),
   hero(
     'firemage',
@@ -460,8 +518,14 @@ export const CLASSES: ClassDef[] = [
     'Аура веры: союзники в 7 метрах получают на 10% меньше урона.',
     [
       a('Священный удар', 'sword', 'enemy', [damage(185)], { range: 3 }),
-      a('Благословение защиты', 'shield', 'ally', [e('defense', 0.4, 6), e('shield', 100)], {
-        range: 10,
+      a('Стена клятвы', 'shield', 'line', [e('barrier', 1, 5)], {
+        range: 3,
+        radius: 4.5,
+        cooldown: 14,
+        delivery: 'wall',
+        ai: 'defense',
+        description:
+          'На 5 с создаёт перед паладином щитовую стену шириной 9 м. Защищает союзников от атак с фронта; её можно обойти.',
       }),
       a('Исцеляющий свет', 'heart', 'ally', [e('heal', 220)], { range: 10, cooldown: 8 }),
       ult(
@@ -544,4 +608,4 @@ export const CLASS_BY_ID = Object.fromEntries(CLASSES.map((c) => [c.id, c])) as 
   string,
   ClassDef
 >;
-export const getClass = (id: string) => CLASS_BY_ID[id] ?? CLASSES[0];
+export const getClass = (id: string) => CLASS_BY_ID[id] ?? CLASS_BY_ID.guardian;

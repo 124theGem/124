@@ -6,6 +6,8 @@ import {
   type Mode,
   type Vec2,
 } from '../core/types';
+import { arenaAllowsMove } from './defenses';
+import { COMBAT_SPEED, combatDuration } from '../core/tempo';
 import { add, direction, distance } from '../core/math';
 import { createMap } from '../maps/maps';
 import { addHero, makeEntity } from '../teams/roster';
@@ -144,13 +146,16 @@ export class Simulation {
           b = alive[j],
           d = distance(a.position, b.position),
           r = a.kind === 'boss' || b.kind === 'boss' ? 1.6 : 0.85;
-        if (d < r && d > 0.001) {
-          const dir = direction(b.position, a.position),
+        if (!a.leap && !b.leap && d < r) {
+          const dir =
+              d > 0.001 ? direction(b.position, a.position) : { x: a.id < b.id ? -1 : 1, z: 0 },
             delta = (r - d) * 0.45;
           const pa = add(a.position, dir, delta),
             pb = add(b.position, dir, -delta);
-          if (navigable(this.state.map, pa)) a.position = pa;
-          if (navigable(this.state.map, pb)) b.position = pb;
+          if (navigable(this.state.map, pa) && arenaAllowsMove(this.state, a.position, pa))
+            a.position = pa;
+          if (navigable(this.state.map, pb) && arenaAllowsMove(this.state, b.position, pb))
+            b.position = pb;
         }
       }
   }
@@ -167,10 +172,10 @@ export class Simulation {
       );
       b.kind = 'boss';
       b.maxHp = b.hp = 22000;
-      b.interval = 1.1;
+      b.interval = combatDuration(1.1);
       b.attack = 115;
       b.range = 3.5;
-      b.speed = 2.7;
+      b.speed = 2.7 * COMBAT_SPEED;
       b.armor = 30;
       b.ultimate = 0;
       s.entities.push(b);
@@ -189,10 +194,10 @@ export class Simulation {
       m.kind = 'monster';
       m.hp = m.maxHp = s.stage === 3 ? 650 : 340 + s.stage * 70;
       m.attack = 35 + s.stage * 7;
-      m.speed = 3;
+      m.speed = 3 * COMBAT_SPEED;
       m.range = i === 2 ? 8 : 2;
       m.armor = 8;
-      m.interval = 0.95;
+      m.interval = combatDuration(0.95);
       m.ultimate = 0;
       s.entities.push(m);
     }
@@ -250,20 +255,23 @@ export class Simulation {
         }
     }
     if (phase === 3) {
-      b.interval = 0.65;
-      b.speed = 3.4;
+      b.interval = combatDuration(0.65);
+      b.speed = 3.4 * COMBAT_SPEED;
     }
-    if (s.tick % (phase === 3 ? 95 : 150) === 0) {
+    if (has(b, 'stun')) return;
+    const interval = Math.round((phase === 3 ? 95 : 150) / COMBAT_SPEED),
+      coneBeat = Math.floor(s.tick / interval) % 2 === 0;
+    if (s.tick % interval === 0) {
       const t = this.combat.target(b, 14);
       if (!t) return;
       s.zones.push({
         id: ++this.combat.serial,
         source: b.id,
         team: 'PVE',
-        position: phase === 1 && s.tick % 300 !== 0 ? { ...t.position } : { ...b.position },
+        position: phase === 1 && !coneBeat ? { ...t.position } : { ...b.position },
         radius: phase === 1 ? 3.5 : phase === 2 ? 5 : 6.5,
         remaining: 0.1,
-        delay: 1.3,
+        delay: combatDuration(1.3),
         tick: 0,
         effects: [
           { kind: 'damage', power: phase === 3 ? 320 : 210 },
@@ -272,7 +280,7 @@ export class Simulation {
         friendly: false,
         color: '#ec7856',
         telegraph: true,
-        shape: phase === 1 && s.tick % 300 === 0 ? 'cone' : 'circle',
+        shape: phase === 1 && coneBeat ? 'cone' : 'circle',
         facing: Math.atan2(t.position.x - b.position.x, t.position.z - b.position.z),
         arc: Math.PI / 2,
       });
@@ -284,7 +292,7 @@ export class Simulation {
           position: { ...t.position },
           radius: 3,
           remaining: 0.1,
-          delay: 1.8,
+          delay: combatDuration(1.8),
           tick: 0,
           effects: [{ kind: 'damage', power: 240 }],
           friendly: false,

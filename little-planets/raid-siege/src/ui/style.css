@@ -4708,3 +4708,8 @@ body {
   border-width: 1px;
   box-shadow: 0 2px 0 #132a4566;
 }
+
+.mission-strip {
+  top: max(env(safe-area-inset-top), var(--tg-viewport-safe-area-inset-top, 0px));
+  border-radius: 0 0 3px 3px;
+}

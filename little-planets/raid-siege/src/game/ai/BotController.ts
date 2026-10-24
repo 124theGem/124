@@ -23,6 +23,7 @@ export class BotController implements Controller {
   }
   sample(s: Readonly<MatchState>): Command {
     const me = s.entities.find((e) => e.id === this.actorId);
+    if (me?.seeker) return { actorId: this.actorId };
     if (!me || !me.alive) {
       if (me) me.aiState = 'Dead';
       return { actorId: this.actorId };

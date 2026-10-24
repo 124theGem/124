@@ -8,6 +8,7 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import '@babylonjs/core/Rendering/outlineRenderer';
+import { combatDuration } from '../core/tempo';
 import type { Entity } from '../core/types';
 import { getClass } from '../classes/catalog';
 import { AssetLibrary } from '../rendering/assets';
@@ -44,8 +45,14 @@ export class ActorView {
     public entity: Entity,
   ) {
     this.root = new TransformNode(entity.id, scene);
+    this.root.position.set(entity.position.x, 0, entity.position.z);
+    this.root.rotation.y = entity.facing;
   }
   async load() {
+    if (this.entity.seeker) {
+      this.buildSeeker();
+      return;
+    }
     const e = this.entity,
       c = getClass(e.classId),
       model =
@@ -80,7 +87,7 @@ export class ActorView {
             ? /2h.*axe|axe.*2h/
             : c.weapon === 'daggers'
               ? /knife|dagger/
-              : ['swords', 'spear', 'bow', 'lute', 'totem'].includes(c.weapon)
+              : ['swords', 'spear', 'bow', 'lute', 'totem', 'bombs'].includes(c.weapon)
                 ? /^never-enable-source$/
                 : c.weapon === 'crossbow'
                   ? /2h.*crossbow/
@@ -152,13 +159,96 @@ export class ActorView {
     }
     this.ready = true;
   }
+  private buildSeeker() {
+    const shell = new StandardMaterial('seeker-iron', this.scene);
+    shell.diffuseColor = Color3.FromHexString('#334354');
+    shell.specularColor = Color3.FromHexString('#b1c4c9');
+    const brass = new StandardMaterial('seeker-bronze', this.scene);
+    brass.diffuseColor = Color3.FromHexString('#d3b06a');
+    const glow = new StandardMaterial('seeker-eyes', this.scene);
+    glow.emissiveColor = Color3.FromHexString('#ff9f4c');
+    glow.disableLighting = true;
+    const body = MeshBuilder.CreateSphere(
+      'seeking-charge-body',
+      { diameter: 1.2, segments: 12 },
+      this.scene,
+    );
+    body.parent = this.root;
+    body.position.y = 0.9;
+    body.material = shell;
+    const band = MeshBuilder.CreateTorus(
+      'seeker-bronze-band',
+      { diameter: 1.18, thickness: 0.09, tessellation: 20 },
+      this.scene,
+    );
+    band.parent = this.root;
+    band.position.y = 0.9;
+    band.material = brass;
+    for (const side of [-1, 1]) {
+      const eye = MeshBuilder.CreateBox(
+        'seeker-eye',
+        { width: 0.19, height: 0.15, depth: 0.09 },
+        this.scene,
+      );
+      eye.parent = this.root;
+      eye.position.set(side * 0.22, 1.02, 0.53);
+      eye.material = glow;
+      const wheel = MeshBuilder.CreateSphere(
+        'seeker-wheel',
+        { diameter: 0.45, segments: 8 },
+        this.scene,
+      );
+      wheel.parent = this.root;
+      wheel.position.set(side * 0.48, 0.24, 0);
+      wheel.scaling.x = 0.5;
+      wheel.material = brass;
+    }
+    const fuse = MeshBuilder.CreateCylinder(
+      'seeker-fuse',
+      { height: 0.32, diameter: 0.12, tessellation: 8 },
+      this.scene,
+    );
+    fuse.parent = this.root;
+    fuse.position.y = 1.6;
+    fuse.material = glow;
+    const teamMat = new StandardMaterial('seeker-team-marker', this.scene);
+    teamMat.emissiveColor = Color3.FromHexString(this.entity.team === 'A' ? '#42c8f5' : '#ff637e');
+    teamMat.alpha = 0.6;
+    const marker = MeshBuilder.CreateDisc(
+      'seeker-team-disc',
+      { radius: 0.66, tessellation: 20 },
+      this.scene,
+    );
+    marker.parent = this.root;
+    marker.rotation.x = Math.PI / 2;
+    marker.position.y = 0.035;
+    marker.material = teamMat;
+    this.meshes = this.root.getChildMeshes();
+    for (const m of this.meshes) m.isPickable = false;
+    this.ready = true;
+  }
   update(entity: Entity, dt: number, time: number, alpha: number) {
     this.entity = entity;
     if (!entity.alive && !this.deadAt) this.deadAt = time;
     if (entity.alive) this.deadAt = 0;
     const p = entity.position,
       prev = entity.previous;
-    this.root.position.set(prev.x + (p.x - prev.x) * alpha, 0, prev.z + (p.z - prev.z) * alpha);
+    const leap = entity.leap,
+      progress = leap ? Math.max(0, (leap.elapsed - (1 - alpha) / 30) / leap.duration) : 0;
+    const height = leap
+      ? Math.sin(Math.PI * progress) *
+        Math.min(
+          7,
+          3 +
+            Math.hypot(leap.destination.x - leap.origin.x, leap.destination.z - leap.origin.z) *
+              0.18,
+        )
+      : 0;
+    this.root.position.set(
+      prev.x + (p.x - prev.x) * alpha,
+      height,
+      prev.z + (p.z - prev.z) * alpha,
+    );
     const angle = entity.facing;
     const delta = Math.atan2(
       Math.sin(angle - this.root.rotation.y),
@@ -179,6 +269,7 @@ export class ActorView {
             : c.weapon === 'daggers' || c.weapon === 'swords'
               ? 'Dualwield_Melee_Attack_Slice'
               : aliases.attack;
+    if (entity.animation === 'attack' && c.weapon === 'bombs') animation = 'Spellcast_Shoot';
     if (entity.animation.startsWith('skill') || entity.animation === 'ultimate') {
       const index = entity.animation === 'ultimate' ? 3 : Number(entity.animation.slice(-1)) - 1;
       animation = c.abilities[index]?.animation ?? animation;
@@ -207,13 +298,14 @@ export class ActorView {
         const fps = next.targetedAnimations[0]?.animation.framePerSecond || 60;
         const nativeDuration = (next.to - next.from) / fps;
         const visualDuration =
-          entity.animation === 'ultimate'
-            ? 1.55
+          entity.leap?.duration ??
+          (entity.animation === 'ultimate'
+            ? combatDuration(1.55)
             : entity.animation.startsWith('skill')
-              ? 1.0
+              ? combatDuration(1.0)
               : entity.animation === 'attack'
-                ? Math.min(0.74, entity.interval * 0.96)
-                : 0.4;
+                ? Math.min(combatDuration(0.74), entity.interval * 0.96)
+                : 0.4);
         const speed = looping
           ? entity.animation === 'run'
             ? entity.speed / 5
