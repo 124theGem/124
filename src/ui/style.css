@@ -15,9 +15,19 @@
   --muted: #8e9e9e;
   --panel: #14242be8;
   --border: #d1c9a320;
-  --safe-top: max(env(safe-area-inset-top), var(--tg-viewport-content-safe-area-inset-top, 0px));
+  --safe-top: max(
+    env(safe-area-inset-top),
+    var(--tg-viewport-safe-area-inset-top, 0px),
+    var(--tg-viewport-content-safe-area-inset-top, 0px)
+  );
+  --safe-left: max(env(safe-area-inset-left), var(--tg-viewport-content-safe-area-inset-left, 0px));
+  --safe-right: max(
+    env(safe-area-inset-right),
+    var(--tg-viewport-content-safe-area-inset-right, 0px)
+  );
   --safe-bottom: max(
     env(safe-area-inset-bottom),
+    var(--tg-viewport-safe-area-inset-bottom, 0px),
     var(--tg-viewport-content-safe-area-inset-bottom, 0px)
   );
 }
@@ -1479,7 +1489,7 @@ select {
 }
 .joystick {
   position: absolute;
-  left: max(48px, env(safe-area-inset-left));
+  left: max(48px, var(--safe-left));
   bottom: calc(43px + var(--safe-bottom));
   width: 125px;
   height: 125px;
@@ -1537,7 +1547,7 @@ select {
 }
 .combat-controls {
   position: absolute;
-  right: max(28px, env(safe-area-inset-right));
+  right: max(28px, var(--safe-right));
   bottom: calc(32px + var(--safe-bottom));
   display: flex;
   gap: 18px;
@@ -3795,4 +3805,74 @@ select {
 .ult-label {
   font-size: 7px;
   letter-spacing: 1px;
+}
+
+/* Action buttons are independent aiming sticks; release fires, a tap auto-aims. */
+[data-attack] > svg,
+[data-skill] > svg {
+  transform: translate(var(--aim-x, 0px), var(--aim-y, 0px));
+  pointer-events: none;
+}
+[data-attack].aiming,
+[data-skill].aiming {
+  overflow: visible;
+  outline: 3px solid #edfbffbb;
+  box-shadow: 0 0 0 17px #d4faff22;
+}
+.ultimate-button.aiming {
+  outline-color: #ffe24c;
+}
+
+#landscape-gate {
+  display: none;
+}
+html,
+body {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100dvh;
+}
+#landscape-gate button {
+  background: #ffcf32;
+  color: #192145;
+  padding: 14px 26px;
+  border-radius: 16px;
+  font-weight: 800;
+  margin-top: 20px;
+}
+@media (orientation: portrait) and (max-width: 900px) {
+  #landscape-gate {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 28px;
+    background: radial-gradient(ellipse at top, #208bed, #13387e);
+    color: white;
+    touch-action: manipulation;
+  }
+  #landscape-gate h1 {
+    font-size: 30px;
+    font-weight: 800;
+    margin: 14px 0;
+  }
+  #landscape-gate p {
+    color: #d0edff;
+    font-size: 15px;
+  }
+  .rotate-device {
+    font-size: 98px;
+    line-height: 1;
+    color: #ffcf32;
+  }
+}
+@media (orientation: landscape) {
+  .rotate-hint {
+    display: none !important;
+  }
 }

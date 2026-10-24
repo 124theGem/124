@@ -63,6 +63,11 @@ test('retina clarity, moving skill bones, replayed casts, and VFX surviving skip
     r.render(sim.state, 1 / 30, 1);
     return {
       metrics: r.metrics,
+      aimRoundTrip: (() => {
+        const pixel = r.screenPosition(hero.position, 0),
+          world = r.aimAt(pixel.x, pixel.y);
+        return Math.hypot(world.x - hero.position.x, world.z - hero.position.z);
+      })(),
       guardianShields: r.actors
         .get('A1')
         .meshList.filter((m: any) => m.isEnabled() && /shield/i.test(m.name)).length,
@@ -73,6 +78,7 @@ test('retina clarity, moving skill bones, replayed casts, and VFX surviving skip
       arrows: r.scene.meshes.filter((m: any) => m.name === 'skill-arrow').length,
     };
   });
+  expect(result.aimRoundTrip).toBeLessThan(0.01);
   expect(result.guardianShields).toBe(1);
   expect(result.metrics.renderWidth).toBeGreaterThanOrEqual(844);
   expect(result.metrics.pixelRatio).toBe(1.5);

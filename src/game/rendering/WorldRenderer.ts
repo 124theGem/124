@@ -13,8 +13,13 @@ import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator'
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { SceneInstrumentation } from '@babylonjs/core/Instrumentation/sceneInstrumentation';
+import '@babylonjs/core/Culling/ray';
 import { Plane } from '@babylonjs/core/Maths/math.plane';
 import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imageProcessingConfiguration';
+import { AimView } from './AimView';
+import { aimSpec, clippedAim } from '../controls/aim';
+import { direction, add } from '../core/math';
+import { makeEntity } from '../teams/roster';
 import { CombatVfx } from './CombatVfx';
 import { FrameEvents, renderPixelRatio } from './RenderQuality';
 import { ActorView } from '../animation/ActorView';
@@ -34,6 +39,11 @@ export class WorldRenderer {
   private zoneViews = new Map<number, Mesh>();
   private pointViews: Mesh[] = [];
   private vfx: CombatVfx;
+  private aimView: AimView;
+  private environmentMap?: MatchState['map'];
+  private aimPreview?: { index: number; aim?: Vec2 };
+  private dormantBoss?: ActorView;
+  private retired = new Set<string>();
   private pendingEvents = new FrameEvents<GameEvent>();
   private shadow: ShadowGenerator;
   private glow: GlowLayer;
@@ -104,6 +114,7 @@ export class WorldRenderer {
     });
     this.glow.intensity = 0.3;
     this.vfx = new CombatVfx(this.scene);
+    this.aimView = new AimView(this.scene);
     this.markerMat = this.material('player-ring', '#a8d8cc', 0.8);
     this.assets = new AssetLibrary(this.scene);
     this.instrumentation = new SceneInstrumentation(this.scene);
@@ -125,10 +136,14 @@ export class WorldRenderer {
   async load(state: MatchState, menu = false) {
     const generation = ++this.generation;
     this.ready = false;
+    this.environmentMap = state.map;
     this.mode = menu ? 'menu' : 'battle';
     this.environment?.dispose();
     for (const a of this.actors.values()) a.dispose();
     this.actors.clear();
+    this.retired.clear();
+    this.dormantBoss?.dispose();
+    this.dormantBoss = undefined;
     for (const m of [
       ...this.projectiles.values(),
       ...this.zoneViews.values(),
@@ -156,6 +171,20 @@ export class WorldRenderer {
       ...state.entities.map((e) => this.addActor(e)),
     ]);
     if (generation !== this.generation) return;
+    if (state.mode === 'raid' && !menu) {
+      // Decode, instantiate the rig, and compile its materials during the loading screen.
+      const boss = makeEntity('boss', 'guardian', 'PVE', { x: 0, z: 27 }, 'BOT');
+      boss.kind = 'boss';
+      this.dormantBoss = new ActorView(this.scene, this.assets, boss);
+      await this.dormantBoss.load();
+      await Promise.all(
+        this.dormantBoss.meshList
+          .filter((m) => m.isEnabled() && m.material)
+          .map((m) => m.material!.forceCompilationAsync(m)),
+      );
+      this.dormantBoss.root.setEnabled(false);
+    }
+    if (generation !== this.generation) return;
     this.selected = MeshBuilder.CreateTorus(
       'local-selection',
       { diameter: 1.8, thickness: 0.025, tessellation: 48 },
@@ -177,9 +206,13 @@ export class WorldRenderer {
   }
   private async addActor(e: Entity) {
     if (this.actors.has(e.id)) return;
-    const view = new ActorView(this.scene, this.assets, e);
+    const prepared = e.kind === 'boss' ? this.dormantBoss : undefined;
+    const view = prepared ?? new ActorView(this.scene, this.assets, e);
     this.actors.set(e.id, view);
-    await view.load();
+    if (prepared) {
+      this.dormantBoss = undefined;
+      view.entity = e;
+    } else await view.load();
     for (const mesh of view.meshList) this.shadow.addShadowCaster(mesh);
   }
   async showcase(e: Entity) {
@@ -219,6 +252,13 @@ export class WorldRenderer {
     for (const e of state.entities) {
       const view = this.actors.get(e.id);
       if (view) {
+        if (!e.alive && e.kind !== 'hero' && view.isFaded(state.time)) {
+          for (const mesh of view.meshList) this.shadow.removeShadowCaster(mesh);
+          view.dispose();
+          this.actors.delete(e.id);
+          this.retired.add(e.id);
+          continue;
+        }
         view.root.setEnabled(this.mode === 'battle' || e.team === 'A');
         view.update(e, dt, state.time, alpha);
         if (this.mode === 'menu' && e.team === 'A') {
@@ -231,7 +271,8 @@ export class WorldRenderer {
           view.root.rotation.y = Math.PI + 0.15;
           view.root.scaling.setAll(slot ? 1.1 : 1.6);
         } else view.root.scaling.setAll(1);
-      } else void this.addActor(e).catch((error) => this.onError?.(String(error)));
+      } else if (!this.retired.has(e.id))
+        void this.addActor(e).catch((error) => this.onError?.(String(error)));
     }
     if (this.selected) {
       this.selected.position.x = hero.position.x;
@@ -243,20 +284,56 @@ export class WorldRenderer {
       if (!mesh) {
         const caster = state.entities.find((e) => e.id === p.source);
         const magic = caster ? getClass(caster.classId).model === 'Mage' : false;
+        const ice = caster?.classId === 'icemage' || p.abilityId === 'archer-2';
+        const fire = caster?.classId === 'firemage';
+        const special = !!p.abilityId;
         mesh = new Mesh('projectile-root', this.scene);
-        const mat = this.material('visible-projectile', magic || p.effects ? p.color : '#fff0a2');
-        if (magic) {
+        const mat = this.material(
+          'visible-projectile',
+          ice ? '#9af4ff' : fire ? '#ffad32' : magic || p.effects ? p.color : '#fff0a2',
+        );
+        if (ice) {
+          const lance = MeshBuilder.CreateCylinder(
+            'flying-ice-lance',
+            { height: special ? 1.7 : 0.9, diameterBottom: 0.42, diameterTop: 0, tessellation: 4 },
+            this.scene,
+          );
+          lance.parent = mesh;
+          lance.material = mat;
+          for (const side of [-1, 1]) {
+            const shard = MeshBuilder.CreateCylinder(
+              'frost-bolt-shard',
+              { height: 0.65, diameterBottom: 0.18, diameterTop: 0, tessellation: 4 },
+              this.scene,
+            );
+            shard.parent = mesh;
+            shard.material = mat;
+            shard.position.x = side * 0.24;
+            shard.position.y = -0.25;
+          }
+        } else if (magic) {
           const core = MeshBuilder.CreateSphere(
             'magic-bolt-core',
-            { diameter: 0.44, segments: 10 },
+            { diameter: special ? 0.75 : 0.44, segments: 8 },
             this.scene,
           );
           core.material = mat;
           core.parent = mesh;
+          if (fire)
+            for (let i = 0; i < 3; i++) {
+              const flame = MeshBuilder.CreateCylinder(
+                'fireball-flame',
+                { height: 1.3, diameterTop: 0.42, diameterBottom: 0, tessellation: 5 },
+                this.scene,
+              );
+              flame.parent = mesh;
+              flame.material = mat;
+              flame.position.set(Math.sin(i * 2.1) * 0.2, -0.55, Math.cos(i * 2.1) * 0.2);
+            }
         } else {
           const shaft = MeshBuilder.CreateCylinder(
             'arrow-shaft',
-            { height: 0.95, diameter: 0.065, tessellation: 6 },
+            { height: special ? 1.4 : 0.95, diameter: special ? 0.11 : 0.065, tessellation: 5 },
             this.scene,
           );
           shaft.parent = mesh;
@@ -342,12 +419,29 @@ export class WorldRenderer {
         this.lastEvent = event.id;
       }
     this.vfx.update(dt, state);
+    this.aimView.update(this.mode === 'battle' ? this.aimPreview : undefined, hero, state);
     this.environment?.update(state.time, hero.position);
     this.scene.animationTimeScale = Math.min(
       1,
       dt / Math.max(0.001, this.engine.getDeltaTime() / 1000),
     );
     this.scene.render();
+  }
+  setAim(preview?: { index: number; aim?: Vec2 }) {
+    this.aimPreview = preview;
+  }
+  dragAim(hero: Entity, dx: number, dy: number, index: number): Vec2 | undefined {
+    const center = this.screenPosition(hero.position, 0);
+    const world = this.aimAt(center.x + dx, center.y + dy);
+    if (!world) return undefined;
+    const spec = aimSpec(hero, index);
+    const magnitude = spec.shape === 'area' ? Math.min(1, Math.hypot(dx, dy) / 70) : 1;
+    const end = add(
+      hero.position,
+      direction(hero.position, world),
+      Math.max(0.1, spec.range * magnitude),
+    );
+    return clippedAim(hero.position, end, this.environmentMap!);
   }
   enqueueEvents(events: readonly GameEvent[]) {
     this.pendingEvents.push(events);
@@ -357,13 +451,19 @@ export class WorldRenderer {
   }
   private createZoneMesh(z: Zone) {
     if (z.shape !== 'cone') {
-      const ring = MeshBuilder.CreateTorus(
-        'area',
-        { diameter: z.radius * 2, thickness: z.telegraph ? 0.11 : 0.06, tessellation: 64 },
+      const area = MeshBuilder.CreateDisc(
+        'area-footprint',
+        { radius: z.radius, tessellation: 32, sideOrientation: Mesh.DOUBLESIDE },
         this.scene,
       );
-      ring.material = this.material('area-mat', z.telegraph ? '#ff755d' : z.color, 0.7);
-      return ring;
+      area.rotation.x = Math.PI / 2;
+      area.material = this.material(
+        'area-mat',
+        z.telegraph && z.delay > 0 ? '#ff5d42' : z.color,
+        z.telegraph ? 0.24 : 0.08,
+      );
+      area.isPickable = false;
+      return area;
     }
     const mesh = new Mesh('cone-warning', this.scene),
       data = new VertexData();
@@ -402,12 +502,7 @@ export class WorldRenderer {
     };
   }
   aimAt(x: number, y: number): Vec2 | undefined {
-    const ray = this.scene.createPickingRay(
-      (x / this.canvas.clientWidth) * this.engine.getRenderWidth(),
-      (y / this.canvas.clientHeight) * this.engine.getRenderHeight(),
-      Matrix.Identity(),
-      this.camera,
-    );
+    const ray = this.scene.createPickingRay(x, y, Matrix.Identity(), this.camera);
     const t = ray.intersectsPlane(new Plane(0, 1, 0, 0));
     if (t === null) return;
     const p = ray.origin.add(ray.direction.scale(t));
@@ -444,6 +539,8 @@ export class WorldRenderer {
   }
   dispose() {
     for (const a of this.actors.values()) a.dispose();
+    this.dormantBoss?.dispose();
+    this.aimView.dispose();
     this.vfx.dispose();
     this.instrumentation.dispose();
     this.environment?.dispose();

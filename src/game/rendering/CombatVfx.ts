@@ -10,6 +10,7 @@ import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { GameEvent, MatchState, Vec2 } from '../core/types';
 import type { Quality } from './WorldRenderer';
+import { skillVisual } from './skillVisuals';
 import { getClass } from '../classes/catalog';
 
 interface SpellVisual {
@@ -28,6 +29,9 @@ export class CombatVfx {
   private shields = new Map<string, Mesh>();
   private sprite: DynamicTexture;
   private serial = 0;
+  private burstIndex = 0;
+  private templates = new Map<string, Mesh>();
+  private palette = new Map<string, StandardMaterial>();
   quality: Quality = 'medium';
   constructor(private scene: Scene) {
     this.sprite = new DynamicTexture(
@@ -46,6 +50,8 @@ export class CombatVfx {
     ctx.fillRect(0, 0, 64, 64);
     this.sprite.hasAlpha = true;
     this.sprite.update();
+    // Four reusable emitters, including hit sparks. No shader/system allocation on contact.
+    for (let i = 0; i < 4; i++) this.makeEmitter();
   }
   private material(name: string, color: string, alpha = 1) {
     const mat = new StandardMaterial(`vfx-${name}-${this.serial++}`, this.scene);
@@ -90,40 +96,251 @@ export class CombatVfx {
       };
     });
   }
-  private burst(p: Vec2, color: string, count = 30, y = 0.8, upward = false) {
-    if (this.particles.size >= (this.quality === 'low' ? 5 : 10)) return;
-    const ps = new ParticleSystem(
-      `spell-burst-${this.serial++}`,
-      Math.min(count * 2, 160),
-      this.scene,
-    );
+  private makeEmitter() {
+    const ps = new ParticleSystem(`pooled-combat-sparks-${this.particles.size}`, 192, this.scene);
     ps.particleTexture = this.sprite;
-    ps.emitter = point(p, y);
-    ps.minEmitBox.set(-0.25, -0.1, -0.25);
-    ps.maxEmitBox.set(0.25, 0.2, 0.25);
-    const c = Color3.FromHexString(color);
-    ps.color1 = new Color4(c.r, c.g, c.b, 1);
-    ps.color2 = new Color4(1, 0.95, 0.8, 0.8);
-    ps.colorDead = new Color4(c.r, c.g, c.b, 0);
-    ps.minSize = 0.07;
-    ps.maxSize = 0.3;
-    ps.minLifeTime = 0.25;
-    ps.maxLifeTime = 0.85;
+    ps.emitter = new Vector3();
+    ps.minEmitBox.set(-0.2, -0.1, -0.2);
+    ps.maxEmitBox.set(0.2, 0.2, 0.2);
+    ps.minSize = 0.08;
+    ps.maxSize = 0.24;
+    ps.minLifeTime = 0.2;
+    ps.maxLifeTime = 0.55;
     ps.emitRate = 0;
-    ps.manualEmitCount = this.quality === 'low' ? Math.ceil(count / 2) : count;
-    ps.direction1.set(-1.5, upward ? 2 : 0.4, -1.5);
-    ps.direction2.set(1.5, upward ? 4 : 2.2, 1.5);
+    ps.manualEmitCount = 0;
     ps.minEmitPower = 1.1;
     ps.maxEmitPower = 2.8;
-    ps.gravity.set(0, upward ? 0.4 : -3, 0);
     ps.blendMode = ParticleSystem.BLENDMODE_ADD;
     ps.updateSpeed = 0.016;
-    ps.disposeOnStop = false;
-    ps.targetStopDuration = 0.9;
-    ps.onStoppedObservable.addOnce(() => ps.dispose(false));
     this.particles.add(ps);
-    ps.onDisposeObservable.addOnce(() => this.particles.delete(ps));
     ps.start();
+  }
+  private burst(p: Vec2, color: string, count = 30, y = 0.8, upward = false) {
+    const pool = [...this.particles];
+    const ps = pool[this.burstIndex++ % pool.length];
+    if (!ps) return;
+    (ps.emitter as Vector3).copyFrom(point(p, y));
+    const c = Color3.FromHexString(color);
+    ps.color1.set(c.r, c.g, c.b, 1);
+    ps.color2.set(1, 0.95, 0.8, 0.8);
+    ps.colorDead.set(c.r, c.g, c.b, 0);
+    ps.direction1.set(-1.5, upward ? 2 : 0.4, -1.5);
+    ps.direction2.set(1.5, upward ? 4 : 2.2, 1.5);
+    ps.gravity.set(0, upward ? 0.4 : -3, 0);
+    ps.manualEmitCount = Math.min(
+      90,
+      ps.manualEmitCount + Math.ceil(count * (this.quality === 'low' ? 0.5 : 1)),
+    );
+  }
+  private shape(kind: string, parent: TransformNode, color: string) {
+    let template = this.templates.get(kind);
+    if (!template) {
+      template =
+        kind === 'orb'
+          ? MeshBuilder.CreateIcoSphere(
+              'vfx-template-orb',
+              { radius: 1, subdivisions: 1 },
+              this.scene,
+            )
+          : kind === 'spike'
+            ? MeshBuilder.CreateCylinder(
+                'vfx-template-spike',
+                { height: 1, diameterTop: 0, diameterBottom: 1, tessellation: 5 },
+                this.scene,
+              )
+            : MeshBuilder.CreateBox('vfx-template-block', { size: 1 }, this.scene);
+      template.setEnabled(false);
+      this.templates.set(kind, template);
+    }
+    let mat = this.palette.get(color);
+    if (!mat) {
+      mat = this.material('shared-skill-color', color);
+      this.palette.set(color, mat);
+    }
+    const mesh = template.clone('skill-' + kind, parent)!;
+    mesh.setEnabled(true);
+    mesh.material = mat;
+    mesh.isPickable = false;
+    return mesh;
+  }
+  /** Solid silhouettes, with shared geometry/materials. Each style is distinct at phone scale. */
+  private sculpt(
+    style: string,
+    p: Vec2,
+    color: string,
+    radius: number,
+    life: number,
+    facing = 0,
+    follow?: string,
+  ) {
+    this.visual(life, (root) => {
+      root.position.copyFrom(point(p));
+      root.rotation.y = facing;
+      root.metadata = follow ? { follow } : undefined;
+      const pieces: { mesh: Mesh; x: number; y: number; z: number; phase: number }[] = [];
+      const part = (
+        kind: string,
+        x: number,
+        y: number,
+        z: number,
+        sx: number,
+        sy: number,
+        sz: number,
+        tint = color,
+      ) => {
+        const mesh = this.shape(kind, root, tint);
+        mesh.position.set(x, y, z);
+        mesh.scaling.set(sx, sy, sz);
+        pieces.push({ mesh, x, y, z, phase: pieces.length * 2.399 });
+        return mesh;
+      };
+      if (/shield|armor|blessing|fortress|guard|parry/.test(style)) {
+        const count = style === 'fortress' ? 10 : style === 'parry' ? 2 : 5;
+        for (let i = 0; i < count; i++) {
+          const a = (i / count) * Math.PI * 2,
+            r = style === 'fortress' ? Math.min(radius, 4) : 1.25;
+          const panel = part('block', Math.sin(a) * r, 1.15, Math.cos(a) * r, 0.78, 1.35, 0.13);
+          panel.rotation.y = a;
+          const crest = part(
+            'spike',
+            Math.sin(a) * r,
+            2,
+            Math.cos(a) * r,
+            0.65,
+            0.5,
+            0.14,
+            '#fff4bc',
+          );
+          crest.rotation.y = a;
+        }
+      } else if (/root|flame|fire|eruption|blizzard|ice-trap|storm|slam/.test(style)) {
+        const count = style === 'elemental-storm' ? 18 : 12;
+        for (let i = 0; i < count; i++) {
+          const a = i * 2.399,
+            r = Math.sqrt((i + 1) / count) * radius * 0.85;
+          const kind = /root/.test(style) ? 'block' : 'spike';
+          const stem = part(
+            kind,
+            Math.cos(a) * r,
+            0.7,
+            Math.sin(a) * r,
+            0.32,
+            1.2 + (i % 3) * 0.6,
+            0.32,
+            i % 3 === 0 ? '#fff5ba' : color,
+          );
+          stem.rotation.z = Math.sin(i) * 0.45;
+          if (/root/.test(style)) {
+            const branch = part(
+              'spike',
+              Math.cos(a) * r + 0.25,
+              1.2,
+              Math.sin(a) * r,
+              0.3,
+              1.3,
+              0.3,
+            );
+            branch.rotation.z = -0.9;
+          }
+        }
+      } else if (/skull|summon|undead/.test(style)) {
+        const count = /army/.test(style) ? 3 : 1;
+        for (let i = 0; i < count; i++) {
+          const x = count > 1 ? Math.cos(i * 2.1) * 2 : 0,
+            z = count > 1 ? Math.sin(i * 2.1) * 2 : 0;
+          part('orb', x, 1.5, z, 0.7, 0.8, 0.52, '#e5ddff');
+          for (const side of [-1, 1])
+            part('block', x + side * 0.25, 1.6, z + 0.49, 0.2, 0.25, 0.09, '#28164a');
+          for (let t = 0; t < 4; t++)
+            part('block', x + (t - 1.5) * 0.16, 0.95, z + 0.35, 0.11, 0.27, 0.15);
+        }
+      } else if (/song|anthem|wave|challenge/.test(style)) {
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2,
+            r = Math.min(radius, 3) * 0.75;
+          if (style === 'challenge') {
+            part('block', Math.sin(a) * r, 2.1, Math.cos(a) * r, 0.16, 0.85, 0.16, '#ffcc38');
+            part('orb', Math.sin(a) * r, 1.45, Math.cos(a) * r, 0.13, 0.13, 0.13, '#ffcc38');
+          } else {
+            part('orb', Math.sin(a) * r, 1.1, Math.cos(a) * r, 0.25, 0.16, 0.2);
+            part('block', Math.sin(a) * r + 0.2, 1.6, Math.cos(a) * r, 0.08, 0.85, 0.08);
+            part('block', Math.sin(a) * r + 0.4, 1.95, Math.cos(a) * r, 0.45, 0.1, 0.1);
+          }
+        }
+      } else if (/heal|cleanse|resurrection|wings/.test(style)) {
+        for (let i = 0; i < 6; i++) {
+          const a = i * 2.399,
+            r = 1 + (i % 2) * 0.5;
+          if (/wings|resurrection/.test(style)) {
+            const wing = part(
+              'spike',
+              (i < 3 ? -1 : 1) * (1.1 + (i % 3) * 0.45),
+              1.8 + (i % 3) * 0.25,
+              -0.4,
+              0.8,
+              2.1,
+              0.22,
+              '#fff3ac',
+            );
+            wing.rotation.z = (i < 3 ? 1 : -1) * 0.6;
+          } else {
+            part('block', Math.sin(a) * r, 1, Math.cos(a) * r, 0.65, 0.16, 0.15);
+            part('block', Math.sin(a) * r, 1, Math.cos(a) * r, 0.16, 0.65, 0.15);
+          }
+        }
+      } else if (/spore|stealth|shadow|rage|reload/.test(style)) {
+        for (let i = 0; i < 9; i++) {
+          const a = i * 2.399,
+            r = 0.7 + (i % 3) * 0.5;
+          const m = part(
+            /rage/.test(style) ? 'spike' : 'orb',
+            Math.sin(a) * r,
+            0.6 + (i % 4) * 0.4,
+            Math.cos(a) * r,
+            0.25,
+            0.5,
+            0.25,
+          );
+          m.rotation.z = 0.5;
+        }
+      } else {
+        // Physical weapon silhouettes, including spears and orbiting execution blades.
+        const count = /thousand|rain/.test(style) ? 14 : /double|execution/.test(style) ? 4 : 7;
+        for (let i = 0; i < count; i++) {
+          const a = (i / count) * Math.PI * 2,
+            r = Math.min(radius, 3.6) * 0.75;
+          const spear = /spear/.test(style),
+            y = /rain/.test(style) ? 4 + (i % 3) : 1.1;
+          const blade = part(
+            'spike',
+            Math.sin(a) * r,
+            y,
+            Math.cos(a) * r,
+            spear ? 0.22 : 0.42,
+            spear ? 2.1 : 1.2,
+            0.12,
+            i % 3 === 0 ? '#fff7df' : color,
+          );
+          blade.rotation.z = /rain/.test(style) ? Math.PI : Math.PI / 2;
+          blade.rotation.y = a;
+        }
+      }
+      return (age, t) => {
+        const fade = Math.min(1, (1 - t) * 5),
+          grow = Math.min(1, age * 9);
+        root.scaling.setAll(grow);
+        for (const item of pieces) {
+          item.mesh.visibility = fade;
+          if (/root|fire|flame|blizzard|storm|slam/.test(style))
+            item.mesh.position.y = item.y + Math.sin(age * 9 + item.phase) * 0.22;
+          else if (/rain/.test(style))
+            item.mesh.position.y = 0.5 + ((((item.y - age * 9) % 5) + 5) % 5);
+          else item.mesh.position.y = item.y + Math.sin(age * 4 + item.phase) * 0.14;
+        }
+        if (/whirl|dance|cuts|song|spore|rage|stealth/.test(style))
+          root.rotation.y = facing + age * (/whirl|cuts/.test(style) ? 7 : 1.4);
+      };
+    });
   }
   private slash(p: Vec2, facing: number, color: string, radius = 2.2, delay = 0, spin = false) {
     this.visual(0.52 + delay, (root, materials) => {
@@ -189,70 +406,6 @@ export class CombatVfx {
       };
     });
   }
-  private pillar(p: Vec2, color: string, radius = 1.5, life = 1.2) {
-    this.visual(life, (root, materials) => {
-      root.position.copyFrom(point(p));
-      const mat = this.material('light-column', color, 0.22);
-      materials.push(mat);
-      const column = MeshBuilder.CreateCylinder(
-        'holy-light-column',
-        { diameter: radius * 2, height: 4.5, tessellation: 32, hasRings: false, cap: Mesh.NO_CAP },
-        this.scene,
-      );
-      column.parent = root;
-      column.position.y = 2.1;
-      column.material = mat;
-      const halo = MeshBuilder.CreateTorus(
-        'holy-halo',
-        { diameter: radius * 2, thickness: 0.075, tessellation: 40 },
-        this.scene,
-      );
-      halo.parent = root;
-      halo.material = this.material('halo', color, 0.9);
-      materials.push(halo.material as StandardMaterial);
-      return (age, t) => {
-        mat.alpha = Math.sin(t * Math.PI) * 0.25;
-        halo.position.y = 0.2 + t * 2.4;
-        (halo.material as StandardMaterial).alpha = 1 - t;
-        root.scaling.x = root.scaling.z = 0.7 + t * 0.3;
-      };
-    });
-    this.ring(p, radius, color, 0.9);
-    this.burst(p, color, 36, 0.4, true);
-  }
-  private ice(p: Vec2, radius: number, ultimate: boolean) {
-    this.ring(p, radius, '#9cecff', 1.1);
-    this.visual(ultimate ? 2.4 : 1.3, (root, materials) => {
-      root.position.copyFrom(point(p));
-      const mat = this.material('ice-crystals', '#a4e9ff', 0.9);
-      materials.push(mat);
-      const spikes: Mesh[] = [];
-      for (let i = 0; i < (ultimate ? 14 : 7); i++) {
-        const a = i * 2.399,
-          r = Math.sqrt((i + 1) / (ultimate ? 14 : 7)) * radius * 0.8;
-        const spike = MeshBuilder.CreateCylinder(
-          'rising-ice-spike',
-          { height: 1.4 + (i % 3) * 0.5, diameterTop: 0, diameterBottom: 0.4, tessellation: 5 },
-          this.scene,
-        );
-        spike.parent = root;
-        spike.position.set(Math.cos(a) * r, 0, Math.sin(a) * r);
-        spike.rotation.z = Math.sin(i) * 0.2;
-        spike.material = mat;
-        spikes.push(spike);
-      }
-      return (_, t) => {
-        const grow = Math.min(1, t * 6),
-          fade = Math.min(1, (1 - t) * 4);
-        for (const spike of spikes) {
-          spike.scaling.y = grow * fade;
-          spike.position.y = spike.getBoundingInfo().boundingBox.extendSize.y * spike.scaling.y;
-        }
-        mat.alpha = fade * 0.85;
-      };
-    });
-    this.burst(p, '#b7f7ff', 45, 0.4);
-  }
   private fire(p: Vec2, radius: number, meteor: boolean, delay = 1.2) {
     if (meteor)
       this.visual(delay + 1.1, (root, materials) => {
@@ -274,18 +427,11 @@ export class CombatVfx {
           rock.setEnabled(fall < 1);
           if (fall === 1 && !exploded) {
             exploded = true;
-            this.ring(p, radius, '#ff8543', 1);
-            this.ring(p, radius * 0.7, '#ffdb83', 0.7);
+            this.sculpt('fire-eruption', p, '#ff8543', radius, 1.1);
             this.burst(p, '#ff9d43', 90, 0.7);
-            this.pillar(p, '#ffb25c', radius * 0.55, 0.65);
           }
         };
       });
-    else {
-      this.ring(p, radius, '#ff964b', 0.85);
-      this.ring(p, radius * 0.7, '#ffd285', 0.55, 0.1, true);
-      this.burst(p, '#ff8f41', 48, 0.5);
-    }
   }
   private arrows(
     from: Vec2,
@@ -399,115 +545,128 @@ export class CombatVfx {
   }
   emit(event: GameEvent, state: MatchState) {
     if (event.type === 'damage') {
-      const c = event.classId ? getClass(event.classId) : undefined;
-      this.burst(event.position, c?.color ?? event.color, c?.model === 'Mage' ? 18 : 6, 1.1);
-      if (c?.model === 'Mage') this.ring(event.position, 1.1, c.color, 0.4);
+      this.burst(event.position, event.color, 8, 1.1);
       return;
     }
     if (event.type === 'heal') {
-      this.burst(event.position, '#a7f3be', 9, 0.8, true);
+      this.burst(event.position, '#a7f3be', 6, 0.8, true);
       return;
     }
     if (event.type === 'dodge') {
-      this.ring(event.position, 1.5, '#b7e6e6', 0.35);
+      this.sculpt('shadow-step', event.position, '#b7faff', 1, 0.3);
       return;
     }
     if (event.type !== 'cast') return;
     const origin = event.origin ?? event.target ?? event.position,
       to = event.position;
-    const c = getClass(event.classId ?? 'guardian');
-    const ability = c.abilities.find((a) => a.id === event.abilityId);
-    const radius = Math.max(1.5, event.radius || 2.4),
-      facing = event.facing ?? 0;
-    if (!ability) {
-      if (event.sourceId && c.range <= 5) this.slash(origin, facing, c.color, Math.min(3, c.range));
+    if (event.abilityId === 'boss-slam') {
+      this.sculpt('boss-slam', to, '#ff9643', event.radius ?? 4, 0.65);
+      this.burst(to, '#ffc857', 45);
       return;
     }
-    const kinds = ability.effects.map((f) => f.kind),
-      ultimate = !!event.ultimate;
-    // Every skill has both a caster cue and its own travelling/impact/area treatment.
-    this.ring(origin, ultimate ? 1.8 : 1, c.color, ultimate ? 0.9 : 0.45);
-    if (c.id === 'archer' || c.id === 'crossbow') {
-      if (kinds.includes('haste') && !kinds.includes('damage'))
-        this.pillar(origin, '#e6d7a0', 1.3, 0.8);
-      else if (c.id === 'archer' && ability.id.endsWith('-4'))
-        this.arrows(origin, to, '#e7d6a0', true, radius, event.duration ?? 5);
-      else if (ability.target === 'line') this.beam(origin, to, '#fff0b7');
-      else if (ability.type === 'projectile') this.burst(origin, c.color, 12, 1.2);
-      else this.arrows(origin, to, c.color, false, radius, 0);
-      if (c.id === 'crossbow' && ability.id.endsWith('-2')) this.fire(to, radius, false);
-    } else if (c.id === 'firemage') {
-      if (ability.type === 'projectile') this.burst(origin, c.color, 18, 1.2);
-      else this.fire(to, radius, ultimate, event.delay ?? 1.2);
-    } else if (c.id === 'icemage') {
-      if (kinds.includes('shield')) this.pillar(origin, c.color, 1.3);
-      else if (ability.type === 'projectile') this.burst(origin, c.color, 18, 1.2);
-      else this.ice(to, radius, ultimate);
-    } else if (c.id === 'shaman') {
-      if (ability.id.endsWith('-2')) this.totem(to, c.color, false, event.duration ?? 10);
-      else if (kinds.includes('damage')) {
-        let previous = origin;
-        for (const enemy of state.entities
-          .filter(
-            (e) =>
-              e.alive &&
-              e.team !== state.entities.find((s) => s.id === event.sourceId)?.team &&
-              Math.hypot(e.position.x - to.x, e.position.z - to.z) < radius + 3,
-          )
-          .slice(0, ultimate ? 6 : 3)) {
-          this.beam(previous, enemy.position, '#a1f0ee', true);
-          this.burst(enemy.position, c.color, 18);
-          previous = enemy.position;
-        }
-        this.ring(to, radius, c.color, 0.9);
-      } else this.pillar(origin, c.color, radius * 0.5);
-    } else if (c.id === 'druid' && ultimate) this.totem(origin, c.color, true, event.duration ?? 8);
-    else if (kinds.includes('heal') || kinds.includes('revive') || kinds.includes('cleanse')) {
-      const team = state.entities.find((e) => e.id === event.sourceId)?.team;
-      const targets =
-        ability.target === 'team'
-          ? state.entities.filter((e) => e.team === team && e.alive)
-          : [{ position: ability.target === 'ally' ? to : origin }];
-      for (const ally of targets)
-        this.pillar(ally.position, c.color, ultimate ? 1.8 : 1.2, ultimate ? 1.8 : 1);
-    } else if (kinds.includes('shield') || kinds.includes('defense')) {
-      this.pillar(origin, c.color, ultimate ? 3 : 1.4, ultimate ? 1.8 : 1);
-      if (ultimate) this.ring(origin, Math.min(radius, 9), c.color, 1.5);
-    } else if (
-      c.id === 'necromancer' ||
-      kinds.includes('summon') ||
-      kinds.includes('stealth') ||
-      kinds.includes('poison') ||
-      kinds.includes('root')
-    ) {
-      this.ring(to, radius, c.color, 1.3);
-      this.burst(to, c.color, ultimate ? 75 : 35, 0.4, true);
-      if (kinds.includes('summon'))
-        for (let i = 0; i < (ultimate ? 3 : 1); i++)
-          this.pillar(
-            { x: origin.x + Math.cos(i * 2) * 2, z: origin.z + Math.sin(i * 2) * 2 },
-            c.color,
-            0.8,
-            1.4,
-          );
-      if (kinds.includes('damage')) this.beam(origin, to, c.color);
-    } else if (c.id === 'bard') {
-      for (let i = 0; i < 3; i++) this.ring(origin, 2 + i * 1.7, c.color, 0.8 + i * 0.2);
-      this.burst(origin, c.color, 40, 1.4, true);
-    } else if (kinds.includes('damage')) {
-      this.slash(origin, facing, c.color, Math.min(radius, 4.8), 0, ultimate);
-      if (ultimate) {
-        this.slash(origin, facing + Math.PI, c.color, Math.min(radius, 4.8), 0.18, true);
-        this.burst(to, c.color, 60);
-      } else this.burst(to, c.color, 20);
-      if (ability.target === 'line') this.beam(origin, to, c.color);
-    } else {
-      this.ring(origin, 3, c.color, 1);
-      this.burst(origin, c.color, 35, 1.2, true);
+    const c = getClass(event.classId ?? 'guardian'),
+      index = c.abilities.findIndex((a) => a.id === event.abilityId),
+      a = c.abilities[index];
+    if (!a) {
+      if (event.sourceId && c.range <= 5)
+        this.slash(origin, event.facing ?? 0, c.color, Math.min(3, c.range));
+      return;
     }
+    const style = skillVisual(c.id, index)!,
+      radius = Math.max(1.2, a.radius || 2),
+      facing = event.facing ?? 0;
+    const source = state.entities.find((e) => e.id === event.sourceId);
+    const life = a.duration ? Math.min(8, a.duration) : event.ultimate ? 1.7 : 0.85;
+    this.burst(origin, c.color, event.ultimate ? 24 : 10, 1.1);
+    if (a.delay && style !== 'meteor' && event.delay !== 0) {
+      const delay = event.delay ?? a.delay;
+      this.visual(delay + 0.05, () => {
+        let fired = false;
+        return (age) => {
+          if (!fired && age >= delay) {
+            fired = true;
+            this.emit({ ...event, delay: 0 }, state);
+          }
+        };
+      });
+      return;
+    }
+    if (a.type === 'projectile') return; // The real simulated projectile supplies travel and impact.
+    if (style === 'arrow-rain' || style === 'volley') {
+      this.arrows(origin, to, c.color, style === 'arrow-rain', radius, a.duration);
+      return;
+    }
+    if (style === 'meteor') {
+      this.fire(to, radius, true, a.delay ?? 1.2);
+      return;
+    }
+    if (style === 'life-tree' || style === 'spirit-totem') {
+      this.totem(to, c.color, style === 'life-tree', a.duration);
+      return;
+    }
+    if (style === 'life-drain') {
+      this.beam(to, origin, c.color);
+      this.sculpt('healing', origin, '#85f5ab', 1, 1);
+      this.sculpt('curse-skull', to, c.color, 1, 1);
+      return;
+    }
+    if (style === 'chain-lightning' || style === 'elemental-storm') {
+      this.beam(origin, to, c.color, true);
+      for (const enemy of state.entities
+        .filter(
+          (e) =>
+            e.alive &&
+            e.team !== source?.team &&
+            Math.hypot(e.position.x - to.x, e.position.z - to.z) < radius + 1,
+        )
+        .slice(0, 6))
+        this.beam(to, enemy.position, c.color, true);
+      this.sculpt(style === 'elemental-storm' ? style : 'sound-wave', to, c.color, radius, 1.2);
+      return;
+    }
+    if (style === 'rail-bolt' || style === 'spear-thrust') {
+      this.beam(origin, to, c.color);
+      this.sculpt(style, to, c.color, 1.5, 0.6, facing);
+      return;
+    }
+    const support = a.target === 'team' || a.target === 'self';
+    if (support && a.target === 'team') {
+      for (const ally of state.entities.filter(
+        (e) =>
+          e.alive &&
+          e.team === source?.team &&
+          Math.hypot(e.position.x - origin.x, e.position.z - origin.z) <= a.radius,
+      ))
+        this.sculpt(
+          style,
+          ally.position,
+          c.color,
+          style === 'fortress' ? 3 : 1.8,
+          life,
+          facing,
+          ally.id,
+        );
+    } else {
+      const follow = support ? event.sourceId : undefined;
+      this.sculpt(style, support ? origin : to, c.color, radius, life, facing, follow);
+    }
+    if (/cleave|slash|strike|blade|execution|whirl|dance|cuts|sweep|charge/.test(style))
+      this.slash(
+        origin,
+        facing,
+        c.color,
+        Math.min(radius, 4),
+        0,
+        event.ultimate || /whirl|dance/.test(style),
+      );
   }
   update(dt: number, state: MatchState) {
     for (const visual of [...this.visuals]) {
+      const follow = visual.root.metadata?.follow;
+      if (follow) {
+        const actor = state.entities.find((e) => e.id === follow);
+        if (actor) visual.root.position.copyFrom(point(actor.position));
+      }
       visual.age += dt;
       visual.update(visual.age, Math.min(1, visual.age / visual.life));
     }
@@ -561,13 +720,19 @@ export class CombatVfx {
   clear() {
     for (const v of this.visuals) this.disposeVisual(v);
     this.visuals = [];
-    for (const p of [...this.particles]) p.dispose(false);
-    this.particles.clear();
+    for (const p of this.particles) {
+      p.reset();
+      p.start();
+    }
     for (const shield of this.shields.values()) shield.dispose(false, true);
     this.shields.clear();
   }
   dispose() {
     this.clear();
+    for (const p of this.particles) p.dispose(false);
+    this.particles.clear();
+    for (const mesh of this.templates.values()) mesh.dispose();
+    for (const mat of this.palette.values()) mat.dispose();
     this.sprite.dispose();
   }
 }

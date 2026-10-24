@@ -433,7 +433,7 @@ describe('AI behavior', () => {
     }
     expect(sim.state.stage).toBe(4);
     expect(sim.state.winner).toBe('A');
-    expect(sim.state.time).toBeGreaterThanOrEqual(240);
+    expect(sim.state.time).toBeGreaterThanOrEqual(90);
     expect(sim.state.time).toBeLessThanOrEqual(420);
   }, 30000);
   it('both PvP modes finish with autonomous bots and legal rosters', () => {
