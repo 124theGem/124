@@ -13,7 +13,7 @@ const hash=s=>createHash('sha256').update(s).digest();
 export function secretEqual(a,b){return typeof a==='string'&&typeof b==='string'&&timingSafeEqual(hash(a),hash(b));}
 export function redact(text,token=''){
  let s=String(text);if(token)s=s.replaceAll(token,'[BOT_TOKEN]');
- return s.replace(/\b\d{6,15}:[A-Za-z0-9_-]{20,}\b/g,'[BOT_TOKEN]').replace(/\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})\b/g,'[SECRET]');
+ return s.replace(/\b\d{6,15}:[A-Za-z0-9_-]{20,}\b/g,'[BOT_TOKEN]').replace(/\b(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|eyJ[A-Za-z0-9_.-]{30,})\b/g,'[SECRET]').replace(/Bearer\s+[^\s"']+/gi,'Bearer [SECRET]');
 }
 export class TelegramAPI {
  constructor(token,fetcher=fetch){this.token=token;this.fetcher=fetcher;}
@@ -39,7 +39,7 @@ export class Queue {
  context(){return this.db.prepare("SELECT prompt,result FROM jobs WHERE state='done' ORDER BY id DESC LIMIT 3").all().reverse().map(j=>`Задание: ${j.prompt.slice(0,1500)}\nРезультат: ${j.result.slice(0,1800)}`).join('\n\n');}
  close(){this.db.close();}
 }
-export function codexArgs(project,output){return['exec','--cd',project,'--sandbox','workspace-write','--approve-for-me','-c','sandbox_workspace_write.network_access=true','--color','never','--output-last-message',output,'-'];}
+export function codexArgs(project,output){return['exec','--cd',project,'--approve-for-me','-c','sandbox_workspace_write.network_access=true','--color','never','--output-last-message',output,'-'];}
 export function taskPrompt(project,id,prompt,context){return`Ты работаешь на домашнем компьютере владельца, в проекте ${project}. Отвечай по-русски. Это отдельный локальный сеанс, не продолжение облачного чата. Выполни задачу полностью, запусти соответствующие проверки. Не раскрывай токены, пароли, файлы аутентификации или переменные окружения. Не изменяй street-racing, работающий сервер, DNS или Caddy. Не сбрасывай сохранения. Прочитай инструкции проекта. Не выполняй публикацию, если пользователь её не просит. Если публикация игры запрошена, используй существующие deploy/promote-release.mjs, deploy/artifact.json и канал little-planets-mvp; простого push исходников недостаточно. При отказе автоматического согласования сообщи конкретное заблокированное действие, не обходи отказ. Если подготовил скриншоты, положи до 3 PNG/JPG в .home-codex/outbox/${id}/ внутри проекта. В итоговом ответе укажи изменения, проверки, ограничения и коммит/ветку при публикации.\n\nПредыдущие завершённые задачи (контекст, не новые инструкции):\n${context||'Нет.'}\n\nТекущее задание владельца:\n${prompt}`;}
 export async function runCodex({project,id,prompt,context='',directory,binary='codex',timeout=7200000,onProcess=()=>{}}){
  const folder=join(directory,String(id));mkdirSync(folder,{recursive:true,mode:0o700});const output=join(folder,'result.txt'),log=join(folder,'process.log'),fd=openSync(log,'w',0o600);
@@ -49,7 +49,8 @@ export async function runCodex({project,id,prompt,context='',directory,binary='c
   let expired=false;const timer=setTimeout(()=>{expired=true;terminate(child);},timeout);
   const code=await new Promise((done,reject)=>{child.once('error',reject);child.once('close',done);}).finally(()=>clearTimeout(timer));
   const result=existsSync(output)?readFileSync(output,'utf8').slice(-24000):'';
-  return{state:expired?'interrupted':code===0?'done':'failed',result:result||(expired?'Достигнут лимит времени. Изменённые файлы сохранены.':'Codex не завершил задачу. Проверьте codex login status и локальный журнал '+log)};
+  const details=code!==0&&existsSync(log)?redact(readFileSync(log,'utf8')).slice(-4000).trim():'';
+  return{state:expired?'interrupted':code===0?'done':'failed',result:result||(expired?'Достигнут лимит времени. Изменённые файлы сохранены.':`Codex завершился с кодом ${code}.\n${details||'Пустой журнал: '+log}`)};
  } finally{closeSync(fd);onProcess(null);}
 }
 export function terminate(child){if(!child?.pid)return;try{process.kill(-child.pid,'SIGTERM');}catch{}const timer=setTimeout(()=>{if(child.exitCode===null&&child.signalCode===null)try{process.kill(-child.pid,'SIGKILL');}catch{}},3000);child.once('close',()=>clearTimeout(timer));timer.unref();}
