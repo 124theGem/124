@@ -1,7 +1,8 @@
 import { version } from "../../package.json";
-import { RAID_SKINS,RAID_WEAPONS,RAID_PERKS,RAID_CONTRACTS,RAID_DURATION,RAID_EXIT_AT,raidBagValue,raidInteraction,raidUpgradeCost,raidLevel, type RaidSnapshot,type RaidCommand,type RaidMap,type RaidSkin } from "../../shared/raid";
+import { RAID_SKINS,RAID_WEAPONS,RAID_PERKS,RAID_CONTRACTS,RAID_DURATION,RAID_EXIT_AT,raidBagValue,raidInteraction,raidUpgradeCost,raidLevel, type RaidInput,type RaidSnapshot,type RaidCommand,type RaidMap,type RaidSkin } from "../../shared/raid";
 import type { Telegram } from "../platform/Telegram";
 import { RaidView } from "./RaidView";
+import { RaidMotion } from "./RaidMotion";
 import { RaidTransport } from "./RaidTransport";
 import { icon } from "./icons";
 import "./raid.css";
@@ -11,6 +12,7 @@ export class RaidApp {
   private root=document.createElement("main");
   private ui=document.createElement("div");
   private view=new RaidView();
+  private motion=new RaidMotion();
   private api:RaidTransport;
   private state?:RaidSnapshot;
   private abort=new AbortController();
@@ -37,14 +39,14 @@ export class RaidApp {
   private sound=true;
   private audio?:AudioContext;
   private lastShot=0;
-  private lastSoundEvent=0;
+  private soundEvents=new Set<number>();
   constructor(private telegram:Telegram){
     this.api=new RaidTransport(telegram.initData);this.root.className="rift-raid";this.ui.className="rr-ui";
     this.sound=localStorage.getItem("rift-raid-sound")!=="off";
     this.ui.innerHTML=`<header class="rr-header"><button class="rr-logo" id="rr-logo" aria-label="На базу"><i>${icon("bolt")}</i><span>RIFT<span>RAID</span><small>EXTRACTION / ${version}</small></span></button><div class="rr-header-right"><span class="rr-wallet">${icon("loot")}<b id="rr-wallet">—</b></span><button class="rr-icon" id="rr-audio" aria-label="Включить или выключить звук">${icon("sound")}</button><button class="rr-profile" id="rr-profile" aria-label="Профиль рейдера">R<span id="rr-player-level">01</span></button></div></header><section class="rr-home" id="rr-home"></section><nav class="rr-nav" id="rr-nav">${[["home","home","База"],["gear","gun","Арсенал"],["daily","target","Контракты"],["season","season","Сезон"],["shop","star","Образы"]].map(([id,i,name])=>`<button data-pane="${id}">${icon(i)}<span>${name}</span></button>`).join("")}</nav><section class="rr-hud" id="rr-hud" hidden><div class="rr-health"><span>${icon("heart")}<b id="rr-hp">100</b><small id="rr-level">УР. 1</small></span><div><i id="rr-hp-fill"></i></div></div><div class="rr-run-clock"><span id="rr-timer">3:00</span><small id="rr-exit-time">ШЛЮЗ ЗАКРЫТ</small></div><button class="rr-icon rr-quit" id="rr-quit" aria-label="Покинуть рейд">${icon("exit")}</button><div class="rr-team" id="rr-team"></div><div class="rr-loot-meter">${icon("loot")}<div><small>В РЮКЗАКЕ</small><b id="rr-loot">0</b></div><span id="rr-kills">0 целей</span></div><div class="rr-mission-tip" id="rr-mission-tip"></div><div class="rr-stick" id="rr-stick" aria-label="Джойстик движения"><span></span></div><button class="rr-dash" id="rr-dash" aria-label="Рывок">${icon("dash")}<b id="rr-dash-label">РЫВОК</b></button><button class="rr-use" id="rr-use" aria-label="Взаимодействие" hidden><span id="rr-use-label"></span><i id="rr-use-progress"></i></button><div class="rr-desktop-help"><kbd>WASD</kbd> движение <kbd>SPACE</kbd> рывок <kbd>E</kbd> удерживать · огонь автоматически</div></section><section class="rr-perks" id="rr-perks" hidden></section><section class="rr-result" id="rr-result" hidden></section><section class="rr-modal" id="rr-modal" hidden></section><div class="rr-toast" id="rr-toast" role="status"></div><div class="rr-connection" id="rr-connection">СВЯЗЬ СО ШТАБОМ</div>`;
     this.root.append(this.view.canvas,this.ui);document.querySelector("#app")!.replaceChildren(this.root);this.bind();
     this.animation=requestAnimationFrame(this.frame);void this.connect();
-    if(new URLSearchParams(location.search).has("debug"))Object.defineProperty(window,"__raid",{configurable:true,value:{snapshot:()=>structuredClone(this.state)}});
+    if(new URLSearchParams(location.search).has("debug"))Object.defineProperty(window,"__raid",{configurable:true,value:{snapshot:()=>structuredClone(this.state),presentation:()=>structuredClone(this.motion.debug())}});
   }
   private el<T extends HTMLElement=HTMLElement>(selector:string){return this.ui.querySelector<T>(selector)!;}
   private bind(){
@@ -79,8 +81,8 @@ export class RaidApp {
     finally{this.busy=false;}
   }
   private accept(state:RaidSnapshot){
-    if(this.disposed)return;const previous=this.state?.room.run?.id;this.state=state;
-    if(state.room.run?.id!==previous)this.lastSoundEvent=0;
+    if(this.disposed)return;const previous=this.state?.room.run?.id;this.state=state;this.motion.accept(state,this.api.receivedAt,this.api.sampledAt);
+    if(state.room.run?.id!==previous)this.soundEvents.clear();
     this.el("#rr-wallet").textContent=String(state.profile.credits);this.el("#rr-player-level").textContent=String(raidLevel(state.profile.xp)).padStart(2,"0");
     const run=state.room.run,pawn=run?.pawns.find(p=>p.id===state.me),active=!!run&&!!pawn;
     this.root.dataset.phase=active?"raid":"base";this.el("#rr-home").hidden=active;this.el("#rr-nav").hidden=active;this.el("#rr-hud").hidden=!active;
@@ -156,8 +158,8 @@ export class RaidApp {
     if(this.network||this.busy||!this.connected||this.disposed)return;
     this.network=true;
     this.networkWait=(async()=>{try{
-      const active=this.state?.room.run?.status==="active",x=this.stick.x+Number(this.keys.has("KeyD")||this.keys.has("ArrowRight"))-Number(this.keys.has("KeyA")||this.keys.has("ArrowLeft")),z=this.stick.z+Number(this.keys.has("KeyS")||this.keys.has("ArrowDown"))-Number(this.keys.has("KeyW")||this.keys.has("ArrowUp")),n=Math.max(1,Math.hypot(x,z));
-      this.accept(await this.api.poll(active?{x:x/n,z:z/n,dash:this.dash||this.keys.has("Space"),interact:this.use||this.keys.has("KeyE")}:undefined));
+      const active=this.state?.room.run?.status==="active";
+      this.accept(await this.api.poll(active?this.input():undefined));
       this.el("#rr-connection").hidden=true;
     }catch(e){
       if(this.disposed)return;
@@ -168,12 +170,19 @@ export class RaidApp {
   }
   private toast(text:string){if(this.disposed)return;this.el("#rr-toast").textContent=text;this.el("#rr-toast").classList.add("visible");clearTimeout(this.toastTimer);this.toastTimer=window.setTimeout(()=>this.el("#rr-toast").classList.remove("visible"),4000);}
   private beep(frequency:number,duration=.04){if(!this.sound||!this.audio||this.audio.state!=="running")return;const o=this.audio.createOscillator(),gain=this.audio.createGain(),at=this.audio.currentTime;o.type="triangle";o.frequency.setValueAtTime(frequency,at);o.frequency.exponentialRampToValueAtTime(frequency*.45,at+duration);gain.gain.setValueAtTime(.025,at);gain.gain.exponentialRampToValueAtTime(.001,at+duration);o.connect(gain).connect(this.audio.destination);o.start();o.stop(at+duration);}
+  private input():RaidInput{
+    if(this.busy||!this.connected||document.hidden||!this.el("#rr-modal").hidden||!this.el("#rr-perks").hidden)return{x:0,z:0,dash:false,interact:false};
+    const x=this.stick.x+Number(this.keys.has("KeyD")||this.keys.has("ArrowRight"))-Number(this.keys.has("KeyA")||this.keys.has("ArrowLeft"));
+    const z=this.stick.z+Number(this.keys.has("KeyS")||this.keys.has("ArrowDown"))-Number(this.keys.has("KeyW")||this.keys.has("ArrowUp")),n=Math.max(1,Math.hypot(x,z));
+    return{x:x/n,z:z/n,dash:this.dash||this.keys.has("Space"),interact:this.use||this.keys.has("KeyE")};
+  }
   private frame=(time:number)=>{
     if(this.disposed)return;const dt=this.frameAt?Math.min(.05,(time-this.frameAt)/1000):0;this.frameAt=time;
-    if(!document.hidden){this.api.advance(dt);const active=!!this.state?.room.run;
-      if(time-this.pollAt>(active?125:1200)){this.pollAt=time;void this.refresh();}
+    if(!document.hidden){const input=this.input();this.api.setControls(input);this.api.advance(dt);const active=!!this.state?.room.run;
+      if(time-this.pollAt>(active?66:1200)){this.pollAt=time;void this.refresh();}
       const s=this.state,run=s?.room.run,p=run?.pawns.find(p=>p.id===s!.me);
-      this.view.draw(s,dt,time/1000,this.preview);
+      const presentation=this.motion.frame(time/1000,dt,input);
+      this.view.draw(s,dt,time/1000,this.preview,presentation);
       if(run&&p){
         this.el("#rr-hp").textContent=String(Math.ceil(p.hp));this.el("#rr-level").textContent=`УР. ${p.level}`;this.el("#rr-hp-fill").style.width=`${p.hp/p.maxHp*100}%`;this.el("#rr-timer").textContent=clock(RAID_DURATION-run.elapsed);
         this.el("#rr-exit-time").textContent=run.elapsed>=RAID_EXIT_AT?"ШЛЮЗ ОТКРЫТ":`ШЛЮЗ ЧЕРЕЗ ${Math.ceil(RAID_EXIT_AT-run.elapsed)} С`;
@@ -183,7 +192,7 @@ export class RaidApp {
         const cooldown=Math.max(0,4-(run.elapsed-p.dashAt));this.el("#rr-dash-label").textContent=cooldown>0?`${Math.ceil(cooldown)} С`:"РЫВОК";this.el("#rr-dash").classList.toggle("cooldown",cooldown>0);
         this.el("#rr-mission-tip").textContent=p.state==="down"?"Ты ранен. Напарник может поднять тебя.":run.elapsed>150?"Последние секунды. К зелёному шлюзу в нижней части зоны!":run.elapsed>=RAID_EXIT_AT?"Вынеси добычу: вернись к зелёному шлюзу и удерживай эвакуацию.":"Двигайся. Огонь автоматический. Открывай контейнеры и собирай добычу.";
         const key=run.pawns.map(p=>`${p.id}:${Math.ceil(p.hp)}:${p.state}`).join("|");if(key!==this.hudKey){this.hudKey=key;this.el("#rr-team").innerHTML=run.pawns.filter(f=>f.id!==s!.me).map(f=>`<div><i style="background:${RAID_SKINS[f.skin].glow}"></i>${escape(f.name)}<small>${f.state==="alive"?Math.ceil(f.hp)+" HP":f.state==="down"?"РАНЕН":f.state==="extracted"?"ВЫШЕЛ":"ПОГИБ"}</small></div>`).join("");}
-        for(const event of run.events)if(event.id>this.lastSoundEvent){if(event.kind==="shot"&&time-this.lastShot>90){this.beep(190);this.lastShot=time;}else if(event.kind==="chest"||event.kind==="extract")this.beep(640,.15);this.lastSoundEvent=event.id;}
+        for(const event of presentation?.events??[])if(!this.soundEvents.has(event.id)){this.soundEvents.add(event.id);if(event.kind==="shot"&&(!event.shot||event.shot.owner===s!.me)&&time-this.lastShot>70){this.beep(190);this.lastShot=time;}else if(event.kind==="chest"||event.kind==="extract")this.beep(640,.15);}
       }
     }
     this.animation=requestAnimationFrame(this.frame);

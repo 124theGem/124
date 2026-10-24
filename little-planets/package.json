@@ -1,6 +1,6 @@
 {
   "name": "little-planets",
-  "version": "0.18.0",
+  "version": "0.18.1",
   "private": true,
   "type": "module",
   "engines": {
@@ -38,7 +38,9 @@
     "test:raid": "vitest run tests/raid.test.ts",
     "test:raid-browser": "node --import tsx tests/raid-browser.mjs",
     "raid:metrics": "node scripts/raid-metrics.mjs",
-    "raid:payments-check": "node deploy/raid-stars.mjs"
+    "raid:payments-check": "node deploy/raid-stars.mjs",
+    "test:raid-motion": "vitest run tests/raid-motion.test.ts",
+    "test:raid-motion-browser": "node --import tsx tests/raid-motion-browser.mjs"
   },
   "dependencies": {
     "three": "^0.180.0",

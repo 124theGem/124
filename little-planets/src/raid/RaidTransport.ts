@@ -1,6 +1,8 @@
 import { freshRaidProfile,createRaid,tickRaid,raidReceipt,applyRaidReceipt,selectRaidPerk,updateRaidProfile, type RaidSnapshot,type RaidInput,type RaidCommand,type RaidProfile,type RaidRun } from "../../shared/raid";
 export class RaidTransport {
   readonly local:boolean;
+  sampledAt=0;
+  receivedAt=0;
   private session="";
   private profile?:RaidProfile;
   private run:RaidRun|null=null;
@@ -9,17 +11,19 @@ export class RaidTransport {
   private seq=0;
   constructor(private initData:string){this.local=import.meta.env.DEV&&!initData;}
   private async request(path:string,body?:unknown){
+    const sent=performance.now()/1000;
     const r=await fetch(new URL(`./api/raid${path}`,location.href),{method:body?"POST":"GET",headers:{Authorization:`tma ${this.initData}`,...(body?{"Content-Type":"application/json"}:{})},body:body?JSON.stringify(body):undefined,cache:"no-store",signal:AbortSignal.timeout(8000)});
-    const data=await r.json();if(!r.ok){const error=new Error(data.error||"Нет связи со штабом.");Object.assign(error,{status:r.status});throw error;}return data;
+    const data=await r.json();if(!path){this.sampledAt=sent;this.receivedAt=performance.now()/1000;}if(!r.ok){const error=new Error(data.error||"Нет связи со штабом.");Object.assign(error,{status:r.status});throw error;}return data;
   }
   private save(){localStorage.setItem("rift-raid-v1",JSON.stringify(this.profile));}
-  private snapshot():RaidSnapshot{return{session:"local",me:"local-raider",serverTime:Date.now(),profile:structuredClone(this.profile!),room:{code:"LOCAL1",owner:"local-raider",members:[{id:"local-raider",name:this.profile!.name,skin:this.profile!.skin,ready:true,owner:true}],run:this.run?structuredClone(this.run):null},leaderboard:[],shop:{enabled:false,botUsername:null}};}
+  private snapshot():RaidSnapshot{this.sampledAt=this.receivedAt=performance.now()/1000;return{session:"local",me:"local-raider",serverTime:Date.now(),profile:structuredClone(this.profile!),room:{code:"LOCAL1",owner:"local-raider",members:[{id:"local-raider",name:this.profile!.name,skin:this.profile!.skin,ready:true,owner:true}],run:this.run?structuredClone(this.run):null},leaderboard:[],shop:{enabled:false,botUsername:null}};}
   async hello(invite?:string):Promise<RaidSnapshot>{
     if(!this.local){const data=await this.request("",{type:"hello",...(invite?{invite}:{})});this.session=data.session;return data;}
     const raw=localStorage.getItem("rift-raid-v1");this.profile=raw?JSON.parse(raw):freshRaidProfile("Рейдер",Date.now());
     if(!this.profile?.stats||!Array.isArray(this.profile.skins))throw new Error("Не удалось прочитать локальный профиль. Сохранение не удалено.");
     this.save();return this.snapshot();
   }
+  setControls(controls:RaidInput){this.controls={...controls};}
   advance(dt:number){
     if(!this.local||!this.run||this.run.status!=="active"||this.run.pawns[0].choices.length)return;
     tickRaid(this.run,dt,{"local-raider":this.controls});

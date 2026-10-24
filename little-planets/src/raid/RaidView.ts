@@ -9,7 +9,6 @@ export class RaidView {
   private camera={x:0,z:23};
   private scale=28;
   private sprites=new Map<string,HTMLCanvasElement>();
-  private lastPositions=new Map<string,{x:number;z:number}>();
   private seen=new Set<number>();
   private particles:{x:number;z:number;vx:number;vz:number;life:number;color:string}[]=[];
   private worldUnit=28;
@@ -21,9 +20,9 @@ export class RaidView {
     for(let i=0;i<40;i++){const x=((i*197+time*2*(i%3+1))%(innerWidth+60))-30,y=(i*103)%innerHeight;c.fillStyle=i%3?"#65adbb":"#ffbd72";c.fillRect(x,y,1,1);}
     c.restore();
   }
-  draw(snapshot:RaidSnapshot|undefined,dt:number,time:number,preview?:RaidSkin){
+  draw(snapshot:RaidSnapshot|undefined,dt:number,time:number,preview?:RaidSkin,presentation?:RaidRun|null){
     this.backdrop(time);if(!snapshot)return;
-    const run=snapshot.room.run,pawn=run?.pawns.find(p=>p.id===snapshot.me);
+    const run=presentation??snapshot.room.run,pawn=run?.pawns.find(p=>p.id===snapshot.me);
     if(!run||!pawn){
       const c=this.ctx;
       c.save();c.strokeStyle="#72c5b615";c.lineWidth=1;
@@ -34,10 +33,9 @@ export class RaidView {
       c.restore();return;
     }
     if(this.mapType!==run.map){this.mapType=run.map;this.makeMap(run);}
-    if(this.runId!==run.id){this.runId=run.id;this.camera={x:pawn.x,z:pawn.z};this.lastPositions.clear();this.seen.clear();this.particles=[];}
-    const c=this.ctx,blend=1-Math.exp(-10*dt),at=this.lastPositions.get(pawn.id)??{x:pawn.x,z:pawn.z};
-    at.x+=(pawn.x-at.x)*blend;at.z+=(pawn.z-at.z)*blend;this.lastPositions.set(pawn.id,at);
-    this.camera.x+=(at.x-this.camera.x)*(1-Math.exp(-8*dt));this.camera.z+=(at.z-this.camera.z)*(1-Math.exp(-8*dt));
+    if(this.runId!==run.id){this.runId=run.id;this.camera={x:pawn.x,z:pawn.z};this.seen.clear();this.particles=[];}
+    const c=this.ctx,at=pawn;
+    this.camera.x+=(at.x-this.camera.x)*(1-Math.exp(-14*dt));this.camera.z+=(at.z-this.camera.z)*(1-Math.exp(-14*dt));
     c.save();c.translate(innerWidth/2,innerHeight*(innerHeight<500?.5:.53));c.scale(this.scale,this.scale);c.translate(-this.camera.x,-this.camera.z);
     c.drawImage(this.map,-this.map.width/this.worldUnit/2,-this.map.height/this.worldUnit/2,this.map.width/this.worldUnit,this.map.height/this.worldUnit);
     this.exit(c,run,time);
@@ -61,7 +59,7 @@ export class RaidView {
     for(const b of run.bullets){c.strokeStyle=b.enemy?"#ff829e":"#ffe4a5";c.lineWidth=b.enemy?.09:.065;c.beginPath();c.moveTo(b.x,b.z);const speed=Math.hypot(b.vx,b.vz);c.lineTo(b.x-b.vx/speed*.6,b.z-b.vz/speed*.6);c.stroke();}
     for(const p of run.pawns){
       if(p.state==="extracted"||p.state==="dead")continue;
-      const pos=p.id===pawn.id?at:this.lastPositions.get(p.id)??{x:p.x,z:p.z};if(p.id!==pawn.id){pos.x+=(p.x-pos.x)*blend;pos.z+=(p.z-pos.z)*blend;this.lastPositions.set(p.id,pos);}
+      const pos=p;
       c.save();c.translate(pos.x,pos.z);c.fillStyle="#06101880";c.beginPath();c.ellipse(.1,.25,.52,.3,0,0,Math.PI*2);c.fill();
       if(p.invulnerable>0){c.strokeStyle=p.dashLeft>0?"#fff3b5":"#a6f4e0";c.globalAlpha=.65;c.lineWidth=.045;c.beginPath();c.arc(0,0,.72,0,Math.PI*2);c.stroke();c.globalAlpha=1;}
       c.rotate(p.angle+Math.PI/2);const sprite=this.sprite(p.skin);c.globalAlpha=p.state==="down"?.5:1;c.drawImage(sprite,-.7,-.75,1.4,1.5);c.restore();

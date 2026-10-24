@@ -79,7 +79,11 @@ export interface RaidEnemy { id: number; kind: "crawler" | "drone" | "brute"; x:
 export interface RaidBullet { id: number; owner: string; x: number; z: number; vx: number; vz: number; damage: number; left: number; enemy: boolean; pierce: number; hit: number[] }
 export interface RaidDrop { id: number; kind: keyof RaidBag | "med"; x: number; z: number; amount: number }
 export interface RaidChest { id: number; x: number; z: number; opened: boolean; rare: boolean }
-export interface RaidEvent { id: number; kind: "shot" | "hit" | "kill" | "chest" | "dash" | "level" | "extract"; x: number; z: number; at: number }
+export interface RaidEvent {
+  id: number; kind: "shot" | "impact" | "hit" | "kill" | "chest" | "dash" | "level" | "extract"; x: number; z: number; at: number;
+  shot?: { owner:string; enemy:boolean; rounds:{id:number;vx:number;vz:number;life:number}[] };
+  impact?: number;
+}
 export interface RaidRun {
   id: string; map: RaidMap; seed: number; rng: number; elapsed: number; counter: number; status: "active" | "complete";
   pawns: RaidPawn[]; walls: RaidWall[]; enemies: RaidEnemy[]; bullets: RaidBullet[]; drops: RaidDrop[]; chests: RaidChest[];
@@ -100,7 +104,7 @@ export type RaidCommand =
 export const raidDistance = (a: { x: number; z: number }, b: { x: number; z: number }) => Math.hypot(a.x - b.x, a.z - b.z);
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 function random(run: RaidRun) { let x = run.rng; x ^= x << 13; x ^= x >>> 17; x ^= x << 5; run.rng = x >>> 0 || 1; return run.rng / 4294967296; }
-function event(run: RaidRun, kind: RaidEvent["kind"], at: { x: number; z: number }) { run.events.push({ id: ++run.counter, kind, x: at.x, z: at.z, at: run.elapsed }); if (run.events.length > 80) run.events.shift(); }
+function event(run: RaidRun, kind: RaidEvent["kind"], at: { x: number; z: number }, detail:Partial<Pick<RaidEvent,"shot"|"impact"|"at">>={}) { run.events.push({ id: ++run.counter, kind, x: at.x, z: at.z, at: run.elapsed,...detail }); if (run.events.length > 120) run.events.shift(); }
 export function raidWalls(map: RaidMap): RaidWall[] {
   const walls: RaidWall[] = [
     {x:-10,z:12,w:7,d:4,kind:"building"},{x:10,z:10,w:6,d:5,kind:"building"},
@@ -119,6 +123,20 @@ export function raidBlocked(walls: RaidWall[], x: number, z: number, radius = 0.
 export function raidMove(walls: RaidWall[], at: { x: number; z: number }, x: number, z: number, radius = 0.4) {
   if (!raidBlocked(walls, at.x + x, at.z, radius)) at.x += x;
   if (!raidBlocked(walls, at.x, at.z + z, radius)) at.z += z;
+}
+/** Identical collision, speed and dash rules for authoritative movement and visual prediction. */
+export function moveRaidPawn(walls:RaidWall[],p:RaidPawn,controls:RaidInput,dt:number,elapsed:number){
+  if(p.state!=="alive"){p.vx=p.vz=0;return false;}
+  dt=clamp(dt,0,.05);p.dashLeft=Math.max(0,p.dashLeft-dt);
+  const dashed=controls.dash&&elapsed-p.dashAt>=4;
+  if(dashed){p.dashAt=elapsed;p.dashLeft=.2;p.invulnerable=.25;}
+  const n=Math.max(1,Math.hypot(controls.x,controls.z)),dx=controls.x/n,dz=controls.z/n;
+  const speed=p.dashLeft>0?21:5.6*(1+p.perks.speed*.12);
+  p.vx=dx*speed;p.vz=dz*speed;
+  if(p.dashLeft>0&&Math.hypot(dx,dz)<.1){p.vx=Math.cos(p.angle)*speed;p.vz=Math.sin(p.angle)*speed;}
+  raidMove(walls,p,p.vx*dt,p.vz*dt);
+  if(Math.hypot(dx,dz)>.1)p.angle=Math.atan2(dz,dx);
+  return dashed;
 }
 export function createRaid(id: string, map: RaidMap, seed: number, players: { id: string; profile: RaidProfile }[]): RaidRun {
   const run: RaidRun = { id, map, seed, rng: seed >>> 0 || 1, elapsed: 0, counter: 0, status: "active", pawns: [], walls: raidWalls(map), enemies: [], bullets: [], drops: [], chests: [], events: [], nextSpawn: 0.7, boss: false };
@@ -180,21 +198,17 @@ export function tickRaid(run: RaidRun, dt: number, input: Record<string,RaidInpu
   for(const p of run.pawns){
     if(p.state==="down"){p.downLeft-=dt;if(p.downLeft<=0||!alive.length)p.state="dead";continue;}
     if(p.state!=="alive")continue;
-    p.invulnerable=Math.max(0,p.invulnerable-dt);p.dashLeft=Math.max(0,p.dashLeft-dt);
-    const controls=input[p.id]??{x:0,z:0,dash:false,interact:false},n=Math.max(1,Math.hypot(controls.x,controls.z));
-    if(controls.dash&&run.elapsed-p.dashAt>=4){p.dashAt=run.elapsed;p.dashLeft=0.2;p.invulnerable=0.25;event(run,"dash",p);}
-    const speed=p.dashLeft>0?21:5.6*(1+p.perks.speed*0.12),dx=controls.x/n,dz=controls.z/n;
-    p.vx=dx*speed;p.vz=dz*speed;
-    if(p.dashLeft>0&&Math.hypot(dx,dz)<0.1){p.vx=Math.cos(p.angle)*speed;p.vz=Math.sin(p.angle)*speed;}
-    raidMove(run.walls,p,p.vx*dt,p.vz*dt);
-    if(Math.hypot(dx,dz)>0.1)p.angle=Math.atan2(dz,dx);
+    p.invulnerable=Math.max(0,p.invulnerable-dt);
+    const controls=input[p.id]??{x:0,z:0,dash:false,interact:false};
+    if(moveRaidPawn(run.walls,p,controls,dt,run.elapsed))event(run,"dash",p);
     const target=run.enemies.filter(e=>e.hp>0&&raidDistance(e,p)<RAID_WEAPONS[p.weapon].range&&clearShot(run.walls,p,e)).sort((a,b)=>raidDistance(a,p)-raidDistance(b,p))[0];
     if(target&&run.elapsed>=p.shootAt){
       const weapon=RAID_WEAPONS[p.weapon],angle=Math.atan2(target.z-p.z,target.x-p.x);p.angle=angle;
       p.shootAt=run.elapsed+weapon.rate*Math.max(0.4,1-p.perks.rate*0.15);
       const spread=p.weapon==="scatter"?[-0.18,-0.06,0.06,0.18]:[0];
+      const firstRound=run.bullets.length;
       for(const offset of spread)run.bullets.push({id:++run.counter,owner:p.id,x:p.x,z:p.z,vx:Math.cos(angle+offset)*weapon.speed,vz:Math.sin(angle+offset)*weapon.speed,damage:weapon.damage*p.damageMultiplier*(1+p.perks.damage*0.2),left:weapon.range/weapon.speed,enemy:false,pierce:p.weapon==="arc"?2:0,hit:[]});
-      event(run,"shot",p);
+      event(run,"shot",p,{at:run.elapsed-dt,shot:{owner:p.id,enemy:false,rounds:run.bullets.slice(firstRound).map(b=>({id:b.id,vx:b.vx,vz:b.vz,life:b.left}))}});
     }
     const interaction=raidInteraction(run,p);
     const interactionKey=interaction?`${interaction.kind}:${interaction.id}`:undefined;
@@ -246,6 +260,7 @@ export function tickRaid(run: RaidRun, dt: number, input: Record<string,RaidInpu
     if(enemy.kind==="drone"&&distance<8&&run.elapsed>=enemy.attackAt&&clearShot(run.walls,enemy,target)){
       enemy.attackAt=run.elapsed+1.8;
       run.bullets.push({id:++run.counter,owner:"enemy",x:enemy.x,z:enemy.z,vx:Math.cos(angle)*8,vz:Math.sin(angle)*8,damage:14,left:2.1,enemy:true,pierce:0,hit:[]});
+      const bullet=run.bullets.at(-1)!;event(run,"shot",enemy,{at:run.elapsed-dt,shot:{owner:"enemy",enemy:true,rounds:[{id:bullet.id,vx:bullet.vx,vz:bullet.vz,life:bullet.left}]}});
     }else if(distance<1.1&&run.elapsed>=enemy.attackAt){enemy.attackAt=run.elapsed+0.8;hurt(run,target,enemy.kind==="brute"?24:11);}
   }
   for(const bullet of run.bullets){
@@ -258,6 +273,7 @@ export function tickRaid(run: RaidRun, dt: number, input: Record<string,RaidInpu
       else{const enemy=run.enemies.find(e=>e.hp>0&&!bullet.hit.includes(e.id)&&raidDistance(e,bullet)<(e.kind==="brute"?0.95:0.55));if(enemy){enemy.hp-=bullet.damage;enemy.hitAt=run.elapsed;bullet.hit.push(enemy.id);if(enemy.hp<=0)enemyDeath(run,enemy,bullet.owner);if(bullet.pierce--<=0)bullet.left=0;}}
     }
   }
+  for(const bullet of run.bullets)if(bullet.left<=0)event(run,"impact",bullet,{impact:bullet.id});
   run.enemies=run.enemies.filter(e=>e.hp>0);run.bullets=run.bullets.filter(b=>b.left>0).slice(-180);run.drops=run.drops.filter(d=>d.amount>0).slice(-180);
   if(run.elapsed>=RAID_DURATION){for(const p of run.pawns)if(p.state==="alive"||p.state==="down")p.state="dead";}
   if(run.pawns.every(p=>p.state==="extracted"||p.state==="dead")){run.status="complete";}
