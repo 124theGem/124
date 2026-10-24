@@ -134,6 +134,8 @@ powershell -ExecutionPolicy Bypass -File .\autostart.ps1 -Distro Ubuntu
 Start-ScheduledTask -TaskName HomeCodexTelegram
 ```
 
+Если старая копия `autostart.ps1` выдала `ParserError` и русский текст вида «РЎР...», это была несовместимость UTF-8 без BOM с Windows PowerShell 5.1. Исправленный скрипт содержит только ASCII, одинаково читаемый в Windows PowerShell 5.1 и PowerShell 7. Скачайте свежую копию из ветки `home-codex`, затем повторите регистрацию. Задача создаётся только после успешного выполнения скрипта; ошибка `Start-ScheduledTask: не удаётся найти указанный файл` после ParserError означает, что регистрация ещё не состоялась.
+
 Создаётся задача текущего пользователя при входе в Windows, без запуска под SYSTEM или повышения до администратора. Если название дистрибутива другое — передайте его в `-Distro`. Автозапуск не обходит экран входа: после перезагрузки нужно войти в Windows. До этого бот будет офлайн.
 
 Компьютер должен быть включён, с интернетом и не спать. Сон настройте вручную в параметрах питания; скрипт сам их не меняет. Остановить: `Stop-ScheduledTask -TaskName HomeCodexTelegram`. Удалить автозапуск: `Unregister-ScheduledTask -TaskName HomeCodexTelegram`. Во время первого ручного запуска Ctrl+C останавливает бота и активное задание.
