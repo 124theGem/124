@@ -241,7 +241,7 @@ export class GameApp {
         for (const event of s.events) {
           this.audio.play(event);
           this.combatText(event);
-          if (event.abilityId && event.sourceId === this.simulation.player.id) {
+          if (event.abilityId && event.name && event.sourceId === this.simulation.player.id) {
             const note = document.getElementById('skill-callout');
             if (note) {
               note.textContent = event.name ?? '';
@@ -591,7 +591,7 @@ export class GameApp {
     }
     if (action === 'credits') {
       this.modal(
-        `<div class="modal-heading"><span class="eyebrow">RAID & SIEGE</span><h2>Мир, который растёт</h2></div><p>Локальный игровой прототип. Один игрок и управляемый ИИ отряд. Сетевая игра пока не реализована.</p><div class="credits-list"><span>Модели и анимации: <a href="https://kaylousberg.com/" target="_blank" rel="noopener">Kay Lousberg / KayKit</a> · CC0</span><span>Adventurers · Skeletons · Dungeon Remastered</span><span>Шрифт Manrope: SIL Open Font License</span><span>Движок: Babylon.js · Apache 2.0</span></div><p class="muted">Пять базовых моделей героев, варианты классов и стилизованное окружение. Это прототип графики; 15 полностью уникальных моделей и тесты на Android/iOS ещё нужны. Целевые 30–60 FPS на телефонах не подтверждены.</p>`,
+        `<div class="modal-heading"><span class="eyebrow">RAID & SIEGE</span><h2>Мир, который растёт</h2></div><p>Локальный игровой прототип. Один игрок и управляемый ИИ отряд. Сетевая игра пока не реализована.</p><div class="credits-list"><span>Модели и анимации: <a href="https://kaylousberg.com/" target="_blank" rel="noopener">Kay Lousberg / KayKit</a> · CC0</span><span>Adventurers · Skeletons · Dungeon Remastered</span><span>Шрифт Manrope: SIL Open Font License</span><span>Движок: Babylon.js · Apache 2.0</span></div><p class="muted">Пять базовых моделей героев, варианты классов и стилизованное окружение. Это прототип графики; ${CLASSES.length} полностью уникальных моделей и тесты на Android/iOS ещё нужны. Целевые 30–60 FPS на телефонах не подтверждены.</p>`,
       );
       return;
     }

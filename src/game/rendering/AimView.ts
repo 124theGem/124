@@ -3,7 +3,6 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
-import { getClass } from '../classes/catalog';
 import { aimSpec, clippedAim } from '../controls/aim';
 import { add, direction, distance } from '../core/math';
 import type { Entity, MatchState, Vec2 } from '../core/types';
@@ -41,26 +40,31 @@ export class AimView {
     this.root.setEnabled(false);
   }
   update(preview: { index: number; aim?: Vec2 } | undefined, hero: Entity, state: MatchState) {
-    this.root.setEnabled(!!preview && hero.alive);
-    if (!preview) return;
-    const spec = aimSpec(hero, preview.index);
-    const friendly = getClass(hero.classId).abilities[preview.index]?.target === 'ally';
-    const target = state.entities
-      .filter((e) => e.alive && (friendly ? e.team === hero.team : e.team !== hero.team))
-      .sort((a, b) => distance(hero.position, a.position) - distance(hero.position, b.position))[0];
+    const spec = preview ? aimSpec(hero, preview.index) : undefined;
+    const visible = !!preview && hero.alive && (spec?.shape === 'self' || !!preview.aim);
+    this.root.setEnabled(visible);
+    if (!visible || !preview || !spec) return;
     const dir = preview.aim
       ? direction(hero.position, preview.aim)
-      : target
-        ? direction(hero.position, target.position)
-        : { x: Math.sin(hero.facing), z: Math.cos(hero.facing) };
+      : { x: Math.sin(hero.facing), z: Math.cos(hero.facing) };
     const range =
       spec.shape === 'area' && preview.aim
         ? Math.min(spec.range, distance(hero.position, preview.aim))
         : spec.range;
-    const end = clippedAim(hero.position, add(hero.position, dir, range), state.map);
+    const requested = add(hero.position, dir, range);
+    const end = spec.lob ? requested : clippedAim(hero.position, requested, state.map);
     const length = distance(hero.position, end),
       angle = Math.atan2(dir.x, dir.z);
     this.mat.emissiveColor = Color3.FromHexString(preview.index === 3 ? '#ffdc43' : '#efffff');
+    if (spec.shape === 'wall') {
+      this.path.setEnabled(true);
+      this.head.setEnabled(false);
+      this.area.setEnabled(false);
+      this.path.position.set(end.x, 0.18, end.z);
+      this.path.scaling.set(spec.radius * 2, 1, 0.2);
+      this.path.rotation.y = angle;
+      return;
+    }
     this.path.setEnabled(spec.shape !== 'self');
     this.path.position.set((hero.position.x + end.x) / 2, 0.18, (hero.position.z + end.z) / 2);
     this.path.scaling.set(

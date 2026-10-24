@@ -18,6 +18,7 @@ import '@babylonjs/core/Culling/ray';
 import '@babylonjs/core/Rendering/edgesRenderer';
 import { Plane } from '@babylonjs/core/Maths/math.plane';
 import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imageProcessingConfiguration';
+import { specialZone } from './SpecialZones';
 import { AimView } from './AimView';
 import { aimSpec, clippedAim } from '../controls/aim';
 import { direction, add } from '../core/math';
@@ -315,10 +316,15 @@ export class WorldRenderer {
       this.selected.setEnabled(hero.alive && this.mode === 'battle');
     }
     for (const p of state.projectiles) {
+      if ((p.warmup ?? 0) > 0) continue;
       let mesh = this.projectiles.get(p.id);
       if (!mesh) {
         const caster = state.entities.find((e) => e.id === p.source);
-        const magic = caster ? getClass(caster.classId).model === 'Mage' : false;
+        const physicalArea = caster && ['archer', 'crossbow', 'lancer'].includes(caster.classId);
+        const magic =
+          (!!p.area && !physicalArea) ||
+          (caster ? getClass(caster.classId).model === 'Mage' : false);
+        const bomb = caster?.classId === 'demolitionist';
         const ice = caster?.classId === 'icemage' || p.abilityId === 'archer-2';
         const fire = caster?.classId === 'firemage';
         const special = !!p.abilityId;
@@ -327,7 +333,42 @@ export class WorldRenderer {
           'visible-projectile',
           ice ? '#9af4ff' : fire ? '#ffad32' : magic || p.effects ? p.color : '#fff0a2',
         );
-        if (ice) {
+        if (bomb) {
+          const shell = MeshBuilder.CreateSphere(
+            'flying-bomb-shell',
+            { diameter: p.area?.mines === 3 ? 0.55 : 0.8, segments: 10 },
+            this.scene,
+          );
+          shell.parent = mesh;
+          shell.material = this.material('bomb-iron', '#384356');
+          if (p.area?.mines === 3)
+            for (const side of [-1, 1]) {
+              const extra = MeshBuilder.CreateSphere(
+                'cluster-flight-mine',
+                { diameter: 0.4, segments: 8 },
+                this.scene,
+              );
+              extra.parent = mesh;
+              extra.position.set(side * 0.37, -0.12, 0);
+              extra.material = shell.material;
+            }
+
+          const band = MeshBuilder.CreateTorus(
+            'flying-bomb-band',
+            { diameter: 0.7, thickness: 0.07, tessellation: 14 },
+            this.scene,
+          );
+          band.parent = mesh;
+          band.material = mat;
+          const fuse = MeshBuilder.CreateCylinder(
+            'flying-bomb-fuse',
+            { height: 0.35, diameter: 0.09, tessellation: 6 },
+            this.scene,
+          );
+          fuse.parent = mesh;
+          fuse.position.y = 0.5;
+          fuse.material = mat;
+        } else if (ice) {
           const lance = MeshBuilder.CreateCylinder(
             'flying-ice-lance',
             { height: special ? 1.7 : 0.9, diameterBottom: 0.42, diameterTop: 0, tessellation: 4 },
@@ -397,8 +438,23 @@ export class WorldRenderer {
         trail.material = mat;
         this.projectiles.set(p.id, mesh);
       }
-      mesh.position.set(p.position.x, 1.25, p.position.z);
-      mesh.rotation.set(Math.PI / 2, Math.atan2(p.direction.x, p.direction.z), 0);
+      let y = 1.25,
+        pitch = Math.PI / 2;
+      if (p.area) {
+        const t = p.area.elapsed / p.area.flightTime,
+          dist = Math.hypot(
+            p.area.destination.x - p.area.origin.x,
+            p.area.destination.z - p.area.origin.z,
+          ),
+          arc = Math.max(1, Math.min(3, dist * 0.2));
+        y = 1.25 * (1 - t) + 0.25 * t + Math.sin(t * Math.PI) * arc;
+        pitch = Math.atan2(
+          dist / p.area.flightTime,
+          (-1 + Math.PI * Math.cos(Math.PI * t) * arc) / p.area.flightTime,
+        );
+      }
+      mesh.position.set(p.position.x, y, p.position.z);
+      mesh.rotation.set(pitch, Math.atan2(p.direction.x, p.direction.z), 0);
     }
     for (const [id, m] of this.projectiles)
       if (!state.projectiles.some((p) => p.id === id)) {
@@ -411,7 +467,9 @@ export class WorldRenderer {
         mesh = this.createZoneMesh(z);
         this.zoneViews.set(z.id, mesh);
       }
-      mesh.position.set(z.position.x, 0.12, z.position.z);
+      mesh.position.set(z.position.x, z.trap ? 0.02 : 0.12, z.position.z);
+      if (z.trap && mesh.metadata?.fuse)
+        mesh.metadata.fuse.visibility = z.delay > 0 ? 0.4 : 0.7 + Math.sin(state.time * 10) * 0.3;
       mesh.scaling.setAll(z.delay > 0 ? 1 + Math.sin(state.time * 10) * 0.025 : 1);
     }
     for (const [id, m] of this.zoneViews)
@@ -466,18 +524,17 @@ export class WorldRenderer {
     this.aimPreview = preview;
   }
   dragAim(hero: Entity, dx: number, dy: number, index: number): Vec2 | undefined {
-    const center = this.screenPosition(hero.position, 0);
-    const world = this.aimAt(center.x + dx, center.y + dy);
-    if (!world) return undefined;
+    // Both rays use one camera frame, so camera follow cannot bias the first aim sample.
+    const cx = this.canvas.clientWidth / 2,
+      cy = this.canvas.clientHeight / 2;
+    const base = this.aimAt(cx, cy),
+      world = this.aimAt(cx + dx, cy + dy);
+    if (!base || !world) return undefined;
     const spec = aimSpec(hero, index);
     const pull = Math.min(1, Math.hypot(dx, dy) / 110);
     const magnitude = spec.shape === 'area' ? pull * pull * (3 - 2 * pull) : 1;
-    const end = add(
-      hero.position,
-      direction(hero.position, world),
-      Math.max(0.1, spec.range * magnitude),
-    );
-    return clippedAim(hero.position, end, this.environmentMap!);
+    const end = add(hero.position, direction(base, world), Math.max(0.1, spec.range * magnitude));
+    return spec.lob ? end : clippedAim(hero.position, end, this.environmentMap!);
   }
   enqueueEvents(events: readonly GameEvent[]) {
     this.pendingEvents.push(events);
@@ -486,6 +543,8 @@ export class WorldRenderer {
     return this.canvas.clientWidth / this.canvas.clientHeight < 0.8 ? 22 : 18.5;
   }
   private createZoneMesh(z: Zone) {
+    const custom = specialZone(this.scene, z);
+    if (custom) return custom;
     if (z.shape !== 'cone') {
       const area = MeshBuilder.CreateDisc(
         'area-footprint',

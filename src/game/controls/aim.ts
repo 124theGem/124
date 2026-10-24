@@ -6,12 +6,21 @@ export function aimSpec(actor: Entity, index: number) {
   const c = getClass(actor.classId),
     a = c.abilities[index];
   if (!a)
-    return { range: actor.range, radius: actor.range > 5 ? 0.45 : 0.85, shape: 'line' as const };
+    return c.id === 'demolitionist'
+      ? { range: actor.range, radius: 2.8, shape: 'area' as const, lob: true }
+      : {
+          range: actor.range,
+          radius: actor.range > 5 ? 0.45 : 0.85,
+          shape: 'line' as const,
+          lob: false,
+        };
+  if (a.delivery === 'wall') return { range: 2.3, radius: 4.5, shape: 'wall' as const, lob: false };
   const self = a.target === 'self' || a.target === 'team' || a.range === 0;
   const area = a.target === 'ground' && a.radius > 0;
   return {
     range: self ? 0 : a.range,
     radius: a.radius || (self ? 2 : 0.6),
+    lob: a.delivery === 'jump' || a.delivery === 'mines',
     shape: self ? ('self' as const) : area ? ('area' as const) : ('line' as const),
   };
 }

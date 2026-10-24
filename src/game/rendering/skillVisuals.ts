@@ -1,6 +1,7 @@
 /** Explicit art direction for every ability, independent of effect ordering. */
 export const SKILL_VISUALS: Record<string, readonly string[]> = {
-  guardian: ['shield-bash', 'challenge', 'armor', 'fortress'],
+  demolitionist: ['cluster-mines', 'last-resort', 'minefield', 'seeking-charge'],
+  guardian: ['shield-bash', 'challenge', 'armor', 'titan-leap'],
   berserker: ['cleave', 'charge', 'rage', 'whirlwind'],
   assassin: ['venom-blade', 'shadow-step', 'stealth', 'execution'],
   duelist: ['double-slash', 'parry', 'blade-dance', 'thousand-cuts'],
@@ -12,7 +13,7 @@ export const SKILL_VISUALS: Record<string, readonly string[]> = {
   necromancer: ['curse-skull', 'summon', 'life-drain', 'undead-army'],
   priest: ['healing', 'cleanse', 'holy-shield', 'resurrection'],
   druid: ['roots', 'nature-heal', 'spores', 'life-tree'],
-  paladin: ['holy-strike', 'blessing', 'holy-heal', 'divine-wings'],
+  paladin: ['holy-strike', 'oath-wall', 'holy-heal', 'divine-wings'],
   bard: ['sound-wave', 'speed-song', 'power-song', 'hero-anthem'],
   shaman: ['chain-lightning', 'spirit-totem', 'spirit-guard', 'elemental-storm'],
 };

@@ -32,7 +32,8 @@ export class HumanController implements Controller {
   }
   smoothAim(dt: number, project: (x: number, y: number, index: number) => Vec2 | undefined) {
     if (!this.preview || !this.aimTarget) return;
-    const prev = this.preview.drag ?? { x: 0, y: 0 };
+    // Seed the very first frame from the real gesture; only subsequent changes are smoothed.
+    const prev = this.preview.drag ?? { ...this.aimTarget };
     const blend = 1 - Math.exp(-Math.max(0, dt) / 0.085);
     this.preview.drag = {
       x: prev.x + (this.aimTarget.x - prev.x) * blend,

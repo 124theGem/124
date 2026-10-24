@@ -5,11 +5,17 @@ import type {
   Entity,
   GameEvent,
   MatchState,
+  PendingCast,
+  Projectile,
+  Zone,
   Vec2,
 } from '../core/types';
 import { add, clamp, direction, distance, lineClear, normalize } from '../core/math';
 import { getClass } from '../classes/catalog';
-import { navigable } from '../ai/navigation';
+import { navigable, navigate } from '../ai/navigation';
+import { COMBAT_SPEED, combatDuration } from '../core/tempo';
+import { arenaAllowsMove, barrierBlocks } from './defenses';
+import { makeEntity } from '../teams/roster';
 export const has = (e: Entity, kind: string) =>
   e.statuses.some((t) => t.kind === kind && t.remaining > 0);
 export const strength = (e: Entity, kind: string) =>
@@ -42,13 +48,19 @@ export class CombatSystem {
   }
   move(e: Entity, vector: Vec2, dt: number, dash = false) {
     const d = Math.hypot(vector.x, vector.z);
-    if (!d || !e.alive || has(e, 'stun') || has(e, 'root')) return;
+    if (!d || !e.alive || e.leap || has(e, 'stun') || has(e, 'root')) return;
     const v = d > 1 ? normalize(vector) : vector;
-    const speed = dash ? 22 : e.speed * (1 + strength(e, 'haste')) * (1 - strength(e, 'slow'));
+    const speed = dash
+      ? 22 * COMBAT_SPEED
+      : e.speed * (1 + strength(e, 'haste')) * (1 - strength(e, 'slow'));
     const next = add(e.position, v, speed * dt);
     // Axis sliding plus substeps in dodges avoids walking or dashing through walls.
-    if (navigable(this.state.map, { x: next.x, z: e.position.z })) e.position.x = next.x;
-    if (navigable(this.state.map, { x: e.position.x, z: next.z })) e.position.z = next.z;
+    const px = { x: next.x, z: e.position.z };
+    if (navigable(this.state.map, px) && arenaAllowsMove(this.state, e.position, px))
+      e.position.x = px.x;
+    const pz = { x: e.position.x, z: next.z };
+    if (navigable(this.state.map, pz) && arenaAllowsMove(this.state, e.position, pz))
+      e.position.z = pz.z;
     e.facing = Math.atan2(v.x, v.z);
     if (e.animationUntil <= this.state.time) e.animation = 'run';
   }
@@ -68,12 +80,20 @@ export class CombatSystem {
           : distance(a.position, e.position) - distance(b.position, e.position),
       )[0];
   }
-  damage(source: Entity, target: Entity, amount: number, magical = false) {
+  damage(
+    source: Entity,
+    target: Entity,
+    amount: number,
+    magical = false,
+    origin?: Vec2,
+    persistent = false,
+  ) {
     if (
-      !source.alive ||
+      (!source.alive && !persistent) ||
       !target.alive ||
       source.team === target.team ||
-      has(target, 'invulnerable')
+      has(target, 'invulnerable') ||
+      barrierBlocks(this.state, source.team, origin ?? source.position, target.position)
     )
       return;
     let multiplier = (1 + strength(source, 'power')) * (1 - strength(source, 'weakness'));
@@ -122,6 +142,7 @@ export class CombatSystem {
     if (target.hp <= 0) {
       target.hp = 0;
       target.alive = false;
+      target.leap = undefined;
       target.shield = 0;
       target.stats.deaths++;
       target.aiState = 'Dead';
@@ -155,10 +176,28 @@ export class CombatSystem {
       color: '#89e8b9',
     });
   }
-  effects(source: Entity, target: Entity, effects: EffectSpec[]) {
+  effects(
+    source: Entity,
+    target: Entity,
+    effects: EffectSpec[],
+    origin?: Vec2,
+    persistent = false,
+  ) {
+    if (
+      source.team !== target.team &&
+      barrierBlocks(this.state, source.team, origin ?? source.position, target.position)
+    )
+      return;
     for (const f of effects) {
       if (f.kind === 'damage')
-        this.damage(source, target, f.power, getClass(source.classId).model === 'Mage');
+        this.damage(
+          source,
+          target,
+          f.power,
+          getClass(source.classId).model === 'Mage',
+          origin,
+          persistent,
+        );
       else if (f.kind === 'heal')
         this.heal(source, target.team === source.team ? target : source, f.power);
       else if (f.kind === 'shield') {
@@ -197,6 +236,7 @@ export class CombatSystem {
               );
         if (
           navigable(this.state.map, end) &&
+          arenaAllowsMove(this.state, source.position, end) &&
           lineClear(source.position, end, this.state.map.obstacles)
         )
           source.position = end;
@@ -204,10 +244,12 @@ export class CombatSystem {
         const end = add(target.position, direction(source.position, target.position), f.power);
         if (
           navigable(this.state.map, end) &&
+          arenaAllowsMove(this.state, target.position, end) &&
           lineClear(target.position, end, this.state.map.obstacles)
         )
           target.position = end;
       } else if (f.kind === 'summon') this.summon(source, f.power, f.duration ?? 15);
+      else if (f.kind === 'barrier') continue;
       else if (f.kind === 'reset') {
         source.cooldowns[0] = 0;
         source.cooldowns[1] = 0;
@@ -255,27 +297,50 @@ export class CombatSystem {
       .sort((a, b) => distance(e.position, a.position) - distance(e.position, b.position))[0];
   }
   attack(e: Entity, targetId?: string, aim?: Vec2) {
-    if (e.attackCooldown > 0 || has(e, 'stun')) return;
+    if (
+      e.attackCooldown > 0 ||
+      e.leap ||
+      this.state.casts?.some((c) => c.source === e.id) ||
+      has(e, 'stun')
+    )
+      return;
     const manual =
       aim && Number.isFinite(aim.x) && Number.isFinite(aim.z) && distance(e.position, aim) > 0.01;
     const t = manual ? this.aimedTarget(e, e.range, aim) : this.target(e, e.range, targetId);
     if (!t && !manual) return;
     const dir = direction(e.position, manual ? aim : t!.position);
     e.facing = Math.atan2(dir.x, dir.z);
-    this.animate(e, 'attack', Math.min(0.8, e.interval));
+    this.animate(e, 'attack', Math.min(combatDuration(0.8), e.interval));
     e.attackCooldown =
       (e.interval / (1 + strength(e, 'haste'))) *
       (e.classId === 'duelist' && e.combo % 3 === 2 ? 0.75 : 1);
     e.combo++;
-    if (e.range > 5)
+    if (e.classId === 'demolitionist') {
+      const center = manual
+        ? add(e.position, dir, Math.min(e.range, distance(e.position, aim)))
+        : { ...t!.position };
+      this.launchArea(
+        e,
+        {
+          ...getClass(e.classId).abilities[0],
+          id: 'demolitionist-basic',
+          effects: [{ kind: 'damage', power: e.attack * 0.65 }],
+          radius: 2.8,
+          mineCount: 3,
+          delay: 0,
+        },
+        center,
+      );
+    } else if (e.range > 5)
       this.state.projectiles.push({
         id: ++this.serial,
         source: e.id,
         team: e.team,
         position: { ...e.position },
         direction: dir,
-        speed: 18,
-        remaining: e.range / 18,
+        speed: 18 * COMBAT_SPEED,
+        remaining: e.range / (18 * COMBAT_SPEED),
+        warmup: combatDuration(0.12),
         damage: e.attack,
         targetId: manual ? undefined : t?.id,
         color: getClass(e.classId).color,
@@ -297,6 +362,8 @@ export class CombatSystem {
     if (
       !a ||
       !e.alive ||
+      e.leap ||
+      this.state.casts?.some((c) => c.source === e.id) ||
       e.cooldowns[index] > 0 ||
       e.resource < a.cost ||
       has(e, 'stun') ||
@@ -332,7 +399,17 @@ export class CombatSystem {
         if (distance(e.position, center) > a.range)
           center = add(e.position, direction(e.position, center), a.range);
       }
-      if (!lineClear(e.position, center, this.state.map.obstacles)) return false;
+      if (
+        a.delivery === 'jump' &&
+        (!navigable(this.state.map, center) || !arenaAllowsMove(this.state, e.position, center))
+      )
+        return false;
+      if (
+        a.delivery !== 'jump' &&
+        a.delivery !== 'mines' &&
+        !lineClear(e.position, center, this.state.map.obstacles)
+      )
+        return false;
     }
     e.resource -= a.cost;
     e.cooldowns[index] = a.cooldown;
@@ -340,7 +417,7 @@ export class CombatSystem {
     this.animate(
       e,
       (['skill1', 'skill2', 'skill3', 'ultimate'] as const)[index],
-      a.ultimate ? 1.6 : 1.05,
+      combatDuration(a.ultimate ? 1.6 : 1.05),
     );
     if (distance(e.position, center) > 0.2) {
       const dir = direction(e.position, center);
@@ -356,14 +433,185 @@ export class CombatSystem {
       sourceId: e.id,
       classId: e.classId,
       abilityId: a.id,
+      castStage: 'windup',
       origin: { ...e.position },
       radius: a.radius,
       duration: a.duration,
       delay: a.delay,
       facing: e.facing,
     });
+    (this.state.casts ??= []).push({
+      id: ++this.serial,
+      source: e.id,
+      abilityId: a.id,
+      targetId: target?.id,
+      position: { ...center },
+      aim: manual && aim ? { ...aim } : undefined,
+      manual: !!manual,
+      remaining: combatDuration(a.ultimate ? 0.42 : 0.28),
+    });
+    return true;
+  }
+  private impactEvent(e: Entity, a: AbilityDef, center: Vec2, origin: Vec2) {
+    this.event({
+      type: 'cast',
+      castStage: 'impact',
+      position: center,
+      origin: { ...origin },
+      target: { ...origin },
+      sourceId: e.id,
+      classId: e.classId,
+      abilityId: a.id,
+      name: a.name,
+      color: a.color,
+      ultimate: a.ultimate,
+      radius: a.radius,
+      duration: a.duration,
+      delay: 0,
+      facing: e.facing,
+    });
+  }
+  private launchArea(e: Entity, a: AbilityDef, center: Vec2) {
+    const duration = Math.max(
+      combatDuration(0.25),
+      distance(e.position, center) / (16 * COMBAT_SPEED),
+      combatDuration(a.delay ?? 0),
+    );
+    this.state.projectiles.push({
+      id: ++this.serial,
+      source: e.id,
+      team: e.team,
+      position: { ...e.position },
+      direction: direction(e.position, center),
+      speed: 16 * COMBAT_SPEED,
+      remaining: duration + 0.05,
+      damage: 0,
+      color: a.color,
+      abilityId: a.id,
+      effects: a.effects,
+      warmup: a.id === 'demolitionist-basic' ? combatDuration(0.12) : 0,
+      area: {
+        origin: { ...e.position },
+        destination: { ...center },
+        elapsed: 0,
+        flightTime: duration,
+        radius: a.radius || 3,
+        duration: a.duration,
+        friendly: a.target === 'team',
+        mines: a.delivery === 'mines' ? a.mineCount : undefined,
+        lob: a.delivery === 'mines',
+      },
+    });
+  }
+  private resolveCast(cast: PendingCast) {
+    const e = this.state.entities.find((e) => e.id === cast.source);
+    if (!e?.alive || has(e, 'stun')) return;
+    const a = getClass(e.classId).abilities.find((a) => a.id === cast.abilityId);
+    if (!a) return;
+    const target = this.state.entities.find((t) => t.id === cast.targetId && t.alive);
+    if ((a.target === 'enemy' || a.target === 'ally') && !target && !cast.manual) return;
+    const aim = cast.aim,
+      manual = cast.manual;
+    const center =
+      a.target === 'self' || a.target === 'team'
+        ? { ...e.position }
+        : target && !manual && (a.target === 'enemy' || a.target === 'ally')
+          ? { ...target.position }
+          : { ...cast.position };
+    if (distance(e.position, center) > 0.1)
+      e.facing = Math.atan2(center.x - e.position.x, center.z - e.position.z);
+    if (a.delivery === 'jump') {
+      if (!navigable(this.state.map, center) || !arenaAllowsMove(this.state, e.position, center))
+        return;
+      e.leap = {
+        origin: { ...e.position },
+        destination: { ...center },
+        elapsed: 0,
+        duration: combatDuration(0.55 + distance(e.position, center) / 25),
+        abilityId: a.id,
+      };
+      this.animate(e, 'ultimate', e.leap.duration);
+      return;
+    }
+    if (a.delivery === 'wall') {
+      const dir =
+        distance(e.position, center) > 0.01
+          ? direction(e.position, center)
+          : { x: Math.sin(e.facing), z: Math.cos(e.facing) };
+      const wallCenter = add(e.position, dir, 2.3),
+        facing = Math.atan2(dir.x, dir.z);
+      this.state.zones.push({
+        id: ++this.serial,
+        source: e.id,
+        team: e.team,
+        position: wallCenter,
+        radius: 0,
+        remaining: 5,
+        delay: 0,
+        tick: 0,
+        effects: [],
+        friendly: true,
+        color: a.color,
+        telegraph: false,
+        abilityId: a.id,
+        barrier: { facing, width: 9 },
+      });
+      this.impactEvent(e, a, wallCenter, e.position);
+      return;
+    }
+    if (a.delivery === 'repulse') {
+      this.effects(e, e, [{ kind: 'invulnerable', power: 1, duration: 1 }]);
+      this.state.zones.push({
+        id: ++this.serial,
+        source: e.id,
+        team: e.team,
+        position: { ...e.position },
+        radius: 4.5,
+        remaining: 0.1,
+        delay: 1,
+        tick: 0,
+        effects: [
+          { kind: 'damage', power: 150 },
+          { kind: 'knockback', power: 4 },
+        ],
+        friendly: false,
+        color: a.color,
+        telegraph: true,
+        abilityId: a.id,
+        followSource: true,
+      });
+      this.impactEvent(e, a, center, e.position);
+      return;
+    }
+    if (a.delivery === 'seeker') {
+      this.spawnSeeker(e);
+      this.impactEvent(e, a, center, e.position);
+      return;
+    }
+    if (a.target === 'ground' && a.range >= 6) {
+      this.launchArea(e, a, center);
+      return;
+    }
+    if (a.type === 'projectile' && (target || manual)) {
+      this.state.projectiles.push({
+        id: ++this.serial,
+        source: e.id,
+        team: e.team,
+        position: { ...e.position },
+        direction: direction(e.position, manual && aim ? aim : target!.position),
+        speed: 19 * COMBAT_SPEED,
+        remaining: a.range / (19 * COMBAT_SPEED),
+        damage: 0,
+        targetId: manual ? undefined : target?.id,
+        color: a.color,
+        effects: a.effects,
+        abilityId: a.id,
+      });
+      return;
+    }
+    this.impactEvent(e, a, center, e.position);
     if ((a.delay ?? 0) > 0 || a.duration > 0) {
-      const totem = e.classId === 'shaman' && index === 1 ? 1.25 : 1;
+      const totem = a.id === 'shaman-2' ? 1.25 : 1;
       this.state.zones.push({
         id: ++this.serial,
         source: e.id,
@@ -396,21 +644,6 @@ export class CombatSystem {
         );
         if (!wasAlive && ally.alive) revived = true;
       }
-    } else if (a.type === 'projectile' && (target || manual)) {
-      this.state.projectiles.push({
-        id: ++this.serial,
-        source: e.id,
-        team: e.team,
-        position: { ...e.position },
-        direction: direction(e.position, manual ? aim : target!.position),
-        speed: 19,
-        remaining: a.range / 19,
-        damage: 0,
-        targetId: manual ? undefined : target?.id,
-        abilityId: a.id,
-        color: a.color,
-        effects: a.effects,
-      });
     } else if (a.target === 'line') {
       const dir = direction(e.position, center);
       for (const t of this.state.entities.filter((t) => t.alive && t.team !== e.team)) {
@@ -435,7 +668,122 @@ export class CombatSystem {
       ))
         this.effects(e, t, a.effects);
     } else if (target) this.effects(e, target, a.effects);
-    return true;
+  }
+  private areaImpact(source: Entity, p: Projectile) {
+    const area = p.area!;
+    if (area.mines) {
+      this.scatterMines(source, area.destination, area.mines, p.effects ?? [], area.radius);
+      return;
+    }
+    if (area.duration > 0) {
+      this.state.zones.push({
+        id: ++this.serial,
+        source: source.id,
+        team: source.team,
+        position: { ...area.destination },
+        radius: area.radius,
+        remaining: area.duration,
+        delay: 0,
+        tick: 0,
+        effects: p.effects ?? [],
+        friendly: area.friendly,
+        color: p.color,
+        telegraph: false,
+        abilityId: p.abilityId,
+      });
+    } else
+      for (const target of this.state.entities.filter(
+        (t) =>
+          t.alive &&
+          (area.friendly ? t.team === source.team : t.team !== source.team) &&
+          distance(t.position, area.destination) <= area.radius &&
+          lineClear(area.destination, t.position, this.state.map.obstacles),
+      ))
+        this.effects(source, target, p.effects ?? [], area.destination, true);
+    const a = getClass(source.classId).abilities.find((a) => a.id === p.abilityId);
+    if (a) this.impactEvent(source, a, area.destination, area.origin);
+  }
+  private scatterMines(
+    source: Entity,
+    center: Vec2,
+    count: number,
+    effects: EffectSpec[],
+    radius: number,
+  ) {
+    const existing = this.state.zones.filter((z) => z.source === source.id && z.trap);
+    for (const z of existing.slice(0, Math.max(0, existing.length + count - 24))) z.remaining = 0;
+    for (let i = 0; i < count; i++) {
+      const angle = i * 2.399,
+        r = count === 3 ? 1.15 : Math.sqrt((i + 0.5) / count) * Math.max(1.5, radius - 0.8),
+        position = { x: center.x + Math.sin(angle) * r, z: center.z + Math.cos(angle) * r };
+      if (!navigable(this.state.map, position, 0.2)) continue;
+      this.state.zones.push({
+        id: ++this.serial,
+        source: source.id,
+        team: source.team,
+        position,
+        radius: 1.9,
+        remaining: 5,
+        delay: 0.5,
+        tick: 0,
+        effects,
+        friendly: false,
+        color: getClass(source.classId).color,
+        telegraph: false,
+        abilityId: 'demolitionist-mine',
+        trap: { triggerRadius: 1.3 },
+      });
+    }
+  }
+  private spawnSeeker(owner: Entity) {
+    const active = this.state.entities.filter(
+      (e) => e.alive && e.kind === 'summon' && e.participantId === owner.id,
+    );
+    if (active.length >= 4) return;
+    const head = makeEntity(
+      `seeker-${this.state.spawnSerial++}`,
+      'demolitionist',
+      owner.team,
+      { ...owner.position },
+      'BOT',
+      'Самоходный заряд',
+    );
+    head.kind = 'summon';
+    head.participantId = owner.id;
+    head.hp = head.maxHp = 260;
+    head.attack = 0;
+    head.speed = 6.5 * COMBAT_SPEED;
+    head.range = 1.8;
+    head.lifetime = 8;
+    head.seeker = { owner: owner.id, damage: 440, radius: 4, nextPath: 0, move: { x: 0, z: 0 } };
+    this.state.entities.push(head);
+  }
+  private explodeSeeker(e: Entity) {
+    if (!e.seeker || !e.alive) return;
+    const total = e.stats.damage;
+    for (const target of this.state.entities.filter(
+      (t) =>
+        t.alive &&
+        t.team !== e.team &&
+        distance(e.position, t.position) <= e.seeker!.radius &&
+        lineClear(e.position, t.position, this.state.map.obstacles),
+    ))
+      this.damage(e, target, e.seeker.damage, false, e.position);
+    const owner = this.state.entities.find((t) => t.id === e.seeker!.owner);
+    if (owner) owner.stats.damage += e.stats.damage - total;
+    this.event({
+      type: 'cast',
+      castStage: 'impact',
+      position: e.position,
+      sourceId: e.id,
+      classId: 'demolitionist',
+      abilityId: 'demolitionist-mine',
+      radius: 4,
+      color: '#ffb45b',
+    });
+    e.alive = false;
+    e.hp = 0;
+    this.animate(e, 'death', 10000);
   }
   update(dt: number) {
     const s = this.state;
@@ -458,6 +806,10 @@ export class CombatSystem {
       if (e.lifetime > 0) {
         e.lifetime -= dt;
         if (e.lifetime <= 0) {
+          if (e.seeker) {
+            this.explodeSeeker(e);
+            continue;
+          }
           e.alive = false;
           e.hp = 0;
           this.animate(e, 'death', 10000);
@@ -481,16 +833,114 @@ export class CombatSystem {
       e.statuses = e.statuses.filter((t) => t.remaining > 0);
       if (e.animationUntil <= s.time) e.animation = 'idle';
     }
+    const queued = (s.casts ?? []).filter((c) => {
+      const owner = s.entities.find((e) => e.id === c.source);
+      return owner?.alive && !has(owner, 'stun');
+    });
+    const ready = queued.filter((c) => (c.remaining -= dt) <= 0);
+    s.casts = queued.filter((c) => c.remaining > 0);
+    for (const cast of ready) this.resolveCast(cast);
+    for (const e of s.entities) {
+      if (!e.alive) {
+        e.leap = undefined;
+        continue;
+      }
+      if (e.leap) {
+        const leap = e.leap;
+        leap.elapsed = Math.min(leap.duration, leap.elapsed + dt);
+        const t = leap.elapsed / leap.duration;
+        e.position = {
+          x: leap.origin.x + (leap.destination.x - leap.origin.x) * t,
+          z: leap.origin.z + (leap.destination.z - leap.origin.z) * t,
+        };
+        if (t >= 1) {
+          e.leap = undefined;
+          const a = getClass(e.classId).abilities.find((a) => a.id === leap.abilityId)!;
+          for (const enemy of s.entities.filter(
+            (t) => t.alive && t.team !== e.team && distance(t.position, e.position) <= a.radius,
+          ))
+            this.effects(e, enemy, a.effects, e.position);
+          this.impactEvent(e, a, e.position, leap.origin);
+          s.zones.push({
+            id: ++this.serial,
+            source: e.id,
+            team: e.team,
+            position: { ...e.position },
+            radius: a.radius,
+            remaining: a.arenaDuration ?? 5,
+            delay: 0,
+            tick: 0,
+            effects: [],
+            friendly: false,
+            color: a.color,
+            telegraph: false,
+            arena: true,
+            abilityId: a.id,
+          });
+        }
+      }
+      if (e.seeker) {
+        const enemy = s.entities
+          .filter((t) => t.alive && t.team !== e.team)
+          .sort((a, b) => distance(a.position, e.position) - distance(b.position, e.position))[0];
+        if (enemy && distance(enemy.position, e.position) <= 1.8) {
+          this.explodeSeeker(e);
+          continue;
+        }
+        if (enemy && s.time >= e.seeker.nextPath) {
+          e.seeker.move = navigate(s.map, e.position, enemy.position);
+          e.seeker.nextPath = s.time + 0.4;
+        }
+        if (enemy) this.move(e, e.seeker.move, dt);
+      }
+    }
     for (const p of [...s.projectiles]) {
       const source = s.entities.find((e) => e.id === p.source);
+      if ((p.warmup ?? 0) > 0) {
+        if (!source?.alive) {
+          p.remaining = 0;
+          continue;
+        }
+        p.warmup = Math.max(0, p.warmup! - dt);
+        if (source) {
+          p.position = { ...source.position };
+          if (p.area) p.area.origin = { ...source.position };
+        }
+        continue;
+      }
+      if (p.area) {
+        const before = { ...p.position },
+          area = p.area;
+        area.elapsed = Math.min(area.flightTime, area.elapsed + dt);
+        const t = area.elapsed / area.flightTime;
+        p.position = {
+          x: area.origin.x + (area.destination.x - area.origin.x) * t,
+          z: area.origin.z + (area.destination.z - area.origin.z) * t,
+        };
+        if (
+          (!area.lob && !lineClear(before, p.position, s.map.obstacles)) ||
+          barrierBlocks(s, p.team, before, p.position)
+        ) {
+          p.remaining = 0;
+          continue;
+        }
+        if (t >= 1) {
+          if (source) this.areaImpact(source, p);
+          p.remaining = 0;
+        }
+        continue;
+      }
       const travel = Math.min(dt, p.remaining);
       p.remaining -= dt;
       const before = { ...p.position };
       const t = s.entities.find((e) => e.id === p.targetId && e.alive);
       if (t) p.direction = direction(p.position, t.position);
       p.position = add(p.position, p.direction, p.speed * travel);
-      if (!lineClear(before, p.position, s.map.obstacles)) p.remaining = 0;
-      if (lineClear(before, p.position, s.map.obstacles)) {
+      const clear =
+        lineClear(before, p.position, s.map.obstacles) &&
+        !barrierBlocks(s, p.team, before, p.position);
+      if (!clear) p.remaining = 0;
+      if (clear) {
         const hit = s.entities.find((e) => {
           if (!e.alive || e.team === p.team) return false;
           const dx = p.position.x - before.x,
@@ -509,9 +959,9 @@ export class CombatSystem {
           );
         });
         if (hit && source) {
-          if (p.effects) this.effects(source, hit, p.effects);
+          if (p.effects) this.effects(source, hit, p.effects, p.position, true);
           else {
-            this.damage(source, hit, p.damage);
+            this.damage(source, hit, p.damage, false, p.position, true);
             if (source.classId === 'icemage')
               this.effects(source, hit, [{ kind: 'slow', power: 0.15, duration: 1.5 }]);
           }
@@ -521,11 +971,50 @@ export class CombatSystem {
     }
     s.projectiles = s.projectiles.filter((p) => p.remaining > 0);
     for (const z of s.zones) {
+      if (z.followSource) {
+        const owner = s.entities.find((e) => e.id === z.source);
+        if (owner) z.position = { ...owner.position };
+      }
       if (z.delay > 0) {
         z.delay -= dt;
         continue;
       }
       z.remaining -= dt;
+      if (z.arena || z.barrier) continue;
+      if (z.trap) {
+        if (
+          z.remaining <= 0 ||
+          s.entities.some(
+            (e) =>
+              e.alive &&
+              e.team !== z.team &&
+              distance(e.position, z.position) <= z.trap!.triggerRadius,
+          )
+        ) {
+          const source = s.entities.find((e) => e.id === z.source);
+          if (source)
+            for (const target of s.entities.filter(
+              (e) =>
+                e.alive &&
+                e.team !== z.team &&
+                distance(e.position, z.position) <= z.radius &&
+                lineClear(z.position, e.position, s.map.obstacles),
+            ))
+              this.effects(source, target, z.effects, z.position, true);
+          this.event({
+            type: 'cast',
+            castStage: 'impact',
+            position: z.position,
+            sourceId: z.source,
+            classId: 'demolitionist',
+            abilityId: 'demolitionist-mine',
+            radius: z.radius,
+            color: z.color,
+          });
+          z.remaining = 0;
+        }
+        continue;
+      }
       z.tick -= dt;
       if (z.tick <= 0) {
         z.tick = 1;
@@ -546,8 +1035,19 @@ export class CombatSystem {
             )
               continue;
           }
-          this.effects(source, e, z.effects);
+          this.effects(source, e, z.effects, z.position, true);
         }
+        if (z.abilityId === 'demolitionist-2')
+          this.event({
+            type: 'cast',
+            castStage: 'impact',
+            position: z.position,
+            sourceId: source.id,
+            classId: source.classId,
+            abilityId: 'demolitionist-mine',
+            radius: z.radius,
+            color: z.color,
+          });
         // Persistent zones already have an effect; replay only the actual boss impact.
         if (z.telegraph && !z.abilityId)
           this.event({

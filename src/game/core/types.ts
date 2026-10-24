@@ -27,7 +27,8 @@ export type EffectKind =
   | 'blink'
   | 'knockback'
   | 'summon'
-  | 'reset';
+  | 'reset'
+  | 'barrier';
 export interface EffectSpec {
   kind: EffectKind;
   power: number;
@@ -52,6 +53,9 @@ export interface AbilityDef {
   ai: 'offense' | 'heal' | 'defense' | 'buff';
   ultimate: boolean;
   delay?: number;
+  delivery?: 'jump' | 'wall' | 'mines' | 'repulse' | 'seeker';
+  arenaDuration?: number;
+  mineCount?: number;
 }
 export interface ClassDef {
   id: string;
@@ -137,6 +141,8 @@ export interface Entity {
   revived: boolean;
   aiState: string;
   targetId?: string;
+  leap?: { origin: Vec2; destination: Vec2; elapsed: number; duration: number; abilityId: string };
+  seeker?: { owner: string; damage: number; radius: number; nextPath: number; move: Vec2 };
   combo: number;
   stats: Stats;
 }
@@ -197,6 +203,28 @@ export interface Projectile {
   abilityId?: string;
   color: string;
   effects?: EffectSpec[];
+  warmup?: number;
+  area?: {
+    origin: Vec2;
+    destination: Vec2;
+    elapsed: number;
+    flightTime: number;
+    radius: number;
+    duration: number;
+    friendly: boolean;
+    mines?: number;
+    lob?: boolean;
+  };
+}
+export interface PendingCast {
+  id: number;
+  source: string;
+  abilityId: string;
+  targetId?: string;
+  position: Vec2;
+  aim?: Vec2;
+  manual: boolean;
+  remaining: number;
 }
 export interface Zone {
   id: number;
@@ -211,6 +239,10 @@ export interface Zone {
   friendly: boolean;
   color: string;
   telegraph: boolean;
+  arena?: boolean;
+  barrier?: { facing: number; width: number };
+  trap?: { triggerRadius: number };
+  followSource?: boolean;
   shape?: 'circle' | 'cone';
   abilityId?: string;
   facing?: number;
@@ -233,6 +265,7 @@ export interface GameEvent {
   duration?: number;
   delay?: number;
   facing?: number;
+  castStage?: 'windup' | 'launch' | 'impact';
 }
 export interface MatchState {
   version: 1;
@@ -246,6 +279,7 @@ export interface MatchState {
   map: GameMap;
   entities: Entity[];
   projectiles: Projectile[];
+  casts?: PendingCast[];
   zones: Zone[];
   points: ControlPoint[];
   score: Record<'A' | 'B', number>;
