@@ -1,3 +1,22 @@
+# RAID & SIEGE · размещение 0.20.0
+
+Главный адрес Mini App бота @LittlePlanets_bot теперь предназначен для новой 3D Action RPG. См. [RAID-SIEGE.md](RAID-SIEGE.md). Серверный API, SQLite и сохранения прежних игр сохранены. Их входы: `?mode=emberfall`, `?mode=raid`, `?mode=colony`.
+
+```bash
+npm ci
+npm run build
+npm test
+node scripts/package-server.mjs
+npm run test:upgrade
+node --import tsx tests/raid-siege-production.mjs
+```
+
+Новая игра имеет отдельные исходники, lockfile и проверки в `raid-siege/`. Для отдельной разработки: `cd raid-siege && npm ci && npm run dev`. Публикация использует существующий HTTPS-маршрут `/planets/` и проверяемый канал автообновления. Установка на VPS должна подтверждаться публичным ответом или журналом updater.
+
+Ниже сохранена документация предыдущего выпуска.
+
+---
+
 # EMBERFALL · Пепел и золото · 0.19.0
 
 Новая одиночная action RPG для браузера и Telegram Mini App. Вид сверху, оригинальная пиксельная графика, каменные подземелья, деревянные мостки, факелы и сокровища. Главная страница теперь открывает Emberfall.

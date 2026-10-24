@@ -17,6 +17,7 @@ execFileSync("tar", [
   "ASSETS.md",
   "RIFT-RAID.md",
   "EMBERFALL.md",
+  "RAID-SIEGE.md",
   "scripts/raid-metrics.mjs",
   "deploy/raid-stars.mjs",
 ]);

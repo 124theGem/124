@@ -1,5 +1,6 @@
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 export default defineConfig({
+  test: { include: ["tests/**/*.test.ts"] },
   base: "./",
   server: {
     host: "0.0.0.0",

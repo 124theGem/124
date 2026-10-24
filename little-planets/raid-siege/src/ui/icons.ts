@@ -1,0 +1,62 @@
+const paths: Record<string, string> = {
+  sword: 'm15 3 6-1-1 6L9 19l-4-4ZM4 14l6 6M3 21l4-4',
+  swords: 'm3 3 3 1 14 14-2 2L4 6Zm18 0-3 1-6 6m-2 4-6 6-2-2 6-6M2 16l6 6m8-2 4-4',
+  shield: 'M12 3 3 7v6c0 5 9 9 9 9s9-4 9-9V7ZM8 12l3 3 5-6',
+  armor: 'm8 3-5 4 2 5 2-2v11h10V10l2 2 2-5-5-4c-2 3-6 3-8 0Z',
+  axe: 'm4 21 9-15M8 4c5-4 12 0 13 5l-7 3-5-4Z',
+  dagger: 'm14 2 5 5-8 11-5-5ZM4 12l9 9M2 22l5-5',
+  spear: 'm13 2 5 1 1 5-6 5-3-3ZM12 11 3 22',
+  bow: 'M5 3c17 3 17 15 0 18l5-9ZM10 12h12m-4-4 4 4-4 4',
+  crossbow: 'M3 7c4-5 14-5 18 0L12 12ZM12 2v20M8 18h8',
+  flame: 'M12 2c1 6 7 6 7 12a7 7 0 0 1-14 0c0-4 2-7 4-8 0 5 3 5 3-4Zm0 10c-5 6 0 10 3 5',
+  snow: 'M12 2v20M3 7l18 10M3 17 21 7M8 4l4 3 4-3M8 20l4-3 4 3',
+  skull: 'M5 16a9 9 0 1 1 14 0v5H5ZM8 11h1m6 0h1m-7 6v4m6-4v4m-3-8-1 2h2Z',
+  sun: 'M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10ZM12 1v3m0 16v3M1 12h3m16 0h3M4 4l2 2m12 12 2 2M4 20l2-2M18 6l2-2',
+  leaf: 'M21 3C7 1 1 11 6 17s17 1 15-14ZM4 21 16 9',
+  tree: 'm12 2 7 8h-4l6 7h-8v5h-2v-5H3l6-7H5Z',
+  music: 'M9 18V5l11-2v13M9 8l11-2M9 18a3 3 0 1 0-3 3c2 0 3-1 3-3Zm11-2a3 3 0 1 0-3 3c2 0 3-1 3-3Z',
+  bolt: 'm13 2-9 12h7l-1 8 10-13h-8Z',
+  fortress: 'M3 21V5h4v3h3V3h4v5h3V5h4v16h-7v-6h-4v6Z',
+  target:
+    'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm0 5a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM12 1v4m0 14v4M1 12h4m14 0h4',
+  dash: 'm13 4 8 8-8 8M3 12h17M4 5h4M1 19h7',
+  eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Zm10-3a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z',
+  whirl: 'M4 9a8 8 0 1 1 2 10M2 4v6h6m8 3a4 4 0 1 1-6-4',
+  burst: 'm12 1 2 6 6-3-2 6 5 2-5 2 2 6-6-2-2 5-2-5-6 2 2-6-5-2 5-2-2-6 6 3Z',
+  refresh: 'M20 8a9 9 0 0 0-16-1M3 2v6h6m-5 8a9 9 0 0 0 16 1m1 5v-6h-6',
+  meteor: 'M16 2 4 14a5 5 0 0 0 7 7L23 9M21 2 10 13m13-7-6 6M6 16l2 2',
+  heart: 'M20 5c-3-3-7-1-8 1-1-2-5-4-8-1-5 5 1 10 8 16 7-6 13-11 8-16Z',
+  summon: 'M12 2v5m-7 8-3 4 5 3m12-7 3 4-5 3M4 10l8-5 8 5-3 10H7ZM8 12h1m6 0h1',
+  totem: 'M8 2h8v20H8ZM3 6l5 4m8 0 5-4M3 14l5 3m8 0 5-3M10 7h4m-4 5h4m-4 5h4',
+  gem: 'm8 3-6 7 10 12 10-12-6-7ZM2 10h20M8 3l-1 7 5 12 5-12-1-7',
+  helmet: 'M3 18V11a9 9 0 0 1 18 0v7l-6 4v-8H9v8ZM12 2v8',
+  hand: 'M6 12V5a2 2 0 0 1 3 0V3a2 2 0 0 1 3 0v1a2 2 0 0 1 3 0v2a2 2 0 0 1 3 0v8l-4 8H8l-6-9a2 2 0 0 1 3-2Z',
+  boot: 'M7 2h10v11l4 3v5H3v-6l4-2ZM7 7h10',
+  bag: 'M5 7h14l2 15H3ZM8 7V5a4 4 0 0 1 8 0v2',
+  settings:
+    'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM9 2h6l1 4 4 1 2 5-3 3v4l-5 3-3-2-4 1-4-4 1-4-2-3 3-5 4-1Z',
+  chevron: 'm9 5 7 7-7 7',
+  close: 'm6 6 12 12M6 18 18 6',
+  check: 'm4 12 5 5L20 6',
+  plus: 'M12 4v16M4 12h16',
+  people:
+    'M9 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM2 21v-3a7 7 0 0 1 14 0v3m0-18a4 4 0 0 1 0 8m3 10v-3c0-3-1-5-3-6',
+  clock: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm0 3v6l4 2',
+  trophy: 'M7 3h10v8a5 5 0 0 1-10 0ZM7 5H3v4c0 3 2 4 4 4m10-8h4v4c0 3-2 4-4 4M12 16v5m-5 0h10',
+  flag: 'M5 22V3c5-4 9 4 15 0v11c-6 4-10-4-15 0',
+  coin: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm3 5h-5v4h4v4H9m3-10v12',
+  mountain: 'm2 21 8-17 4 8 3-5 5 14ZM6 13l4 2 4-3',
+  pause: 'M7 4v16M17 4v16',
+  play: 'm7 3 15 9-15 9Z',
+  logout: 'M9 4H3v16h6m6-14 6 6-6 6M8 12h13',
+  volume: 'm11 3-6 5H2v8h3l6 5Zm4 4c4 3 4 7 0 10m3-13c6 5 6 11 0 16',
+  book: 'M12 5C8 2 4 3 2 4v16c4-2 7-1 10 1 3-2 6-3 10-1V4c-2-1-7-2-10 1Zm0 0v16',
+};
+export function icon(name: string, size = 20) {
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[name] ?? paths.gem}"/></svg>`;
+}
+export const escapeHtml = (s: string) =>
+  s.replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!,
+  );
