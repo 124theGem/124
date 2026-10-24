@@ -1,6 +1,6 @@
 {
   "name": "little-planets",
-  "version": "0.18.1",
+  "version": "0.19.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -40,7 +40,9 @@
     "raid:metrics": "node scripts/raid-metrics.mjs",
     "raid:payments-check": "node deploy/raid-stars.mjs",
     "test:raid-motion": "vitest run tests/raid-motion.test.ts",
-    "test:raid-motion-browser": "node --import tsx tests/raid-motion-browser.mjs"
+    "test:raid-motion-browser": "node --import tsx tests/raid-motion-browser.mjs",
+    "test:rpg": "vitest run tests/emberfall.test.ts",
+    "test:rpg-browser": "node --import tsx tests/emberfall-browser.mjs"
   },
   "dependencies": {
     "three": "^0.180.0",

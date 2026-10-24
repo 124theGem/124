@@ -16,6 +16,7 @@ execFileSync("tar", [
   ".env.example",
   "ASSETS.md",
   "RIFT-RAID.md",
+  "EMBERFALL.md",
   "scripts/raid-metrics.mjs",
   "deploy/raid-stars.mjs",
 ]);

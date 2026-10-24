@@ -1,0 +1,78 @@
+{
+  "version": "0.19.0",
+  "build": "passed",
+  "unitTests": {
+    "files": 20,
+    "tests": 175,
+    "result": "passed"
+  },
+  "rpgTests": 15,
+  "archiveRuntime": "passed: production dependencies, HTML, health, protected legacy APIs",
+  "browser": [
+    {
+      "frameMedianMs": 16.699999999999818,
+      "frameP95Ms": 16.700000000000728
+    },
+    {
+      "viewport": {
+        "width": 1440,
+        "height": 960
+      },
+      "checks": [
+        "movement",
+        "release",
+        "equipment",
+        "reload",
+        "quests",
+        "talents",
+        "atlas",
+        "combat",
+        "chest",
+        "merchant",
+        "legacy-save-preserved"
+      ],
+      "errors": []
+    },
+    {
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "checks": [
+        "movement",
+        "release",
+        "equipment",
+        "reload",
+        "quests",
+        "talents",
+        "atlas",
+        "combat",
+        "chest",
+        "merchant",
+        "legacy-save-preserved"
+      ],
+      "errors": []
+    },
+    {
+      "viewport": {
+        "width": 844,
+        "height": 390
+      },
+      "checks": [
+        "movement",
+        "release",
+        "equipment",
+        "reload",
+        "quests",
+        "talents",
+        "atlas",
+        "combat",
+        "chest",
+        "merchant",
+        "legacy-save-preserved"
+      ],
+      "errors": []
+    }
+  ],
+  "limitations": "Chromium viewport/touch emulation; no physical phone or real Telegram client was used."
+}

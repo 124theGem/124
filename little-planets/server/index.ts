@@ -19,7 +19,7 @@ await app.listen({
   port: Number(process.env.PORT ?? 8003),
 });
 console.log(
-  `RIFT RAID backend listening on port ${Number(process.env.PORT ?? 8003)} (${production ? "production" : "development"})`,
+  `EMBERFALL backend listening on port ${Number(process.env.PORT ?? 8003)} (${production ? "production" : "development"})`,
 );
 for (const signal of ["SIGINT", "SIGTERM"])
   process.on(signal, () => {
