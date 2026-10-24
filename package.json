@@ -1,0 +1,33 @@
+{
+  "name": "raid-and-siege",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:browser": "playwright test",
+    "format": "prettier --write src tests scripts *.ts *.json index.html docs/*.md README.md"
+  },
+  "dependencies": {
+    "@babylonjs/core": "9.32.0",
+    "@babylonjs/loaders": "9.32.0",
+    "@tma.js/sdk": "3.3.0"
+  },
+  "devDependencies": {
+    "@gltf-transform/core": "^4.5.1",
+    "@gltf-transform/functions": "^4.5.1",
+    "@playwright/test": "1.58.2",
+    "@types/node": "^22.20.5",
+    "prettier": "^3.9.10",
+    "typescript": "~5.9.3",
+    "vite": "^7.3.1",
+    "vitest": "^3.2.4"
+  }
+}
