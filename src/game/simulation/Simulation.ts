@@ -146,8 +146,9 @@ export class Simulation {
           b = alive[j],
           d = distance(a.position, b.position),
           r = a.kind === 'boss' || b.kind === 'boss' ? 1.6 : 0.85;
-        if (!a.leap && !b.leap && d < r && d > 0.001) {
-          const dir = direction(b.position, a.position),
+        if (!a.leap && !b.leap && d < r) {
+          const dir =
+              d > 0.001 ? direction(b.position, a.position) : { x: a.id < b.id ? -1 : 1, z: 0 },
             delta = (r - d) * 0.45;
           const pa = add(a.position, dir, delta),
             pb = add(b.position, dir, -delta);

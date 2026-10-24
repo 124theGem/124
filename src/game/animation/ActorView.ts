@@ -45,6 +45,8 @@ export class ActorView {
     public entity: Entity,
   ) {
     this.root = new TransformNode(entity.id, scene);
+    this.root.position.set(entity.position.x, 0, entity.position.z);
+    this.root.rotation.y = entity.facing;
   }
   async load() {
     if (this.entity.seeker) {
