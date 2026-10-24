@@ -165,10 +165,10 @@ export async function buildRiverCastles(
           'box',
           'bridge-oak-plank',
           bridge.x,
-          0.06,
+          -0.025,
           river.z - span / 2 + ((i + 0.5) * span) / count,
           bridge.width,
-          0.16,
+          0.1,
           span / count - 0.025,
           wood,
         );
