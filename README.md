@@ -1,6 +1,6 @@
-# RAID & SIEGE
+# RAID & SIEGE · 0.2
 
-Локальный прототип фэнтезийной 3D Action RPG для браузера и Telegram Mini Apps.
+Яркий мультяшный прототип фэнтезийной 3D Action RPG для браузера и Telegram Mini Apps.
 TypeScript · Vite · Babylon.js · Telegram Mini Apps SDK. Backend и реальные сетевые матчи не нужны.
 
 ## Запуск
@@ -53,9 +53,11 @@ npm run test:browser
 
 Браузерные проверки используют установленный `/usr/bin/chromium`. На другой машине задайте `CHROMIUM_PATH` либо установите Chromium и укажите его путь. Тесты запускают Vite автоматически, если сервер ещё не работает. Симуляционные тесты работают в Node без DOM, Babylon.js и Telegram.
 
+[Визуальное обновление 0.2: чёткость, анимации и яркая палитра](docs/VISUAL-UPDATE.md).
+
 Смотрите [результаты и ограничения](docs/VALIDATION.md), [архитектуру](docs/ARCHITECTURE.md) и [ассеты и лицензии](docs/ASSETS.md).
 
-Снимки работающей игры: [главное меню](docs/screenshots/home.png) · [герои и 3D-превью](docs/screenshots/heroes.png).
+Снимки текущей версии: [главное меню](docs/screenshots/home.png) · [бой](docs/screenshots/bright-battle.png).
 
 ## Границы прототипа
 

@@ -5,6 +5,9 @@ import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import { Scene } from '@babylonjs/core/scene';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
+import '@babylonjs/core/Rendering/outlineRenderer';
 import type { Entity } from '../core/types';
 import { getClass } from '../classes/catalog';
 import { AssetLibrary } from '../rendering/assets';
@@ -34,6 +37,7 @@ export class ActorView {
   private ready = false;
   private disposed = false;
   private deadAt = 0;
+  private teamMaterial?: StandardMaterial;
   constructor(
     private scene: Scene,
     private library: AssetLibrary,
@@ -66,7 +70,10 @@ export class ActorView {
       const name = mesh.name.split(':').pop()!.toLowerCase();
       // Source packs contain several interchangeable weapons. Equip one coherent set.
       if (/shield/.test(name))
-        mesh.setEnabled(['sword-shield', 'paladin'].includes(c.weapon) && /round|badge/.test(name));
+        mesh.setEnabled(
+          ['sword-shield', 'paladin'].includes(c.weapon) &&
+            name === (c.weapon === 'paladin' ? 'badge_shield' : 'round_shield'),
+        );
       if (/sword|axe|dagger|knife|crossbow|staff|wand/.test(name) && !name.includes('body')) {
         const wants =
           c.weapon === 'axe'
@@ -82,33 +89,64 @@ export class ActorView {
                     : c.weapon === 'wand'
                       ? /wand/
                       : /1h.*sword|sword.*1h/;
-        mesh.setEnabled(wants.test(name));
+        mesh.setEnabled(wants.test(name) && (c.weapon === 'daggers' || !name.endsWith('_offhand')));
       }
       if (/spellbook_open|mug|throwable/.test(name)) mesh.setEnabled(false);
-      mesh.receiveShadows = true;
+      mesh.receiveShadows = false;
       mesh.isPickable = false;
       if (mesh.material instanceof PBRMaterial) {
-        mesh.material.roughness = 0.78;
-        mesh.material.metallic = 0.12;
+        mesh.material.roughness = 1;
+        mesh.material.metallic = 0;
         const tint = Color3.FromHexString(c.color);
         mesh.material.albedoColor = Color3.Lerp(
           Color3.White(),
           tint,
-          e.kind === 'hero' ? 0.13 : 0.02,
+          e.kind === 'hero' ? 0.08 : 0.02,
         );
+        if (e.kind === 'hero' && /cape|mage_hat|barbarian_hat/.test(name)) {
+          const cloth = new PBRMaterial(`${e.id}-class-cloth`, this.scene);
+          cloth.albedoColor = Color3.FromHexString(c.color).toLinearSpace();
+          cloth.roughness = 1;
+          cloth.metallic = 0;
+          mesh.material = cloth;
+        }
       }
     }
     const bounds = modelRoot.getHierarchyBoundingVectors(true);
     const height = bounds.max.y - bounds.min.y;
     if (e.kind === 'hero') equipClassAccessories(modelRoot, c, this.scene);
     this.meshes = modelRoot.getChildMeshes();
+    for (const mesh of this.meshes) {
+      mesh.renderOutline =
+        !mesh.skeleton &&
+        /helmet|sword|shield|axe|crossbow|spear|bow|wand|staff|totem/i.test(mesh.name);
+      mesh.outlineColor = Color3.FromHexString('#172540');
+      mesh.outlineWidth = 0.014;
+    }
     const scale = (e.kind === 'boss' ? 4.3 : e.kind === 'summon' ? 1.65 : 2.15) / (height || 2);
     modelRoot.scaling.setAll(scale);
     modelRoot.position.y = -bounds.min.y * scale;
+    const circle = MeshBuilder.CreateDisc(
+      'team-marker',
+      { radius: e.kind === 'boss' ? 1.35 : 0.66, tessellation: 32 },
+      this.scene,
+    );
+    circle.parent = this.root;
+    circle.rotation.x = Math.PI / 2;
+    circle.position.y = 0.075;
+    this.teamMaterial = new StandardMaterial(`${e.id}-team-color`, this.scene);
+    this.teamMaterial.diffuseColor = Color3.FromHexString(
+      e.team === 'A' ? '#20aaff' : e.team === 'B' ? '#ff4768' : '#8b49dc',
+    );
+    this.teamMaterial.emissiveColor = this.teamMaterial.diffuseColor.scale(0.6);
+    this.teamMaterial.alpha = 0.55;
+    this.teamMaterial.disableLighting = true;
+    circle.material = this.teamMaterial;
+    circle.isPickable = false;
     for (const group of this.groups) {
       group.stop();
       for (const t of group.targetedAnimations) {
-        t.animation.enableBlending = true;
+        t.animation.enableBlending = false;
         t.animation.blendingSpeed = 0.12;
       }
     }
@@ -153,24 +191,41 @@ export class ActorView {
       const next =
         this.groups.find((g) => g.name.split(':').pop() === animation) ??
         this.groups.find((g) => g.name.split(':').pop() === 'Idle');
-      if (next && next !== this.active) {
-        this.fading?.stop();
-        this.fading = this.active;
+      if (next) {
+        if (next !== this.active) {
+          this.fading?.stop();
+          this.fading = this.active;
+        } else {
+          // restart() only resumes a paused group; it cannot replay an ended clip.
+          next.stop();
+          this.fading = undefined;
+        }
         this.active = next;
-        this.blend = 0;
-        next.start(
-          ['idle', 'run', 'victory'].includes(entity.animation),
-          entity.animation === 'run' ? entity.speed / 5 : 1,
-        );
-        next.setWeightForAllAnimatables(0);
-      } else if (next && !['idle', 'run', 'death'].includes(entity.animation)) {
-        next.restart();
+        const looping = ['idle', 'run', 'victory'].includes(entity.animation);
+        const fps = next.targetedAnimations[0]?.animation.framePerSecond || 60;
+        const nativeDuration = (next.to - next.from) / fps;
+        const visualDuration =
+          entity.animation === 'ultimate'
+            ? 1.05
+            : entity.animation.startsWith('skill')
+              ? 0.6
+              : entity.animation === 'attack'
+                ? 0.48
+                : 0.4;
+        const speed = looping
+          ? entity.animation === 'run'
+            ? entity.speed / 5
+            : 1
+          : Math.max(0.2, nativeDuration / visualDuration);
+        this.blend = this.fading ? 0 : 1;
+        next.start(looping, speed);
+        next.setWeightForAllAnimatables(this.blend);
       }
       this.current = animation;
       this.serial = entity.animationSerial;
     }
     if (this.blend < 1) {
-      this.blend = Math.min(1, this.blend + dt * 7);
+      this.blend = Math.min(1, this.blend + dt * 14);
       this.active?.setWeightForAllAnimatables(this.blend);
       this.fading?.setWeightForAllAnimatables(1 - this.blend);
       if (this.blend === 1) {
@@ -196,6 +251,7 @@ export class ActorView {
     const materials = new Set(this.meshes.map((m) => m.material));
     for (const skeleton of new Set(this.meshes.map((m) => m.skeleton))) skeleton?.dispose();
     this.root.dispose();
+    this.teamMaterial?.dispose();
     for (const material of materials) material?.dispose(false, false);
   }
 }

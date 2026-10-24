@@ -240,9 +240,22 @@ export class GameApp {
         if (import.meta.env.DEV) debugTick(this.simulation);
         this.simulation.step(commands);
         this.accumulator -= FIXED_DT;
+        this.renderer.enqueueEvents(s.events);
         for (const event of s.events) {
           this.audio.play(event);
           this.combatText(event);
+          if (event.abilityId && event.sourceId === this.simulation.player.id) {
+            const note = document.getElementById('skill-callout');
+            if (note) {
+              note.textContent = event.name ?? '';
+              note.dataset.event = String(event.id);
+              note.classList.toggle('super', !!event.ultimate);
+              note.hidden = false;
+              setTimeout(() => {
+                if (note.dataset.event === String(event.id)) note.hidden = true;
+              }, 1100);
+            }
+          }
         }
         if (s.status === 'finished') {
           this.completeMatch();

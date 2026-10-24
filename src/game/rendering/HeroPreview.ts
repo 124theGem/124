@@ -22,6 +22,7 @@ export class HeroPreview {
       audioEngine: false,
       powerPreference: 'low-power',
     });
+    this.engine.setHardwareScalingLevel(1 / Math.min(window.devicePixelRatio || 1, 2));
     this.scene = new Scene(this.engine);
     this.scene.clearColor = new Color4(0, 0, 0, 0);
     const camera = new ArcRotateCamera(

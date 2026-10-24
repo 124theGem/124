@@ -29,8 +29,19 @@ export class AssetLibrary {
         if (!MODEL_FILES[name])
           for (const m of container.materials)
             if (m instanceof PBRMaterial) {
-              m.albedoColor = new Color3(0.52, 0.67, 0.64);
-              m.roughness = 0.95;
+              m.albedoColor = new Color3(0.86, 0.95, 0.91);
+              m.roughness = 1;
+              m.metallic = 0;
+              if (/wall|pillar|column|rubble/.test(name)) {
+                m.albedoTexture = null;
+                m.albedoColor = Color3.FromHexString(
+                  /pillar|column/.test(name)
+                    ? '#e8bf77'
+                    : /rubble/.test(name)
+                      ? '#91a2bf'
+                      : '#c99058',
+                ).toLinearSpace();
+              }
             }
         return container;
       });
