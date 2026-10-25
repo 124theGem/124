@@ -78,15 +78,15 @@ export class WorldRenderer {
       false,
     );
     this.scene = new Scene(this.engine);
-    this.scene.clearColor = Color4.FromHexString('#65b9e0ff');
+    this.scene.clearColor = Color4.FromHexString('#85ddf8ff');
     this.scene.fogMode = Scene.FOGMODE_NONE;
     this.scene.fogDensity = 0.0045;
     this.scene.fogColor = Color3.FromHexString('#426779');
     const image = this.scene.imageProcessingConfiguration;
     image.toneMappingEnabled = false;
     image.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
-    image.exposure = 1.05;
-    image.contrast = 1.1;
+    image.exposure = 1;
+    image.contrast = 1;
     this.camera = new ArcRotateCamera(
       'camera',
       -Math.PI / 2,
@@ -101,19 +101,19 @@ export class WorldRenderer {
     this.camera.fov = 0.72;
     this.camera.inputs.clear();
     const hemi = new HemisphericLight('sky', new Vector3(0, 1, 0), this.scene);
-    hemi.intensity = 0.85;
-    hemi.diffuse = Color3.FromHexString('#cce7ff');
-    hemi.groundColor = Color3.FromHexString('#6e8065');
+    hemi.intensity = 0.65;
+    hemi.diffuse = Color3.FromHexString('#f1faff');
+    hemi.groundColor = Color3.FromHexString('#b2ccbf');
     const sun = new DirectionalLight('moon', new Vector3(-0.5, -1, 0.6), this.scene);
     sun.position.set(20, 35, -20);
-    sun.intensity = 1.15;
-    sun.diffuse = Color3.FromHexString('#f6e3bd');
+    sun.intensity = 0.35;
+    sun.diffuse = Color3.FromHexString('#fff2d5');
     this.shadow = new ShadowGenerator(1024, sun);
     this.shadow.usePercentageCloserFiltering = true;
     this.shadow.filteringQuality = ShadowGenerator.QUALITY_LOW;
     this.shadow.bias = 0.0015;
     this.shadow.normalBias = 0.05;
-    this.shadow.darkness = 0.35;
+    this.shadow.darkness = 0.2;
     this.glow = new GlowLayer('magic-glow', this.scene, {
       blurKernelSize: 32,
       mainTextureRatio: 0.5,
@@ -168,10 +168,10 @@ export class WorldRenderer {
     this.chest?.dispose();
     this.chest = undefined;
     this.lastEvent = 0;
-    this.environment = new Environment(this.scene, this.assets);
+    this.environment = new Environment(this.scene);
     const hero = state.entities.find((e) => e.controller === 'HUMAN_LOCAL')!;
     this.follow.set(hero.position.x, 1, hero.position.z + 2);
-    this.camera.setTarget(this.follow);
+    this.camera.setTarget(this.follow, false, true, true);
     this.camera.radius = menu ? 23 : this.battleRadius();
     await Promise.all([
       this.environment.build(state.map),
@@ -259,6 +259,7 @@ export class WorldRenderer {
     this.updateCameraProjection();
   }
   private updateCameraProjection() {
+    this.camera.alpha = -Math.PI / 2;
     if (this.mode === 'menu') {
       this.camera.mode = Camera.PERSPECTIVE_CAMERA;
       this.camera.beta = 1.0;
@@ -281,7 +282,7 @@ export class WorldRenderer {
       hero.position.z + (this.mode === 'menu' ? -3 : -1.2),
     );
     Vector3.LerpToRef(this.follow, target, 1 - Math.exp(-dt * 5), this.follow);
-    this.camera.setTarget(this.follow);
+    this.camera.setTarget(this.follow, false, true, true);
     this.camera.radius +=
       ((this.mode === 'menu' ? 22 : this.battleRadius()) - this.camera.radius) *
       Math.min(1, dt * 4);

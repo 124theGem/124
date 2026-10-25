@@ -424,7 +424,21 @@ export class GameApp {
           ? 'Герой пал'
           : `Возрождение ${Math.max(0, Math.ceil(e.respawnAt - s.time))}с`;
     }
-    const abilities = getClass(p.classId).abilities;
+    const heroClass = getClass(p.classId);
+    const ammo = document.getElementById('ammo-meter');
+    if (ammo) {
+      ammo.setAttribute('aria-valuenow', String(p.ammo));
+      ammo.setAttribute('aria-valuetext', `${p.ammo} / ${heroClass.ammoCapacity}`);
+      ammo.classList.toggle('empty', p.ammo === 0);
+      ammo.querySelectorAll<HTMLElement>('[data-ammo]').forEach((slot, i) => {
+        slot.classList.toggle('loaded', i < p.ammo);
+        slot.classList.toggle('reloading', i === p.ammo);
+        const progress = i < p.ammo ? 1 : i === p.ammo ? p.ammoReload / heroClass.reloadTime : 0;
+        slot.querySelector<HTMLElement>('i')!.style.transform = `scaleX(${progress})`;
+      });
+    }
+    this.root.querySelector('[data-attack]')?.classList.toggle('out-of-ammo', p.ammo === 0);
+    const abilities = heroClass.abilities;
     this.root.querySelectorAll<HTMLElement>('[data-skill]').forEach((button, i) => {
       const cooldown = p.cooldowns[i];
       const chargeCost = abilityChargeCost(abilities[i]);

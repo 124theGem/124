@@ -1,4 +1,5 @@
 import { HERO_BALANCE, heroStats } from './balance';
+import { basicAttackTiming } from './attacks';
 import { COMBAT_SPEED, combatDuration } from '../core/tempo';
 import type { AbilityDef, ClassDef, EffectSpec, Role } from '../core/types';
 const e = (kind: EffectSpec['kind'], power: number, duration?: number): EffectSpec => ({
@@ -105,9 +106,9 @@ function hero(
     description: `${title}. ${passive}`,
     speed: (role === 'melee' ? 5.04 : 4.62) * COMBAT_SPEED,
     range: ['ranged', 'healer', 'support'].includes(role) ? 8 : 2.3,
-    interval: combatDuration(0.82),
     ...stats,
     ...heroStats(id),
+    ...basicAttackTiming(id),
     abilities: skills
       .map((skill, i) => {
         const s = {
@@ -189,7 +190,7 @@ export const CLASSES: ClassDef[] = [
         }),
       ),
     ],
-    { range: 14, interval: combatDuration(1.6) },
+    { range: 14 },
   ),
 
   hero(
@@ -278,7 +279,6 @@ export const CLASSES: ClassDef[] = [
       a('Скрытность', 'eye', 'self', [e('stealth', 1, 5), e('haste', 0.35, 5)], { cooldown: 18 }),
       ult(a('Казнь из тени', 'dagger', 'enemy', [damage(650), e('stun', 1, 1)], { range: 4 })),
     ],
-    { interval: combatDuration(0.64) },
   ),
   hero(
     'duelist',
@@ -311,7 +311,6 @@ export const CLASSES: ClassDef[] = [
         }),
       ),
     ],
-    { interval: combatDuration(0.7) },
   ),
   hero(
     'lancer',
@@ -387,7 +386,6 @@ export const CLASSES: ClassDef[] = [
       }),
       ult(a('Последний аргумент', 'crossbow', 'line', [damage(600)], { range: 18, radius: 1.4 })),
     ],
-    { interval: combatDuration(1) },
   ),
   hero(
     'firemage',

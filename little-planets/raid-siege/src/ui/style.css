@@ -5027,3 +5027,40 @@ body {
     font-size: 6px;
   }
 }
+
+/* Sequential attack charges stay next to the aiming thumb, without hiding the arena. */
+.ammo-meter {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: -2px;
+  right: -2px;
+  display: flex;
+  gap: 4px;
+  height: 9px;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 0 #15305088);
+}
+.ammo-meter > span {
+  flex: 1;
+  overflow: hidden;
+  background: #142d49d9;
+  border: 1px solid #17345d;
+  border-radius: 3px;
+}
+.ammo-meter i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: #ffd83e;
+  transform-origin: left;
+}
+.ammo-meter .loaded i {
+  background: linear-gradient(#fff19a, #ffc82e);
+}
+.ammo-meter .reloading i {
+  background: #6ee3ff;
+}
+.battle-hud .attack-button.out-of-ammo {
+  filter: saturate(0.4);
+  border-color: #84a1b9;
+}

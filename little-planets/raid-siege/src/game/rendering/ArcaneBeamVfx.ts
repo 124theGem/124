@@ -45,7 +45,7 @@ export class ArcaneBeamVfx {
   private place(beam: Beam) {
     // Anchor the painted impact (74% down the frame) to the actual cast point.
     const up = this.scene.activeCamera?.getDirection(Vector3.Up()) ?? Vector3.Up();
-    beam.sprite.size = 6;
+    beam.sprite.size = 60;
     beam.sprite.position.set(beam.center.x, 0.06, beam.center.z);
     beam.sprite.position.addInPlace(up.scale((0.74 - 0.5) * beam.sprite.size));
   }

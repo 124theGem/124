@@ -1,6 +1,5 @@
 import { abilityChargeCost } from '../core/types';
 import type { Command, Entity, MatchState, Vec2 } from '../core/types';
-import { abilityChargeCost } from '../core/types';
 import type { Controller } from '../networking/interfaces/controllers';
 import { getClass } from '../classes/catalog';
 import { distance, direction } from '../core/math';
@@ -167,7 +166,12 @@ export class BotController implements Controller {
       cmd.move = direction(enemy.position, me.position);
     } else {
       me.aiState = 'Attack';
-      cmd.attack = true;
+      cmd.attack = me.kind !== 'hero' || me.ammo > 0;
+      if (me.kind === 'hero' && me.ammo === 0) {
+        me.aiState = 'Reload';
+        // Keep moving while reloading instead of waiting motionless in melee range.
+        cmd.move = direction(enemy.position, me.position);
+      }
       if (me.classId === 'assassin' && d > 1.7)
         moveTo({
           x: enemy.position.x - Math.sin(enemy.facing) * 1.7,

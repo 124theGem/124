@@ -7,6 +7,7 @@ import {
   type Vec2,
 } from '../core/types';
 import { SKELETON_HEALTH, SKELETON_DAMAGE } from '../classes/balance';
+import { getClass } from '../classes/catalog';
 import { arenaAllowsMove } from './defenses';
 import { COMBAT_SPEED, combatDuration } from '../core/tempo';
 import { add, direction, distance } from '../core/math';
@@ -308,6 +309,11 @@ export class Simulation {
   static restore(snapshot: string) {
     const state = JSON.parse(snapshot) as MatchState;
     if (state.version !== 1) throw new Error('Unsupported snapshot');
+    for (const entity of state.entities) {
+      entity.ammo ??= getClass(entity.classId).ammoCapacity;
+      entity.ammoReload ??= 0;
+      if (entity.kind === 'hero') entity.interval = getClass(entity.classId).interval;
+    }
     const sim = new Simulation({
       mode: state.mode,
       classId: state.entities.find((e) => e.controller === 'HUMAN_LOCAL')!.classId,

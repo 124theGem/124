@@ -227,6 +227,9 @@ export class CombatSystem {
           target.alive = true;
           target.hp = target.maxHp * f.power;
           target.revived = true;
+          target.ammo = getClass(target.classId).ammoCapacity;
+          target.ammoReload = 0;
+          target.attackCooldown = 0;
           target.statuses = [];
           this.animate(target, 'idle', 0);
         }
@@ -268,6 +271,8 @@ export class CombatSystem {
         source.cooldowns[0] = 0;
         source.cooldowns[1] = 0;
         source.attackCooldown = 0;
+        source.ammo = getClass(source.classId).ammoCapacity;
+        source.ammoReload = 0;
       } else {
         if (
           ['haste', 'power', 'defense', 'stealth', 'invulnerable'].includes(f.kind) &&
@@ -312,7 +317,9 @@ export class CombatSystem {
   }
   attack(e: Entity, targetId?: string, aim?: Vec2) {
     if (
-      e.attackCooldown > 0 ||
+      !e.alive ||
+      (e.kind === 'hero' && e.ammo < 1) ||
+      e.attackCooldown > 1e-9 ||
       e.leap ||
       this.state.casts?.some((c) => c.source === e.id) ||
       has(e, 'stun')
@@ -322,9 +329,15 @@ export class CombatSystem {
       aim && Number.isFinite(aim.x) && Number.isFinite(aim.z) && distance(e.position, aim) > 0.01;
     const t = manual ? this.aimedTarget(e, e.range, aim) : this.target(e, e.range, targetId);
     if (!t && !manual) return;
+    if (e.kind === 'hero') {
+      e.ammo--;
+      // Each committed attack interrupts the current reload; misses still use ammo.
+      e.ammoReload = 0;
+    }
     const dir = direction(e.position, manual ? aim : t!.position);
+    const projectileSpeed = e.kind === 'hero' ? 24 : 18 * COMBAT_SPEED;
     e.facing = Math.atan2(dir.x, dir.z);
-    this.animate(e, 'attack', Math.min(combatDuration(0.8), e.interval));
+    this.animate(e, 'attack', Math.min(0.6, e.interval));
     e.attackCooldown =
       (e.interval / (1 + strength(e, 'haste'))) *
       (e.classId === 'duelist' && e.combo % 3 === 2 ? 0.75 : 1);
@@ -352,9 +365,9 @@ export class CombatSystem {
         team: e.team,
         position: { ...e.position },
         direction: dir,
-        speed: 18 * COMBAT_SPEED,
-        remaining: e.range / (18 * COMBAT_SPEED),
-        warmup: combatDuration(0.12),
+        speed: projectileSpeed,
+        remaining: e.range / projectileSpeed,
+        warmup: e.kind === 'hero' ? 0.06 : combatDuration(0.12),
         damage: e.attack,
         targetId: manual ? undefined : t?.id,
         color: getClass(e.classId).color,
@@ -854,6 +867,19 @@ export class CombatSystem {
       if (!e.alive) continue;
       e.previous = { ...e.position };
       e.cooldowns = e.cooldowns.map((c) => Math.max(0, c - dt));
+      if (e.kind === 'hero') {
+        const c = getClass(e.classId);
+        if (e.ammo < c.ammoCapacity) {
+          // Reload begins after the shot's recovery, including the fractional last tick.
+          const reloadDt = Math.max(0, dt - e.attackCooldown);
+          e.ammoReload += reloadDt * (1 + strength(e, 'haste'));
+          while (e.ammoReload + 1e-9 >= c.reloadTime && e.ammo < c.ammoCapacity) {
+            e.ammo++;
+            e.ammoReload = Math.max(0, e.ammoReload - c.reloadTime);
+          }
+        }
+        if (e.ammo >= c.ammoCapacity) e.ammoReload = 0;
+      }
       e.attackCooldown = Math.max(0, e.attackCooldown - dt);
       e.dodgeCooldown = Math.max(0, e.dodgeCooldown - dt);
       const bard = s.entities.some(
