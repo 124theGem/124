@@ -120,6 +120,7 @@ function hero(
         return {
           ...s,
           cooldown: combatDuration(s.cooldown),
+          ...(id === 'guardian' && s.delivery === 'jump' ? { cooldown: 3, chargeCost: 0 } : {}),
           id: `${id}-${i + 1}`,
           animation: skillClips[id]?.[i] ?? s.animation,
           color,
@@ -220,7 +221,7 @@ export const CLASSES: ClassDef[] = [
           delivery: 'jump',
           arenaDuration: 5,
           description:
-            'Дальний прыжок: 192 урона при приземлении, оглушение врагов на 3 с и арена на 5 с. Через границу арены нельзя выйти.',
+            'Дальний прыжок: 192 урона при приземлении, оглушение врагов на 3 с и арена на 5 с. Через границу арены нельзя выйти. Откат 3 с, без накопления заряда.',
         }),
       ),
     ],

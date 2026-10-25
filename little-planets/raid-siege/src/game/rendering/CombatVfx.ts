@@ -12,6 +12,7 @@ import type { GameEvent, MatchState, Vec2 } from '../core/types';
 import type { Quality } from './WorldRenderer';
 import { skillVisual } from './skillVisuals';
 import { BerserkerVfx } from './BerserkerVfx';
+import { TankJumpVfx } from './TankJumpVfx';
 import { HealVfx } from './HealVfx';
 import { getClass } from '../classes/catalog';
 
@@ -32,6 +33,7 @@ export class CombatVfx {
   private sprite: DynamicTexture;
   private healing: HealVfx;
   private berserker: BerserkerVfx;
+  private tankJump: TankJumpVfx;
   private serial = 0;
   private burstIndex = 0;
   private templates = new Map<string, Mesh>();
@@ -40,6 +42,7 @@ export class CombatVfx {
   constructor(private scene: Scene) {
     this.healing = new HealVfx(scene);
     this.berserker = new BerserkerVfx(scene);
+    this.tankJump = new TankJumpVfx(scene);
     this.sprite = new DynamicTexture(
       'spell-particle-atlas',
       { width: 64, height: 64 },
@@ -604,8 +607,7 @@ export class CombatVfx {
       return;
     }
     if (a.delivery === 'jump') {
-      this.sculpt('boss-slam', to, c.color, a.radius, 1.2, event.facing);
-      this.burst(to, '#ffdca1', 65, 0.3);
+      if (event.castStage === 'impact') this.tankJump.play(to, a.radius);
       return;
     }
     const style = skillVisual(c.id, index)!,
@@ -736,6 +738,7 @@ export class CombatVfx {
   }
   update(dt: number, state: MatchState) {
     this.berserker.update(state);
+    this.tankJump.update(dt);
     for (const visual of [...this.visuals]) {
       const follow = visual.root.metadata?.follow;
       if (follow) {
@@ -795,6 +798,7 @@ export class CombatVfx {
   clear() {
     this.healing.clear();
     this.berserker.clear();
+    this.tankJump.clear();
     for (const v of this.visuals) this.disposeVisual(v);
     this.visuals = [];
     for (const p of this.particles) {
@@ -813,5 +817,6 @@ export class CombatVfx {
     this.sprite.dispose();
     this.healing.dispose();
     this.berserker.dispose();
+    this.tankJump.dispose();
   }
 }

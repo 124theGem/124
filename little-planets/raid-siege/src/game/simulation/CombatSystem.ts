@@ -1,3 +1,4 @@
+import { abilityChargeCost } from '../core/types';
 import type {
   AbilityDef,
   AnimationState,
@@ -391,7 +392,7 @@ export class CombatSystem {
       e.cooldowns[index] > 0 ||
       e.resource < a.cost ||
       has(e, 'stun') ||
-      (a.ultimate && e.ultimate < 100)
+      e.ultimate < abilityChargeCost(a)
     )
       return false;
     const manual =
@@ -437,7 +438,7 @@ export class CombatSystem {
     }
     e.resource -= a.cost;
     e.cooldowns[index] = a.cooldown;
-    if (a.ultimate) e.ultimate = 0;
+    if (a.ultimate) e.ultimate = Math.max(0, e.ultimate - abilityChargeCost(a));
     this.animate(
       e,
       a.ultimate ? 'ultimate' : (['skill1', 'skill2'] as const)[index],
