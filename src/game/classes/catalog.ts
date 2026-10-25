@@ -134,7 +134,8 @@ function hero(
         };
       })
       .filter(
-        (_, i) => i !== (({ priest: 1, icemage: 1 } as Record<string, number>)[id] ?? 2),
+        (_, i) =>
+          i !== (({ priest: 1, icemage: 1, berserker: 1 } as Record<string, number>)[id] ?? 2),
       ) as ClassDef['abilities'],
   };
 }

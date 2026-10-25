@@ -32,10 +32,10 @@ export class HealVfx {
     }
     const sprite = new Sprite('priest-heal-burst', this.manager);
     // The atlas has transparent padding: visible artwork occupies 189/320 of a cell.
-    // Match its visible height to 112% of the projected 2.15m hero, rather than
+    // Enlarge the existing 112% projected-hero effect exactly fivefold, rather than
     // treating the entire transparent square as the visible effect.
     const up = this.scene.activeCamera?.getDirection(Vector3.Up()) ?? Vector3.Up();
-    sprite.size = (2.15 * 1.12 * Math.max(0.45, Math.abs(up.y))) / (189 / 320);
+    sprite.size = (5 * 2.15 * 1.12 * Math.max(0.45, Math.abs(up.y))) / (189 / 320);
     const floorOffset = sprite.size * (263 / 320 - 0.5);
     sprite.position.set(position.x, 0.06, position.z);
     sprite.position.addInPlace(up.scale(floorOffset));

@@ -1,0 +1,32 @@
+{
+  "name": "Berserker Rage Surge",
+  "type": "self_buff_vfx",
+  "alpha": true,
+  "cell": {
+    "width": 320,
+    "height": 400
+  },
+  "fps": 30,
+  "activation": {
+    "frames": 48,
+    "grid": [
+      6,
+      8
+    ],
+    "duration_ms": 1600
+  },
+  "aura_loop": {
+    "frames": 24,
+    "grid": [
+      6,
+      4
+    ],
+    "duration_ms": 800
+  },
+  "example_gameplay_buff": {
+    "damage_multiplier": 1.25,
+    "attack_speed_multiplier": 1.15,
+    "duration_sec": 8,
+    "note": "example balance only"
+  }
+}
