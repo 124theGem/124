@@ -1,0 +1,73 @@
+{
+  "snapshot": "Brawl Stars 64.226",
+  "powerLevel": 11,
+  "healthAndDamageMultiplierFromLevel1": 2,
+  "referenceCommit": "cc307ffd36678ac463cc2ca9373a08b0a2d2b0b7",
+  "accessed": "2026-10-25",
+  "source": "https://github.com/tailsjs/brawl-stars-assets/tree/cc307ffd36678ac463cc2ca9373a08b0a2d2b0b7/64.226/csv_logic",
+  "unitScaleInOurGame": 0.1,
+  "brawlers": [
+    {
+      "name": "Shelly",
+      "character": "ShotgunGirl",
+      "hp": 7400,
+      "damagePerProjectile": 600,
+      "attackProjectiles": 5,
+      "fullAttack": 3000,
+      "superPerProjectile": 640,
+      "superProjectiles": 9,
+      "fullSuper": 5760
+    },
+    {
+      "name": "Colt",
+      "character": "Gunslinger",
+      "hp": 5600,
+      "damagePerProjectile": 720,
+      "attackProjectiles": 6,
+      "fullAttack": 4320,
+      "superPerProjectile": 640,
+      "superProjectiles": 12,
+      "fullSuper": 7680
+    },
+    {
+      "name": "Piper",
+      "character": "Sniper",
+      "hp": 4600,
+      "attackMaxRangeDamage": 3400,
+      "superPerBomb": 1800
+    },
+    {
+      "name": "Frank",
+      "character": "HammerDude",
+      "hp": 13400,
+      "attack": 2320,
+      "super": 2480
+    },
+    {
+      "name": "El Primo",
+      "character": "Luchador",
+      "hp": 12600,
+      "damagePerPunch": 760,
+      "punchesPerAttack": 4,
+      "fullAttack": 3040,
+      "super": 1920
+    },
+    {
+      "name": "Poco",
+      "character": "DeadMariachi",
+      "hp": 7600,
+      "attack": 1520,
+      "superHealing": 4200
+    },
+    {
+      "name": "Tick",
+      "character": "ClusterBombDude",
+      "hp": 4400,
+      "damagePerMine": 1360,
+      "minesPerAttack": 3,
+      "fullAttack": 4080,
+      "super": 4000,
+      "superHeadHp": 3200
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import { HERO_BALANCE, heroStats } from './balance';
 import { COMBAT_SPEED, combatDuration } from '../core/tempo';
 import type { AbilityDef, ClassDef, EffectSpec, Role } from '../core/types';
 const e = (kind: EffectSpec['kind'], power: number, duration?: number): EffectSpec => ({
@@ -102,30 +103,36 @@ function hero(
     weapon,
     passive,
     description: `${title}. ${passive}`,
-    hp: role === 'tank' ? 1450 : role === 'melee' ? 1050 : 850,
-    attack: role === 'healer' ? 48 : 72,
-    armor: role === 'tank' ? 28 : 12,
-    resist: 12,
     speed: (role === 'melee' ? 5.04 : 4.62) * COMBAT_SPEED,
     range: ['ranged', 'healer', 'support'].includes(role) ? 8 : 2.3,
     interval: combatDuration(0.82),
     ...stats,
+    ...heroStats(id),
     abilities: skills
-      .map((s, i) => ({
-        ...s,
-        cooldown: combatDuration(s.cooldown),
-        id: `${id}-${i + 1}`,
-        animation: skillClips[id]?.[i] ?? s.animation,
-        color,
-        description:
-          s.description ||
-          s.effects
-            .map(
-              (f) =>
-                `${{ damage: 'Урон', heal: 'Лечение', shield: 'Щит', stun: 'Оглушение', slow: 'Замедление', root: 'Корни', poison: 'Яд', burn: 'Горение', defense: 'Защита', power: 'Сила', haste: 'Скорость', stealth: 'Скрытность', weakness: 'Ослабление', taunt: 'Провокация', invulnerable: 'Неуязвимость', cleanse: 'Очищение', revive: 'Возрождение', dash: 'Рывок', blink: 'Теневой шаг', knockback: 'Отбрасывание', summon: 'Призыв', reset: 'Перезарядка', barrier: 'Защитная стена' }[f.kind]} ${f.power}${f.duration ? ` · ${f.duration} с` : ''}`,
-            )
-            .join(' / '),
-      }))
+      .map((skill, i) => {
+        const s = {
+          ...skill,
+          effects: skill.effects.map((effect) => ({
+            ...effect,
+            power: HERO_BALANCE[id].skills[i]?.[effect.kind] ?? effect.power,
+          })),
+        };
+        return {
+          ...s,
+          cooldown: combatDuration(s.cooldown),
+          id: `${id}-${i + 1}`,
+          animation: skillClips[id]?.[i] ?? s.animation,
+          color,
+          description:
+            s.description ||
+            s.effects
+              .map(
+                (f) =>
+                  `${{ damage: 'Урон', heal: 'Лечение', shield: 'Щит', stun: 'Оглушение', slow: 'Замедление', root: 'Корни', poison: 'Яд', burn: 'Горение', defense: 'Защита', power: 'Сила', haste: 'Скорость', stealth: 'Скрытность', weakness: 'Ослабление', taunt: 'Провокация', invulnerable: 'Неуязвимость', cleanse: 'Очищение', revive: 'Возрождение', dash: 'Рывок', blink: 'Теневой шаг', knockback: 'Отбрасывание', summon: 'Призыв', reset: 'Перезарядка', barrier: 'Защитная стена' }[f.kind]} ${f.power}${f.duration ? ` · ${f.duration} с` : ''}`,
+              )
+              .join(' / '),
+        };
+      })
       .filter(
         (_, i) => i !== (({ priest: 1, icemage: 1 } as Record<string, number>)[id] ?? 2),
       ) as ClassDef['abilities'],
@@ -159,7 +166,7 @@ export const CLASSES: ClassDef[] = [
         delivery: 'repulse',
         ai: 'defense',
         description:
-          'На 1 с становится неуязвимым, затем отбрасывает врагов взрывом на 4 м и наносит 150 урона.',
+          'На 1 с становится неуязвимым, затем отбрасывает врагов взрывом на 4 м и наносит 120 урона.',
       }),
       a('Минное поле', 'target', 'ground', [damage(85)], {
         range: 12,
@@ -176,11 +183,11 @@ export const CLASSES: ClassDef[] = [
           delivery: 'seeker',
           ai: 'offense',
           description:
-            'Выпускает управляемый заряд с 260 HP: он ищет врага до 8 с и взрывается рядом с ним. Заряд можно уничтожить.',
+            'Выпускает управляемый заряд с 320 HP: он ищет врага до 8 с и взрывается рядом с ним. Заряд можно уничтожить.',
         }),
       ),
     ],
-    { hp: 780, attack: 120, range: 14, interval: combatDuration(1.6) },
+    { range: 14, interval: combatDuration(1.6) },
   ),
 
   hero(
@@ -212,11 +219,10 @@ export const CLASSES: ClassDef[] = [
           delivery: 'jump',
           arenaDuration: 5,
           description:
-            'Дальний прыжок: 320 урона при приземлении, оглушение врагов на 3 с и арена на 5 с. Через границу арены нельзя выйти.',
+            'Дальний прыжок: 192 урона при приземлении, оглушение врагов на 3 с и арена на 5 с. Через границу арены нельзя выйти.',
         }),
       ),
     ],
-    { armor: 44 },
   ),
   hero(
     'berserker',
@@ -379,7 +385,7 @@ export const CLASSES: ClassDef[] = [
       }),
       ult(a('Последний аргумент', 'crossbow', 'line', [damage(600)], { range: 18, radius: 1.4 })),
     ],
-    { interval: combatDuration(1), attack: 90 },
+    { interval: combatDuration(1) },
   ),
   hero(
     'firemage',
@@ -504,7 +510,7 @@ export const CLASSES: ClassDef[] = [
         range: 10,
         radius: 3.5,
         description:
-          'Посылает вихрь листьев в выбранную точку. При попадании наносит 160 урона и отбрасывает врагов на 3 м, не лишая их возможности двигаться.',
+          'Посылает вихрь листьев в выбранную точку. При попадании наносит 180 урона и отбрасывает врагов на 3 м, не лишая их возможности двигаться.',
       }),
       a('Природное исцеление', 'heart', 'ally', [e('heal', 240)], { range: 12, cooldown: 6 }),
       a('Ядовитые споры', 'leaf', 'ground', [e('poison', 36, 6)], { range: 9, radius: 4 }),
