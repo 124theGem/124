@@ -120,7 +120,7 @@ function hero(
         return {
           ...s,
           cooldown: combatDuration(s.cooldown),
-          ...(id === 'guardian' && s.delivery === 'jump' ? { cooldown: 3, chargeCost: 0 } : {}),
+          ...(s.ultimate ? { cooldown: 3, chargeCost: 0 } : {}),
           id: `${id}-${i + 1}`,
           animation: skillClips[id]?.[i] ?? s.animation,
           color,
@@ -407,7 +407,7 @@ export const CLASSES: ClassDef[] = [
       a('Огненное кольцо', 'burst', 'ground', [e('burn', 35, 4)], {
         radius: 4,
         range: 0,
-        duration: 5,
+        duration: 1,
       }),
       a('Взрыв пламени', 'burst', 'ground', [damage(190)], { range: 8, radius: 4 }),
       ult(

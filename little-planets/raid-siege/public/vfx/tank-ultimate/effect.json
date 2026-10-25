@@ -1,0 +1,28 @@
+{
+  "name": "tank_ultimate_impact_shields_hd",
+  "version": 1,
+  "stage1": {
+    "start": 0,
+    "duration": 1.0,
+    "sprite": "impact_hd_4k_4x4.png",
+    "grid": [
+      4,
+      4
+    ],
+    "frames": 16,
+    "resolutionPerFrame": [
+      1024,
+      1024
+    ]
+  },
+  "stage2": {
+    "start": 1.0,
+    "duration": 3.0,
+    "shieldIconHD": "shield_emblem_hd_1024.png",
+    "shieldIconMobile": "shield_emblem_mobile_512.png",
+    "defaultCount": 8,
+    "ring": "3D mesh",
+    "defaultRadius": 5.5
+  },
+  "fallback": "impact_mobile_2k_4x4.png"
+}

@@ -615,7 +615,7 @@ export class CombatVfx {
       return;
     }
     if (a.delivery === 'jump') {
-      if (event.castStage === 'impact') this.tankJump.play(to, a.radius);
+      if (event.castStage === 'impact') this.tankJump.play(to, a.radius, this.quality === 'high');
       return;
     }
     const style = skillVisual(c.id, index)!,
