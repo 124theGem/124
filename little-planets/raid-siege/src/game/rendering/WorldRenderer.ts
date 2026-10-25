@@ -24,6 +24,7 @@ import { aimSpec, clippedAim } from '../controls/aim';
 import { direction, add } from '../core/math';
 import { makeEntity } from '../teams/roster';
 import { CombatVfx } from './CombatVfx';
+import { BasicProjectileVfx } from './BasicProjectileVfx';
 import { FrameEvents, renderPixelRatio } from './RenderQuality';
 import { ActorView } from '../animation/ActorView';
 import { AssetLibrary } from './assets';
@@ -39,6 +40,7 @@ export class WorldRenderer {
   private environment?: Environment;
   private actors = new Map<string, ActorView>();
   private projectiles = new Map<number, Mesh>();
+  private basicProjectiles: BasicProjectileVfx;
   private zoneViews = new Map<number, Mesh>();
   private pointViews: Mesh[] = [];
   private vfx: CombatVfx;
@@ -120,6 +122,7 @@ export class WorldRenderer {
     });
     this.glow.intensity = 0.3;
     this.vfx = new CombatVfx(this.scene);
+    this.basicProjectiles = new BasicProjectileVfx(this.scene);
     this.aimView = new AimView(this.scene);
     this.markerMat = this.material('player-ring', '#a8d8cc', 0.8);
     this.assets = new AssetLibrary(this.scene);
@@ -159,6 +162,7 @@ export class WorldRenderer {
     ])
       m.dispose(false, true);
     this.projectiles.clear();
+    this.basicProjectiles.clear();
     this.zoneViews.clear();
     this.pointViews = [];
     this.navigation = [];
@@ -316,12 +320,14 @@ export class WorldRenderer {
       this.selected.position.z = hero.position.z;
       this.selected.setEnabled(hero.alive && this.mode === 'battle');
     }
+    this.basicProjectiles.update(state);
     for (const p of state.projectiles) {
+      const caster = state.entities.find((e) => e.id === p.source);
+      if (this.basicProjectiles.handles(p, caster)) continue;
       if ((p.warmup ?? 0) > 0 || p.abilityId === 'firemage-1' || p.abilityId === 'firemage-4')
         continue;
       let mesh = this.projectiles.get(p.id);
       if (!mesh) {
-        const caster = state.entities.find((e) => e.id === p.source);
         const physicalArea = caster && ['archer', 'crossbow', 'lancer'].includes(caster.classId);
         const magic =
           (!!p.area && !physicalArea) ||
@@ -642,6 +648,7 @@ export class WorldRenderer {
     this.dormantBoss?.dispose();
     this.aimView.dispose();
     this.vfx.dispose();
+    this.basicProjectiles.dispose();
     this.instrumentation.dispose();
     this.environment?.dispose();
     void this.assets.dispose();
