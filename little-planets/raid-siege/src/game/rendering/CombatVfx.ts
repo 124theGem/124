@@ -11,6 +11,7 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { GameEvent, MatchState, Vec2 } from '../core/types';
 import type { Quality } from './WorldRenderer';
 import { skillVisual } from './skillVisuals';
+import { BerserkerVfx } from './BerserkerVfx';
 import { HealVfx } from './HealVfx';
 import { getClass } from '../classes/catalog';
 
@@ -30,6 +31,7 @@ export class CombatVfx {
   private shields = new Map<string, Mesh>();
   private sprite: DynamicTexture;
   private healing: HealVfx;
+  private berserker: BerserkerVfx;
   private serial = 0;
   private burstIndex = 0;
   private templates = new Map<string, Mesh>();
@@ -37,6 +39,7 @@ export class CombatVfx {
   quality: Quality = 'medium';
   constructor(private scene: Scene) {
     this.healing = new HealVfx(scene);
+    this.berserker = new BerserkerVfx(scene);
     this.sprite = new DynamicTexture(
       'spell-particle-atlas',
       { width: 64, height: 64 },
@@ -591,6 +594,10 @@ export class CombatVfx {
       this.healing.play(to);
       return;
     }
+    if (a.id === 'berserker-3' && event.sourceId) {
+      this.berserker.start(event.sourceId, state);
+      return;
+    }
     if (a.delivery === 'wall' || a.delivery === 'seeker') return;
     if (a.delivery === 'repulse') {
       this.sculpt('holy-shield', origin, c.color, 1.5, 1, event.facing, event.sourceId);
@@ -728,6 +735,7 @@ export class CombatVfx {
     this.burst(p, '#d6ffad', 18, 0.5, true);
   }
   update(dt: number, state: MatchState) {
+    this.berserker.update(state);
     for (const visual of [...this.visuals]) {
       const follow = visual.root.metadata?.follow;
       if (follow) {
@@ -786,6 +794,7 @@ export class CombatVfx {
   }
   clear() {
     this.healing.clear();
+    this.berserker.clear();
     for (const v of this.visuals) this.disposeVisual(v);
     this.visuals = [];
     for (const p of this.particles) {
@@ -803,5 +812,6 @@ export class CombatVfx {
     for (const mat of this.palette.values()) mat.dispose();
     this.sprite.dispose();
     this.healing.dispose();
+    this.berserker.dispose();
   }
 }
