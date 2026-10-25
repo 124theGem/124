@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+<defs>
+ <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#FFFBC3"/><stop offset=".24" stop-color="#FFD35A"/><stop offset=".6" stop-color="#E68A1D"/><stop offset="1" stop-color="#FFF097"/></linearGradient>
+ <linearGradient id="blue" x1="0" y1="0" x2=".8" y2="1"><stop stop-color="#D3FFFF"/><stop offset=".2" stop-color="#4BEAFF"/><stop offset=".63" stop-color="#1275D7"/><stop offset="1" stop-color="#242D98"/></linearGradient>
+ <linearGradient id="inner" x1="0" y1="0" x2=".9" y2="1"><stop stop-color="#BFFFFF" stop-opacity=".95"/><stop offset=".45" stop-color="#23B9F4" stop-opacity=".95"/><stop offset="1" stop-color="#104DC2" stop-opacity=".96"/></linearGradient>
+ <filter id="glow"><feGaussianBlur stdDeviation="18"/></filter>
+</defs>
+<path d="M512 76 C600 130 688 152 792 180 L784 565 C762 742 643 845 512 927 C379 845 262 742 240 565 L232 180 C350 149 426 126 512 76Z" fill="#30DDFE" opacity=".72" filter="url(#glow)"/>
+<path d="M512 78 Q647 146 801 183 L792 576 Q768 766 512 933 Q254 766 232 576 L223 183 Q370 151 512 78Z" fill="url(#gold)" stroke="#FFE38C" stroke-width="17" stroke-linejoin="round"/>
+<path d="M512 136 Q641 196 744 220 L734 567 Q710 705 512 855 Q312 705 289 567 L279 220 Q395 190 512 136Z" fill="url(#blue)" stroke="#FFE894" stroke-width="12"/>
+<path d="M512 178 Q618 229 708 250 L699 552 Q669 682 512 812 Q355 682 324 552 L318 251 Q422 224 512 178Z" fill="url(#inner)" opacity=".91"/>
+<path d="M512 179 L512 805 Q359 679 324 551 L318 251 Z" fill="#DAFFFF" opacity=".18"/>
+<path d="M512 273 L565 397 L698 450 L564 504 L512 637 L460 505 L328 452 L459 399Z" fill="#94F5FF" stroke="#E8FFFF" stroke-width="17" stroke-linejoin="round"/>
+<path d="M512 345 L547 428 L630 454 L548 485 L512 567 L478 485 L393 453 L477 426Z" fill="#FFFFFF" opacity=".93"/>
+<path d="M383 264 L512 216 L643 264" fill="none" stroke="#D9FFFF" stroke-width="11" stroke-linecap="round" opacity=".9"/>
+<path d="M287 560 Q308 692 441 794" fill="none" stroke="#FFF7B7" stroke-width="10" stroke-linecap="round" opacity=".85"/>
+</svg>
