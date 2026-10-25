@@ -35,7 +35,6 @@ export class FireMageVfx {
   private textures = new Map<Art, Texture>();
   private timed = new Set<Atlas>();
   private shots = new Map<number, Shot>();
-  private zones = new Map<number, Atlas>();
   constructor(private scene: Scene) {
     for (const art of Object.keys(ATLASES) as Art[]) {
       const texture = new Texture(
@@ -87,7 +86,7 @@ export class FireMageVfx {
     this.frame(atlas, 0);
     return atlas;
   }
-  private dispose(atlas?: Atlas) {
+  private disposeAtlas(atlas?: Atlas) {
     if (!atlas) return;
     atlas.mesh.dispose();
     atlas.material.dispose();
@@ -104,6 +103,14 @@ export class FireMageVfx {
         false,
         16 / 24,
       );
+    else if (event.abilityId === 'firemage-2')
+      effect = this.create(
+        'fire_nova',
+        new Vector3(event.position.x, 0.09, event.position.z),
+        (event.radius ?? 4) * 2.25,
+        true,
+        1,
+      );
     else if (event.abilityId === 'firemage-4')
       effect = this.create(
         'meteor_impact',
@@ -116,7 +123,7 @@ export class FireMageVfx {
       if (this.timed.size >= 32) {
         const oldest = this.timed.values().next().value!;
         this.timed.delete(oldest);
-        this.dispose(oldest);
+        this.disposeAtlas(oldest);
       }
       this.timed.add(effect);
     }
@@ -126,7 +133,7 @@ export class FireMageVfx {
       effect.age += dt;
       if (effect.age >= effect.life) {
         this.timed.delete(effect);
-        this.dispose(effect);
+        this.disposeAtlas(effect);
       } else this.frame(effect, effect.age / effect.life);
     }
     const active = new Set<number>();
@@ -186,44 +193,19 @@ export class FireMageVfx {
     }
     for (const [id, shot] of this.shots)
       if (!active.has(id)) {
-        this.dispose(shot.body);
-        this.dispose(shot.warning);
+        this.disposeAtlas(shot.body);
+        this.disposeAtlas(shot.warning);
         this.shots.delete(id);
-      }
-    const activeZones = new Set<number>();
-    for (const zone of state.zones) {
-      if (zone.abilityId !== 'firemage-2' || zone.delay > 0 || zone.remaining <= 0) continue;
-      activeZones.add(zone.id);
-      let effect = this.zones.get(zone.id);
-      if (!effect) {
-        effect = this.create(
-          'fire_nova',
-          new Vector3(zone.position.x, 0.09, zone.position.z),
-          zone.radius * 2.25,
-          true,
-          1.2,
-        );
-        this.zones.set(zone.id, effect);
-      }
-      effect.age += dt;
-      this.frame(effect, (effect.age % effect.life) / effect.life);
-    }
-    for (const [id, effect] of this.zones)
-      if (!activeZones.has(id)) {
-        this.dispose(effect);
-        this.zones.delete(id);
       }
   }
   clear() {
-    for (const effect of this.timed) this.dispose(effect);
+    for (const effect of this.timed) this.disposeAtlas(effect);
     for (const shot of this.shots.values()) {
-      this.dispose(shot.body);
-      this.dispose(shot.warning);
+      this.disposeAtlas(shot.body);
+      this.disposeAtlas(shot.warning);
     }
-    for (const effect of this.zones.values()) this.dispose(effect);
     this.timed.clear();
     this.shots.clear();
-    this.zones.clear();
   }
   dispose() {
     this.clear();
