@@ -13,6 +13,7 @@ import type { Quality } from './WorldRenderer';
 import { skillVisual } from './skillVisuals';
 import { BerserkerVfx } from './BerserkerVfx';
 import { TankJumpVfx } from './TankJumpVfx';
+import { ArcaneBeamVfx } from './ArcaneBeamVfx';
 import { FireMageVfx } from './FireMageVfx';
 import { HealVfx } from './HealVfx';
 import { getClass } from '../classes/catalog';
@@ -35,6 +36,7 @@ export class CombatVfx {
   private healing: HealVfx;
   private berserker: BerserkerVfx;
   private tankJump: TankJumpVfx;
+  private arcaneBeam: ArcaneBeamVfx;
   private fireMage: FireMageVfx;
   private serial = 0;
   private burstIndex = 0;
@@ -45,6 +47,7 @@ export class CombatVfx {
     this.healing = new HealVfx(scene);
     this.berserker = new BerserkerVfx(scene);
     this.tankJump = new TankJumpVfx(scene);
+    this.arcaneBeam = new ArcaneBeamVfx(scene);
     this.fireMage = new FireMageVfx(scene);
     this.sprite = new DynamicTexture(
       'spell-particle-atlas',
@@ -609,6 +612,10 @@ export class CombatVfx {
       this.berserker.start(event.sourceId, state);
       return;
     }
+    if (a.id === 'guardian-2') {
+      this.arcaneBeam.play(to, this.quality === 'high');
+      return;
+    }
     if (a.delivery === 'wall' || a.delivery === 'seeker') return;
     if (a.delivery === 'repulse') {
       this.sculpt('holy-shield', origin, c.color, 1.5, 1, event.facing, event.sourceId);
@@ -747,6 +754,7 @@ export class CombatVfx {
   update(dt: number, state: MatchState) {
     this.berserker.update(state);
     this.tankJump.update(dt);
+    this.arcaneBeam.update(dt);
     this.healing.update(state);
     this.fireMage.update(dt, state);
     for (const visual of [...this.visuals]) {
@@ -809,6 +817,7 @@ export class CombatVfx {
     this.healing.clear();
     this.berserker.clear();
     this.tankJump.clear();
+    this.arcaneBeam.clear();
     this.fireMage.clear();
     for (const v of this.visuals) this.disposeVisual(v);
     this.visuals = [];
@@ -829,6 +838,7 @@ export class CombatVfx {
     this.healing.dispose();
     this.berserker.dispose();
     this.tankJump.dispose();
+    this.arcaneBeam.dispose();
     this.fireMage.dispose();
   }
 }
