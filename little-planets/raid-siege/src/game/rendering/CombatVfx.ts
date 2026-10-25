@@ -16,6 +16,7 @@ import { TankJumpVfx } from './TankJumpVfx';
 import { ArcaneBeamVfx } from './ArcaneBeamVfx';
 import { FireMageVfx } from './FireMageVfx';
 import { HealVfx } from './HealVfx';
+import { MeleeAttackVfx } from './MeleeAttackVfx';
 import { getClass } from '../classes/catalog';
 
 interface SpellVisual {
@@ -38,6 +39,7 @@ export class CombatVfx {
   private tankJump: TankJumpVfx;
   private arcaneBeam: ArcaneBeamVfx;
   private fireMage: FireMageVfx;
+  private melee: MeleeAttackVfx;
   private serial = 0;
   private burstIndex = 0;
   private templates = new Map<string, Mesh>();
@@ -49,6 +51,7 @@ export class CombatVfx {
     this.tankJump = new TankJumpVfx(scene);
     this.arcaneBeam = new ArcaneBeamVfx(scene);
     this.fireMage = new FireMageVfx(scene);
+    this.melee = new MeleeAttackVfx(scene);
     this.sprite = new DynamicTexture(
       'spell-particle-atlas',
       { width: 64, height: 64 },
@@ -67,6 +70,9 @@ export class CombatVfx {
     this.sprite.update();
     // Four reusable emitters, including hit sparks. No shader/system allocation on contact.
     for (let i = 0; i < 4; i++) this.makeEmitter();
+  }
+  prepare() {
+    return this.melee.prepare();
   }
   private material(name: string, color: string, alpha = 1) {
     const mat = new StandardMaterial(`vfx-${name}-${this.serial++}`, this.scene);
@@ -597,6 +603,11 @@ export class CombatVfx {
       index = c.abilities.findIndex((a) => a.id === event.abilityId),
       a = c.abilities[index];
     if (!a) {
+      const source = state.entities.find((e) => e.id === event.sourceId);
+      if (!event.abilityId && source?.kind === 'hero' && source.range <= 5) {
+        this.melee.play(source, event, state.time);
+        return;
+      }
       if (event.sourceId && c.range <= 5)
         this.slash(
           origin,
@@ -768,6 +779,7 @@ export class CombatVfx {
     this.burst(p, '#d6ffad', 18, 0.5, true);
   }
   update(dt: number, state: MatchState) {
+    this.melee.update(state);
     this.berserker.update(state);
     this.tankJump.update(dt);
     this.arcaneBeam.update(dt);
@@ -823,13 +835,14 @@ export class CombatVfx {
     }
   }
   get activeCount() {
-    return this.visuals.length;
+    return this.visuals.length + this.melee.activeCount;
   }
   private disposeVisual(v: SpellVisual) {
     v.root.dispose();
     for (const m of v.materials) m.dispose();
   }
   clear() {
+    this.melee.clear();
     this.healing.clear();
     this.berserker.clear();
     this.tankJump.clear();
@@ -856,5 +869,6 @@ export class CombatVfx {
     this.tankJump.dispose();
     this.arcaneBeam.dispose();
     this.fireMage.dispose();
+    this.melee.dispose();
   }
 }

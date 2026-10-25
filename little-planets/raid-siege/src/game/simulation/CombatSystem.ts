@@ -337,10 +337,10 @@ export class CombatSystem {
     const dir = direction(e.position, manual ? aim : t!.position);
     const projectileSpeed = e.kind === 'hero' ? 24 : 18 * COMBAT_SPEED;
     e.facing = Math.atan2(dir.x, dir.z);
-    this.animate(e, 'attack', Math.min(0.6, e.interval));
     e.attackCooldown =
       (e.interval / (1 + strength(e, 'haste'))) *
       (e.classId === 'duelist' && e.combo % 3 === 2 ? 0.75 : 1);
+    this.animate(e, 'attack', Math.min(0.6, e.attackCooldown));
     e.combo++;
     if (e.classId === 'demolitionist') {
       const center = manual
@@ -393,6 +393,9 @@ export class CombatSystem {
       classId: e.classId,
       origin: { ...e.position },
       facing: e.facing,
+      duration: e.attackCooldown,
+      radius: e.range,
+      attackSequence: e.combo,
     });
   }
   cast(e: Entity, index: number, targetId?: string, aim?: Vec2): boolean {
