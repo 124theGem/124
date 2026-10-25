@@ -265,10 +265,12 @@ export class ActorView {
             ? 'Spellcast_Shoot'
             : '2H_Ranged_Shoot'
           : c.weapon === 'axe'
-            ? '2H_Melee_Attack_Chop'
-            : c.weapon === 'daggers' || c.weapon === 'swords'
-              ? 'Dualwield_Melee_Attack_Slice'
-              : aliases.attack;
+            ? '2H_Melee_Attack_Slice'
+            : c.weapon === 'spear'
+              ? '2H_Melee_Attack_Stab'
+              : c.weapon === 'daggers' || c.weapon === 'swords'
+                ? 'Dualwield_Melee_Attack_Slice'
+                : aliases.attack;
     if (entity.animation === 'attack' && c.weapon === 'bombs') animation = 'Spellcast_Shoot';
     if (entity.animation.startsWith('skill') || entity.animation === 'ultimate') {
       const index =
@@ -307,7 +309,9 @@ export class ActorView {
             : entity.animation.startsWith('skill')
               ? combatDuration(1.0)
               : entity.animation === 'attack'
-                ? Math.min(combatDuration(0.74), entity.interval * 0.96)
+                ? entity.range <= 5
+                  ? Math.max(0.12, entity.animationUntil - time)
+                  : Math.min(combatDuration(0.74), entity.interval * 0.96)
                 : 0.4);
         const speed = looping
           ? entity.animation === 'run'

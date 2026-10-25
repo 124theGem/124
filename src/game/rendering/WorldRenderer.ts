@@ -179,6 +179,7 @@ export class WorldRenderer {
     this.camera.radius = menu ? 23 : this.battleRadius();
     await Promise.all([
       this.environment.build(state.map),
+      this.vfx.prepare(),
       ...state.entities.map((e) => this.addActor(e)),
     ]);
     if (generation !== this.generation) return;

@@ -274,6 +274,7 @@ export interface GameEvent {
   duration?: number;
   delay?: number;
   facing?: number;
+  attackSequence?: number;
   castStage?: 'windup' | 'launch' | 'impact';
   affectedIds?: string[];
 }
