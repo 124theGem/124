@@ -11,6 +11,7 @@ import type {
   Vec2,
 } from '../core/types';
 import { add, clamp, direction, distance, lineClear, normalize } from '../core/math';
+import { MINER_REPULSE_DAMAGE, SEEKER_HEALTH, SEEKER_DAMAGE } from '../classes/balance';
 import { getClass } from '../classes/catalog';
 import { navigable, navigate } from '../ai/navigation';
 import { COMBAT_SPEED, combatDuration } from '../core/tempo';
@@ -126,8 +127,13 @@ export class CombatSystem {
     const actual = Math.min(target.hp, hit);
     target.hp -= actual;
     source.stats.damage += actual;
-    source.ultimate = clamp(source.ultimate + actual * 0.026, 0, 100);
-    target.ultimate = clamp(target.ultimate + actual * 0.015, 0, 100);
+    source.ultimate = clamp(
+      source.ultimate +
+        (actual / Math.max(1, source.attack)) * (source.classId === 'demolitionist' ? 100 / 6 : 20),
+      0,
+      100,
+    );
+    target.ultimate = clamp(target.ultimate + (actual / target.maxHp) * 12, 0, 100);
     source.statuses = source.statuses.filter((t) => t.kind !== 'stealth');
     if (actual > 0) {
       this.event({
@@ -169,7 +175,7 @@ export class CombatSystem {
     if (value <= 0) return;
     target.hp += value;
     source.stats.healing += value;
-    source.ultimate = Math.min(100, source.ultimate + value * 0.02);
+    source.ultimate = Math.min(100, source.ultimate + (value / source.maxHp) * 40);
     this.event({
       type: 'heal',
       position: target.position,
@@ -331,7 +337,7 @@ export class CombatSystem {
         {
           ...getClass(e.classId).abilities[0],
           id: 'demolitionist-basic',
-          effects: [{ kind: 'damage', power: e.attack * 0.65 }],
+          effects: [{ kind: 'damage', power: e.attack }],
           radius: 2.8,
           mineCount: 3,
           delay: 0,
@@ -589,7 +595,7 @@ export class CombatSystem {
         delay: 1,
         tick: 0,
         effects: [
-          { kind: 'damage', power: 150 },
+          { kind: 'damage', power: MINER_REPULSE_DAMAGE },
           { kind: 'knockback', power: 4 },
         ],
         friendly: false,
@@ -781,12 +787,18 @@ export class CombatSystem {
     );
     head.kind = 'summon';
     head.participantId = owner.id;
-    head.hp = head.maxHp = 260;
+    head.hp = head.maxHp = SEEKER_HEALTH;
     head.attack = 0;
     head.speed = 6.5 * COMBAT_SPEED;
     head.range = 1.8;
     head.lifetime = 8;
-    head.seeker = { owner: owner.id, damage: 440, radius: 4, nextPath: 0, move: { x: 0, z: 0 } };
+    head.seeker = {
+      owner: owner.id,
+      damage: SEEKER_DAMAGE,
+      radius: 4,
+      nextPath: 0,
+      move: { x: 0, z: 0 },
+    };
     this.state.entities.push(head);
   }
   private explodeSeeker(e: Entity) {

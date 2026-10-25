@@ -552,10 +552,6 @@ export class CombatVfx {
       return;
     }
     if (event.type === 'heal') {
-      if (event.classId === 'priest') {
-        this.healing.play(event.position);
-        return;
-      }
       this.burst(event.position, '#a7f3be', 6, 0.8, true);
       return;
     }
@@ -589,6 +585,12 @@ export class CombatVfx {
       this.burst(origin, c.color, event.ultimate ? 18 : 8, 1.2, true);
       return;
     }
+    if (a.id === 'priest-1') {
+      // This atlas belongs to the first skill, including an overheal cast.
+      // Team healing from the ultimate keeps its own original VFX.
+      this.healing.play(to);
+      return;
+    }
     if (a.delivery === 'wall' || a.delivery === 'seeker') return;
     if (a.delivery === 'repulse') {
       this.sculpt('holy-shield', origin, c.color, 1.5, 1, event.facing, event.sourceId);
@@ -618,7 +620,6 @@ export class CombatVfx {
       });
       return;
     }
-    if (c.id === 'priest' && style === 'healing') return; // The actual heal event plays the supplied atlas.
     if (style === 'nature-gust') {
       this.leafGust(to, radius, c.color);
       return;

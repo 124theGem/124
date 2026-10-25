@@ -6,6 +6,7 @@ import {
   type Mode,
   type Vec2,
 } from '../core/types';
+import { SKELETON_HEALTH, SKELETON_DAMAGE } from '../classes/balance';
 import { arenaAllowsMove } from './defenses';
 import { COMBAT_SPEED, combatDuration } from '../core/tempo';
 import { add, direction, distance } from '../core/math';
@@ -219,8 +220,8 @@ export class Simulation {
       );
       m.kind = 'summon';
       m.participantId = source.id;
-      m.hp = m.maxHp = 250;
-      m.attack = 38;
+      m.hp = m.maxHp = SKELETON_HEALTH;
+      m.attack = SKELETON_DAMAGE;
       m.lifetime = duration;
       this.state.entities.push(m);
     }
