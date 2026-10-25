@@ -19,7 +19,7 @@ export function debugAction(sim: Simulation, action: string) {
     sim.player.hp = sim.player.maxHp;
     sim.player.resource = 100;
   }
-  if (action === 'cooldowns') sim.player.cooldowns = [0, 0, 0, 0];
+  if (action === 'cooldowns') sim.player.cooldowns = [0, 0, 0];
   if (action === 'ultimate') sim.player.ultimate = 100;
   if (action === 'invulnerable') {
     if (immortal.has(sim)) {

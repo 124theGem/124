@@ -41,7 +41,7 @@ export function makeEntity(
     speed: c.speed,
     range: c.range,
     interval: c.interval,
-    cooldowns: [0, 0, 0, 0],
+    cooldowns: [0, 0, 0],
     attackCooldown: 0,
     dodgeCooldown: 0,
     ultimate: 30,

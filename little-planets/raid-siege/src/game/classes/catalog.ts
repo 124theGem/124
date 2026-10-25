@@ -110,21 +110,25 @@ function hero(
     range: ['ranged', 'healer', 'support'].includes(role) ? 8 : 2.3,
     interval: combatDuration(0.82),
     ...stats,
-    abilities: skills.map((s, i) => ({
-      ...s,
-      cooldown: combatDuration(s.cooldown),
-      id: `${id}-${i + 1}`,
-      animation: skillClips[id]?.[i] ?? s.animation,
-      color,
-      description:
-        s.description ||
-        s.effects
-          .map(
-            (f) =>
-              `${{ damage: 'Урон', heal: 'Лечение', shield: 'Щит', stun: 'Оглушение', slow: 'Замедление', root: 'Корни', poison: 'Яд', burn: 'Горение', defense: 'Защита', power: 'Сила', haste: 'Скорость', stealth: 'Скрытность', weakness: 'Ослабление', taunt: 'Провокация', invulnerable: 'Неуязвимость', cleanse: 'Очищение', revive: 'Возрождение', dash: 'Рывок', blink: 'Теневой шаг', knockback: 'Отбрасывание', summon: 'Призыв', reset: 'Перезарядка', barrier: 'Защитная стена' }[f.kind]} ${f.power}${f.duration ? ` · ${f.duration} с` : ''}`,
-          )
-          .join(' / '),
-    })) as ClassDef['abilities'],
+    abilities: skills
+      .map((s, i) => ({
+        ...s,
+        cooldown: combatDuration(s.cooldown),
+        id: `${id}-${i + 1}`,
+        animation: skillClips[id]?.[i] ?? s.animation,
+        color,
+        description:
+          s.description ||
+          s.effects
+            .map(
+              (f) =>
+                `${{ damage: 'Урон', heal: 'Лечение', shield: 'Щит', stun: 'Оглушение', slow: 'Замедление', root: 'Корни', poison: 'Яд', burn: 'Горение', defense: 'Защита', power: 'Сила', haste: 'Скорость', stealth: 'Скрытность', weakness: 'Ослабление', taunt: 'Провокация', invulnerable: 'Неуязвимость', cleanse: 'Очищение', revive: 'Возрождение', dash: 'Рывок', blink: 'Теневой шаг', knockback: 'Отбрасывание', summon: 'Призыв', reset: 'Перезарядка', barrier: 'Защитная стена' }[f.kind]} ${f.power}${f.duration ? ` · ${f.duration} с` : ''}`,
+            )
+            .join(' / '),
+      }))
+      .filter(
+        (_, i) => i !== (({ priest: 1, icemage: 1 } as Record<string, number>)[id] ?? 2),
+      ) as ClassDef['abilities'],
   };
 }
 export const CLASSES: ClassDef[] = [
@@ -226,8 +230,10 @@ export const CLASSES: ClassDef[] = [
     'Кровавая ярость: до +60% урона при потере HP.',
     [
       a('Рассекающий удар', 'axe', 'ground', [damage(180)], {
-        range: 2.5,
-        radius: 3.3,
+        range: 4.5,
+        radius: 0,
+        shape: 'cone',
+        arc: Math.PI * 0.65,
         animation: '2H_Melee_Attack_Slice',
       }),
       a('Боевой рывок', 'dash', 'enemy', [e('dash', 7), damage(100)], {
@@ -420,7 +426,7 @@ export const CLASSES: ClassDef[] = [
         range: 12,
         type: 'projectile',
       }),
-      a('Морозная ловушка', 'snow', 'ground', [damage(60), e('root', 1, 2.5)], {
+      a('Морозная ловушка', 'snow', 'ground', [damage(60), e('slow', 0.5, 2.5)], {
         range: 9,
         radius: 3,
         duration: 4,
@@ -494,7 +500,12 @@ export const CLASSES: ClassDef[] = [
     'nature',
     'Живая природа: восстанавливает 0,6% HP в секунду.',
     [
-      a('Корни', 'leaf', 'ground', [damage(80), e('root', 1, 3)], { range: 10, radius: 3 }),
+      a('Порыв природы', 'leaf', 'ground', [damage(160), e('knockback', 3)], {
+        range: 10,
+        radius: 3.5,
+        description:
+          'Посылает вихрь листьев в выбранную точку. При попадании наносит 160 урона и отбрасывает врагов на 3 м, не лишая их возможности двигаться.',
+      }),
       a('Природное исцеление', 'heart', 'ally', [e('heal', 240)], { range: 12, cooldown: 6 }),
       a('Ядовитые споры', 'leaf', 'ground', [e('poison', 36, 6)], { range: 9, radius: 4 }),
       ult(
