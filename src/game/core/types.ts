@@ -53,6 +53,7 @@ export interface AbilityDef {
   ai: 'offense' | 'heal' | 'defense' | 'buff';
   ultimate: boolean;
   chargeCost?: number;
+  friendly?: boolean;
   delay?: number;
   delivery?: 'jump' | 'wall' | 'mines' | 'repulse' | 'seeker';
   arenaDuration?: number;
@@ -269,6 +270,7 @@ export interface GameEvent {
   delay?: number;
   facing?: number;
   castStage?: 'windup' | 'launch' | 'impact';
+  affectedIds?: string[];
 }
 export interface MatchState {
   version: 1;

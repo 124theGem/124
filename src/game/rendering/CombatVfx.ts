@@ -13,6 +13,7 @@ import type { Quality } from './WorldRenderer';
 import { skillVisual } from './skillVisuals';
 import { BerserkerVfx } from './BerserkerVfx';
 import { TankJumpVfx } from './TankJumpVfx';
+import { FireMageVfx } from './FireMageVfx';
 import { HealVfx } from './HealVfx';
 import { getClass } from '../classes/catalog';
 
@@ -34,6 +35,7 @@ export class CombatVfx {
   private healing: HealVfx;
   private berserker: BerserkerVfx;
   private tankJump: TankJumpVfx;
+  private fireMage: FireMageVfx;
   private serial = 0;
   private burstIndex = 0;
   private templates = new Map<string, Mesh>();
@@ -43,6 +45,7 @@ export class CombatVfx {
     this.healing = new HealVfx(scene);
     this.berserker = new BerserkerVfx(scene);
     this.tankJump = new TankJumpVfx(scene);
+    this.fireMage = new FireMageVfx(scene);
     this.sprite = new DynamicTexture(
       'spell-particle-atlas',
       { width: 64, height: 64 },
@@ -592,9 +595,14 @@ export class CombatVfx {
       return;
     }
     if (a.id === 'priest-1') {
-      // This atlas belongs to the first skill, including an overheal cast.
-      // Team healing from the ultimate keeps its own original VFX.
-      this.healing.play(to);
+      for (const id of event.affectedIds ?? []) {
+        const ally = state.entities.find((e) => e.id === id && e.alive);
+        if (ally) this.healing.play(ally);
+      }
+      return;
+    }
+    if (c.id === 'firemage') {
+      this.fireMage.emit(event);
       return;
     }
     if (a.id === 'berserker-3' && event.sourceId) {
@@ -739,6 +747,8 @@ export class CombatVfx {
   update(dt: number, state: MatchState) {
     this.berserker.update(state);
     this.tankJump.update(dt);
+    this.healing.update(state);
+    this.fireMage.update(dt, state);
     for (const visual of [...this.visuals]) {
       const follow = visual.root.metadata?.follow;
       if (follow) {
@@ -799,6 +809,7 @@ export class CombatVfx {
     this.healing.clear();
     this.berserker.clear();
     this.tankJump.clear();
+    this.fireMage.clear();
     for (const v of this.visuals) this.disposeVisual(v);
     this.visuals = [];
     for (const p of this.particles) {
@@ -818,5 +829,6 @@ export class CombatVfx {
     this.healing.dispose();
     this.berserker.dispose();
     this.tankJump.dispose();
+    this.fireMage.dispose();
   }
 }

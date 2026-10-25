@@ -1,0 +1,69 @@
+{
+  "engine": "Babylon.js",
+  "format": "RGBA transparent PNG sprite atlas",
+  "atlasTilePx": [
+    256,
+    256
+  ],
+  "atlases": {
+    "fireball_comet": {
+      "file": "textures/fireball_comet.png",
+      "cols": 6,
+      "rows": 4,
+      "frames": 24,
+      "fps": 24
+    },
+    "fireball_impact": {
+      "file": "textures/fireball_impact.png",
+      "cols": 4,
+      "rows": 4,
+      "frames": 16,
+      "fps": 24
+    },
+    "fire_nova": {
+      "file": "textures/fire_nova.png",
+      "cols": 6,
+      "rows": 6,
+      "frames": 36,
+      "fps": 30
+    },
+    "meteor_warning": {
+      "file": "textures/meteor_warning.png",
+      "cols": 4,
+      "rows": 4,
+      "frames": 16,
+      "fps": 24
+    },
+    "meteor_fall": {
+      "file": "textures/meteor_fall.png",
+      "cols": 4,
+      "rows": 4,
+      "frames": 16,
+      "fps": 24
+    },
+    "meteor_impact": {
+      "file": "textures/meteor_impact.png",
+      "cols": 6,
+      "rows": 6,
+      "frames": 36,
+      "fps": 30
+    }
+  },
+  "skills": {
+    "fireball": {
+      "cometFPS": 24,
+      "onHit": "fireball_impact",
+      "projectileSpeed": 10
+    },
+    "fire_nova": {
+      "durationSeconds": 1.2,
+      "radiusMeters": 4.5
+    },
+    "meteor": {
+      "warningSeconds": 0.7,
+      "fallSeconds": 0.9,
+      "impactSeconds": 1.2,
+      "radiusMeters": 5.5
+    }
+  }
+}
