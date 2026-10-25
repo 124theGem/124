@@ -404,9 +404,9 @@ export const CLASSES: ClassDef[] = [
         type: 'projectile',
         range: 11,
       }),
-      a('Пламенный след', 'dash', 'ground', [e('burn', 35, 4)], {
+      a('Огненное кольцо', 'burst', 'ground', [e('burn', 35, 4)], {
         radius: 4,
-        range: 1,
+        range: 0,
         duration: 5,
       }),
       a('Взрыв пламени', 'burst', 'ground', [damage(190)], { range: 8, radius: 4 }),
@@ -482,7 +482,16 @@ export const CLASSES: ClassDef[] = [
     'holy',
     'Благодать: все исходящие исцеления усилены на 25%.',
     [
-      a('Исцеление', 'heart', 'ally', [e('heal', 280)], { range: 12, cooldown: 5, cost: 16 }),
+      a('Исцеление', 'heart', 'ground', [e('heal', 280)], {
+        range: 12,
+        radius: 4,
+        cooldown: 5,
+        cost: 16,
+        friendly: true,
+        ai: 'heal',
+        description:
+          'Посылает целительный заряд в выбранную область радиусом 4 м. При прибытии восстанавливает каждому союзнику 200 HP с учётом Благодати. Анимация следует за каждым получателем лечения.',
+      }),
       a('Очищение', 'sun', 'ally', [e('cleanse', 1), e('heal', 90)], { range: 12 }),
       a('Божественный щит', 'shield', 'ally', [e('shield', 260)], {
         range: 12,

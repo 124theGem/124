@@ -316,7 +316,8 @@ export class WorldRenderer {
       this.selected.setEnabled(hero.alive && this.mode === 'battle');
     }
     for (const p of state.projectiles) {
-      if ((p.warmup ?? 0) > 0) continue;
+      if ((p.warmup ?? 0) > 0 || p.abilityId === 'firemage-1' || p.abilityId === 'firemage-4')
+        continue;
       let mesh = this.projectiles.get(p.id);
       if (!mesh) {
         const caster = state.entities.find((e) => e.id === p.source);

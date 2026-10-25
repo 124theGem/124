@@ -413,7 +413,7 @@ export class CombatSystem {
         : { ...target!.position };
     }
     if (a.target === 'ground' || a.target === 'line') {
-      target = this.target(e, Math.max(a.range, a.radius), targetId);
+      target = this.target(e, Math.max(a.range, a.radius), targetId, !!a.friendly);
       if (a.range > 0) {
         center =
           aim && Number.isFinite(aim.x) && Number.isFinite(aim.z)
@@ -477,10 +477,17 @@ export class CombatSystem {
     });
     return true;
   }
-  private impactEvent(e: Entity, a: AbilityDef, center: Vec2, origin: Vec2) {
+  private impactEvent(
+    e: Entity,
+    a: AbilityDef,
+    center: Vec2,
+    origin: Vec2,
+    affectedIds?: string[],
+  ) {
     this.event({
       type: 'cast',
       castStage: 'impact',
+      affectedIds,
       position: center,
       origin: { ...origin },
       target: { ...origin },
@@ -522,7 +529,7 @@ export class CombatSystem {
         flightTime: duration,
         radius: a.radius || 3,
         duration: a.duration,
-        friendly: a.target === 'team',
+        friendly: a.friendly || a.target === 'team',
         mines: a.delivery === 'mines' ? a.mineCount : undefined,
         lob: a.delivery === 'mines',
       },
@@ -660,7 +667,7 @@ export class CombatSystem {
         delay: a.delay ?? 0,
         tick: 0,
         effects: a.effects,
-        friendly: a.target === 'team',
+        friendly: a.friendly || a.target === 'team',
         color: a.color,
         telegraph: !!a.delay,
         abilityId: a.id,
@@ -700,7 +707,7 @@ export class CombatSystem {
       for (const t of this.state.entities.filter(
         (t) =>
           t.alive &&
-          t.team !== e.team &&
+          (a.friendly ? t.team === e.team : t.team !== e.team) &&
           distance(t.position, center) <= a.radius &&
           lineClear(center, t.position, this.state.map.obstacles),
       ))
@@ -729,15 +736,27 @@ export class CombatSystem {
         telegraph: false,
         abilityId: p.abilityId,
       });
-    } else
-      for (const target of this.state.entities.filter(
+    } else {
+      const targets = this.state.entities.filter(
         (t) =>
           t.alive &&
           (area.friendly ? t.team === source.team : t.team !== source.team) &&
           distance(t.position, area.destination) <= area.radius &&
           lineClear(area.destination, t.position, this.state.map.obstacles),
-      ))
+      );
+      for (const target of targets)
         this.effects(source, target, p.effects ?? [], area.destination, true);
+      const a = getClass(source.classId).abilities.find((a) => a.id === p.abilityId);
+      if (a)
+        this.impactEvent(
+          source,
+          a,
+          area.destination,
+          area.origin,
+          area.friendly ? targets.map((t) => t.id) : undefined,
+        );
+      return;
+    }
     const a = getClass(source.classId).abilities.find((a) => a.id === p.abilityId);
     if (a) this.impactEvent(source, a, area.destination, area.origin);
   }
@@ -1003,8 +1022,13 @@ export class CombatSystem {
           );
         });
         if (hit && source) {
-          if (p.effects) this.effects(source, hit, p.effects, p.position, true);
-          else {
+          if (p.effects) {
+            this.effects(source, hit, p.effects, p.position, true);
+            if (p.abilityId === 'firemage-1') {
+              const ability = getClass(source.classId).abilities.find((a) => a.id === p.abilityId);
+              if (ability) this.impactEvent(source, ability, hit.position, before);
+            }
+          } else {
             this.damage(source, hit, p.damage, false, p.position, true);
             if (source.classId === 'icemage')
               this.effects(source, hit, [{ kind: 'slow', power: 0.15, duration: 1.5 }]);
