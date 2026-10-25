@@ -1,5 +1,6 @@
 import type { MatchState, Team, Vec2 } from '../core/types';
 import { clamp, distance } from '../core/math';
+import { getClass } from '../classes/catalog';
 export const MODE_NAMES = { raid: 'Рейд', siege: 'Осада', hill: 'Царь горы' };
 export function finish(s: MatchState, winner: Team | 'draw') {
   if (s.status === 'finished') return;
@@ -47,6 +48,9 @@ export function updateRules(s: MatchState, dt: number) {
     e.resource = 100;
     e.shield = 0;
     e.alive = true;
+    e.ammo = getClass(e.classId).ammoCapacity;
+    e.ammoReload = 0;
+    e.attackCooldown = 0;
     e.statuses = [{ kind: 'invulnerable', power: 1, remaining: 2, source: e.id, tick: 0 }];
     e.animation = 'idle';
     e.animationUntil = s.time;

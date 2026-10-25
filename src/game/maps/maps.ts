@@ -90,6 +90,12 @@ function layout(mode: Mode): GameMap {
 
 export function createMap(mode: Mode): GameMap {
   const map = layout(mode);
+  // Short cover islands break up long firing lanes without closing the central route.
+  const coverRows =
+    mode === 'raid' ? [-39, -25, -4, 25] : mode === 'siege' ? [-37, -12, 23] : [-13, 1, 13];
+  for (const z of coverRows)
+    for (const side of [-1, 1])
+      map.obstacles.push({ x: side * 7.5, z, w: 3.6, d: 1.6, kind: 'wall' });
   map.rivers = [
     {
       z: mode === 'raid' ? 13 : mode === 'siege' ? 16 : -7,

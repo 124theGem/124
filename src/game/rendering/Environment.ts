@@ -1,251 +1,484 @@
-import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
+import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
-import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
-import { Scene } from '@babylonjs/core/scene';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
+import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
-import { Vector3 } from '@babylonjs/core/Maths/math.vector';
-import { PointLight } from '@babylonjs/core/Lights/pointLight';
-import { buildLandmarks } from './Landmarks';
-import { buildRiverCastles } from './RiverCastles';
-import type { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture';
+import type { Scene } from '@babylonjs/core/scene';
 import type { GameMap, Vec2 } from '../core/types';
 import { seeded } from '../core/math';
-import { AssetLibrary } from './assets';
-import { ancientStoneTextures } from './stoneTexture';
-import { toonGrass } from './toonFoliage';
+
+type Shape = 'box' | 'round' | 'rock' | 'cone' | 'disc';
+const THEMES = {
+  'forgotten-ruins': {
+    ground: '#8cd653',
+    path: '#f7d687',
+    wall: '#d79958',
+    cap: '#ffe1a1',
+    bush: '#31aa59',
+    leaf: '#79e55c',
+    edge: '#4b994d',
+    roof: '#617ee5',
+  },
+  'ash-fortress': {
+    ground: '#f1bd77',
+    path: '#ffe1a0',
+    wall: '#9b7ed5',
+    cap: '#d9b7fc',
+    bush: '#22b683',
+    leaf: '#60e4a5',
+    edge: '#b27b63',
+    roof: '#ed668c',
+  },
+  'titan-sanctuary': {
+    ground: '#6bd3a0',
+    path: '#caec9a',
+    wall: '#678dd4',
+    cap: '#b1d5ff',
+    bush: '#1fac76',
+    leaf: '#71e998',
+    edge: '#308f7d',
+    roof: '#9c71df',
+  },
+};
+
+/** Flat colors, chunky silhouettes and shared meshes keep combat readable on a phone. */
 export class Environment {
   root: TransformNode;
-  private disposed = false;
-  private effects: Mesh[] = [];
-  private ownedMaterials: (PBRMaterial | StandardMaterial)[] = [];
-  private textures: DynamicTexture[] = [];
-  private riverFlow?: DynamicTexture;
-  private lights: PointLight[] = [];
-  private torchPositions: Vec2[] = [];
-  constructor(
-    private scene: Scene,
-    private assets: AssetLibrary,
-  ) {
+  private materials = new Map<string, StandardMaterial>();
+  private templates = new Map<string, Mesh>();
+  private waterTexture?: DynamicTexture;
+  constructor(private scene: Scene) {
     this.root = new TransformNode('environment', scene);
   }
+  private material(color: string) {
+    let material = this.materials.get(color);
+    if (!material) {
+      material = new StandardMaterial(`arena-${color}`, this.scene);
+      material.diffuseColor = Color3.FromHexString(color);
+      material.emissiveColor = Color3.FromHexString(color).scale(0.08);
+      material.specularColor = Color3.Black();
+      this.materials.set(color, material);
+    }
+    return material;
+  }
+  private part(
+    shape: Shape,
+    name: string,
+    x: number,
+    y: number,
+    z: number,
+    w: number,
+    h: number,
+    d: number,
+    color: string,
+    rotation = 0,
+  ) {
+    const key = `${shape}-${color}`;
+    let base = this.templates.get(key);
+    if (!base) {
+      base =
+        shape === 'box'
+          ? MeshBuilder.CreateBox(`arena-template-${key}`, { size: 1 }, this.scene)
+          : shape === 'round'
+            ? MeshBuilder.CreateSphere(
+                `arena-template-${key}`,
+                { diameter: 1, segments: 8 },
+                this.scene,
+              )
+            : shape === 'rock'
+              ? MeshBuilder.CreateIcoSphere(
+                  `arena-template-${key}`,
+                  { radius: 0.5, subdivisions: 1, flat: true },
+                  this.scene,
+                )
+              : MeshBuilder.CreateCylinder(
+                  `arena-template-${key}`,
+                  {
+                    height: 1,
+                    diameter: 1,
+                    diameterTop: shape === 'cone' ? 0 : 1,
+                    tessellation: shape === 'disc' ? 24 : 8,
+                  },
+                  this.scene,
+                );
+      base.parent = this.root;
+      base.material = this.material(color);
+      base.isPickable = false;
+      base.setEnabled(false);
+      this.templates.set(key, base);
+    }
+    const mesh = base.createInstance(name);
+    mesh.parent = this.root;
+    mesh.position.set(x, y, z);
+    mesh.scaling.set(w, h, d);
+    mesh.rotation.y = rotation;
+    mesh.isPickable = false;
+    mesh.receiveShadows = true;
+    return mesh;
+  }
+  private flag(x: number, z: number, color: string) {
+    this.part('box', 'banner-pole', x, 1.25, z, 0.1, 2.5, 0.1, '#fff0c5');
+    this.part('box', 'bright-banner', x + 0.4, 1.95, z, 0.8, 0.75, 0.08, color);
+    this.part('round', 'banner-finial', x, 2.57, z, 0.22, 0.22, 0.22, '#ffd35b');
+  }
+  private bush(x: number, z: number, color: string, tip: string, size = 1) {
+    this.part('disc', 'bush-ground-shade', x, -0.015, z, size * 2.8, 0.04, size * 2.2, color);
+    for (let i = 0; i < 5; i++) {
+      const a = i * 2.399;
+      this.part(
+        'round',
+        'rounded-bush',
+        x + Math.sin(a) * size * 0.65,
+        size * (0.35 + (i % 2) * 0.1),
+        z + Math.cos(a) * size * 0.5,
+        size * 1.45,
+        size * 0.9,
+        size * 1.2,
+        i === 4 ? tip : color,
+      );
+    }
+  }
   async build(map: GameMap) {
+    const t = THEMES[map.id as keyof typeof THEMES] ?? THEMES['forgotten-ruins'];
     const random = seeded(123);
     const ground = MeshBuilder.CreateGround(
-      'foundation',
-      { width: map.width + 4, height: map.depth + 4 },
+      'bright-arena-floor',
+      { width: map.width + 6, height: map.depth + 6 },
       this.scene,
     );
     ground.parent = this.root;
-    ground.position.y = -0.16;
+    ground.position.y = -0.08;
+    ground.material = this.material(t.ground);
     ground.receiveShadows = true;
-    const mat = new PBRMaterial('foundation-stone', this.scene);
-    this.ownedMaterials.push(mat);
-    mat.albedoColor = Color3.FromHexString(
-      map.id === 'titan-sanctuary' ? '#487b64' : map.id === 'ash-fortress' ? '#62535b' : '#5a7567',
-    ).toLinearSpace();
-    mat.roughness = 1;
-    ground.material = mat;
-    const names = [
-      'floor_tile_large',
-      'floor_tile_small_weeds_A',
-      'pillar_decorated',
-      'wall_broken',
-      'wall',
-      'wall_arched',
-      'rubble_large',
-      'torch_lit',
-      'banner_blue',
-      'chest_gold',
-      'banner_red',
-      'column',
-      'stairs_wide',
-      'barrel_large',
-      'chest',
-      'floor_tile_small_broken_A',
-    ];
-    await Promise.all(names.map((n) => this.assets.load(n)));
-    if (this.disposed) return;
-    const stoneMaps = ancientStoneTextures(this.scene);
-    this.textures.push(stoneMaps.albedo, stoneMaps.normal);
-    const floor = new PBRMaterial('detailed-dungeon-stone', this.scene);
-    floor.albedoTexture = stoneMaps.albedo;
-    floor.bumpTexture = stoneMaps.normal;
-    floor.roughness = 0.88;
-    floor.metallic = 0.04;
-    floor.albedoColor.setAll(1);
-    this.ownedMaterials.push(floor);
-    stoneMaps.albedo.uScale = stoneMaps.normal.uScale = map.width / 4;
-    stoneMaps.albedo.vScale = stoneMaps.normal.vScale = map.depth / 4;
-    if (map.id === 'titan-sanctuary')
-      floor.albedoColor = Color3.FromHexString('#b1d5bf').toLinearSpace();
-    if (map.id === 'ash-fortress')
-      floor.albedoColor = Color3.FromHexString('#d4aeaa').toLinearSpace();
-    const paving = MeshBuilder.CreateGround(
-      'continuous-flagstone-arena',
-      { width: map.width, height: map.depth },
-      this.scene,
-    );
-    paving.parent = this.root;
-    paving.position.y = -0.04;
-    paving.material = floor;
-    paving.receiveShadows = true;
-    paving.isPickable = false;
-    const place = async (
-      name: string,
-      x: number,
-      z: number,
-      sx = 1,
-      sy = sx,
-      sz = sx,
-      rotation = 0,
-    ) => {
-      const container = await this.assets.load(name);
-      if (this.disposed) return undefined;
-      const inst = container.instantiateModelsToScene((n) => `${name}-${x}-${z}:${n}`, false, {
-        doNotInstantiate: false,
-      });
-      const r = new TransformNode(`${name}-instance`, this.scene);
-      r.parent = this.root;
-      r.position.set(x, 0, z);
-      r.scaling.set(sx, sy, sz);
-      r.rotation.y = rotation;
-      for (const node of inst.rootNodes) node.parent = r;
-      for (const mesh of r.getChildMeshes()) {
-        mesh.receiveShadows = true;
-        mesh.isPickable = false;
-      }
-      return r;
-    };
-    const jobs: Promise<unknown>[] = [];
+    ground.isPickable = false;
+    // Large, quiet color areas replace repeated high-frequency flagstone textures.
+    this.part('box', 'main-sand-lane', 0, -0.055, 0, 11, 0.035, map.depth, t.path);
+    for (const z of [map.spawns.A.z, ...map.points.map((p) => p.z), map.spawns.B.z]) {
+      this.part('disc', 'open-arena-clearing', 0, -0.045, z, 22, 0.035, 15, t.path);
+      this.part('box', 'cross-lane', 0, -0.05, z, map.width - 4, 0.035, 5, t.path);
+    }
+    // The footprint of every solid cover comes directly from the simulation map.
     for (const o of map.obstacles) {
-      if (o.landmark) continue;
-      if (o.kind === 'pillar') jobs.push(place('pillar_decorated', o.x, o.z, 0.75, 1.1, 0.75));
-      else if (o.kind === 'rock') jobs.push(place('rubble_large', o.x, o.z, 1.4, 1.4, 1.4));
-      else
-        for (let x = o.x - o.w / 2 + 1; x < o.x + o.w / 2; x += 2)
-          jobs.push(place(random() > 0.6 ? 'wall_broken' : 'wall', x, o.z, 0.5, 0.55, 1));
-    }
-    // Broken arcades and silhouettes frame the arena; all combat blockers match map obstacles.
-    for (let z = -map.depth / 2; z <= map.depth / 2; z += 4) {
-      jobs.push(
-        place(
-          random() > 0.35 ? 'wall_broken' : 'wall_arched',
-          -map.width / 2 - 0.7,
-          z,
-          1.5,
-          0.8,
-          1.5,
-          Math.PI / 2,
-        ),
-      );
-      jobs.push(
-        place(
-          random() > 0.35 ? 'wall_broken' : 'wall_arched',
-          map.width / 2 + 0.7,
-          z,
-          1.5,
-          0.8,
-          1.5,
-          Math.PI / 2,
-        ),
-      );
-    }
-    for (let x = -map.width / 2; x <= map.width / 2; x += 4)
-      jobs.push(place('wall_arched', x, map.depth / 2 + 0.5, 1.7, 0.9, 1.7));
-    for (let i = 0; i < 16; i++) {
-      const x = (random() > 0.5 ? 1 : -1) * (map.width / 2 - 2),
-        z = (random() - 0.5) * map.depth;
-      jobs.push(
-        place('rubble_large', x, z, 0.5 + random(), 0.4 + random(), 0.5 + random(), random() * 6),
-      );
-    }
-    for (const z of [-map.depth / 2 + 5, -6, 10, map.depth / 2 - 5])
-      for (const x of [-7.5, 7.5]) {
-        this.torchPositions.push({ x, z });
-        jobs.push(place('torch_lit', x, z, 1.4));
-        const flame = MeshBuilder.CreateSphere('flame', { diameter: 0.2, segments: 6 }, this.scene);
-        flame.parent = this.root;
-        flame.position.set(x, 0.95, z);
-        const fmat = new StandardMaterial('ember', this.scene);
-        this.ownedMaterials.push(fmat);
-        fmat.emissiveColor = Color3.FromHexString('#ffa24f');
-        fmat.disableLighting = true;
-        flame.material = fmat;
-        this.effects.push(flame);
-      }
-    for (let i = 0; i < 2; i++) {
-      const light = new PointLight('warm-brazier-' + i, new Vector3(0, 1.3, 0), this.scene);
-      light.diffuse = Color3.FromHexString('#ffab58');
-      light.specular = Color3.FromHexString('#ffc078');
-      light.range = 10;
-      light.intensity = 8;
-      this.lights.push(light);
-    }
-    for (const side of [-1, 1]) {
-      jobs.push(place('pillar_decorated', side * 6, -map.depth / 2 + 7, 0.7, 1, 0.7));
-      jobs.push(place('banner_blue', side * 5.7, -map.depth / 2 + 7, 0.9));
-      for (const z of [-18, 2, 17])
-        jobs.push(place('floor_tile_small_weeds_A', side * (9 + random() * 4), z, 1));
-    }
-    const patches: Vec2[] = [];
-    for (const z of [-map.depth / 2 + 5, -map.depth / 2 + 14, -5, 6, map.depth / 2 - 7])
-      for (const x of [-9, 9]) patches.push({ x, z });
-    this.ownedMaterials.push(toonGrass(this.scene, this.root, patches));
-    const gemMat = new PBRMaterial('bright-enchanted-crystals', this.scene);
-    gemMat.albedoColor = Color3.FromHexString('#32d5f4').toLinearSpace();
-    gemMat.emissiveColor = Color3.FromHexString('#1687b7').scale(0.25);
-    gemMat.metallic = 0.1;
-    gemMat.roughness = 0.4;
-    this.ownedMaterials.push(gemMat);
-    for (const z of [-map.depth / 2 + 8, 8, map.depth / 2 - 5])
-      for (const side of [-1, 1])
-        for (let i = 0; i < 3; i++) {
-          const gem = MeshBuilder.CreatePolyhedron(
-            'arena-crystal',
-            { type: 1, size: 0.35 + i * 0.12 },
-            this.scene,
+      if (o.landmark || o.kind === 'river') continue;
+      if (o.kind === 'rock') {
+        this.part('rock', 'chunky-cover-rock', o.x, 0.72, o.z, o.w, 1.65, o.d, t.wall, 0.35);
+        this.part(
+          'rock',
+          'sunlit-rock-cap',
+          o.x - o.w * 0.08,
+          1.14,
+          o.z + 0.08,
+          o.w * 0.75,
+          0.65,
+          o.d * 0.75,
+          t.cap,
+          0.35,
+        );
+      } else {
+        const count = Math.max(1, Math.ceil(o.w / 2.6));
+        for (let i = 0; i < count; i++) {
+          const width = o.w / count;
+          const x = o.x - o.w / 2 + width * (i + 0.5);
+          const height = o.kind === 'pillar' ? 1.85 : 1.35;
+          this.part('box', 'solid-cover', x, height / 2, o.z, width - 0.025, height, o.d, t.wall);
+          this.part(
+            'box',
+            'cover-light-top',
+            x,
+            height,
+            o.z,
+            width - 0.055,
+            0.16,
+            o.d - 0.04,
+            t.cap,
           );
-          gem.parent = this.root;
-          gem.position.set(side * (6.2 + i * 0.4), 0.5 + i * 0.12, z + i * 0.25);
-          gem.scaling.y = 1.5;
-          gem.rotation.z = side * 0.2;
-          gem.material = gemMat;
         }
-    const landmarks = await buildLandmarks(this.scene, this.root, map, place);
-    this.ownedMaterials.push(...landmarks.materials);
-    this.textures.push(...landmarks.textures);
-    const landscape = await buildRiverCastles(this.scene, this.root, map, place);
-    this.ownedMaterials.push(...landscape.materials);
-    this.textures.push(...landscape.textures);
-    this.riverFlow = landscape.flow;
-    await Promise.all(jobs);
-  }
-  update(time: number, focus?: Vec2) {
-    if (this.riverFlow) this.riverFlow.uOffset = (time * 0.035) % 1;
-    for (let i = 0; i < this.effects.length; i++) {
-      const f = this.effects[i];
-      f.scaling.setAll(1 + Math.sin(time * 7 + i) * 0.15);
+      }
+      if (o.kind === 'wall' && o.w === 3.6 && o.d === 1.6)
+        this.bush(o.x, o.z + 2.3, t.bush, t.leaf, 1.1);
     }
-    if (focus) {
-      const nearest = [...this.torchPositions].sort(
-        (a, b) =>
-          Math.hypot(a.x - focus.x, a.z - focus.z) - Math.hypot(b.x - focus.x, b.z - focus.z),
+    // Low shrubs frame the lanes; there is no decorative rubble in the firing corridors.
+    for (let z = -map.depth / 2 + 3; z < map.depth / 2; z += 6)
+      for (const side of [-1, 1]) {
+        this.bush(side * (map.width / 2 + 0.35), z, t.edge, t.leaf, 1.45);
+        if (random() > 0.45) {
+          const x = side * (map.width / 2 - 4.5);
+          const clear = map.obstacles.every(
+            (o) => Math.abs(o.x - x) > o.w / 2 + 2 || Math.abs(o.z - z) > o.d / 2 + 2,
+          );
+          const dry = (map.rivers ?? []).every((r) => Math.abs(r.z - z) > r.depth / 2 + 2);
+          if (clear && dry) this.bush(x, z, t.bush, t.leaf, 0.85);
+        }
+      }
+    for (const side of [-1, 1]) {
+      this.part(
+        'box',
+        'arena-side-boundary',
+        side * (map.width / 2 + 1.25),
+        0.25,
+        0,
+        1,
+        0.6,
+        map.depth + 3,
+        t.edge,
       );
-      this.lights.forEach((light, i) => {
-        const p = nearest[i];
-        if (p) light.position.set(p.x, 1.3, p.z);
-        light.intensity = 8 + Math.sin(time * 7 + i) * 0.5;
-      });
+      this.part(
+        'box',
+        'arena-end-boundary',
+        0,
+        0.25,
+        side * (map.depth / 2 + 1.25),
+        map.width + 3,
+        0.6,
+        1,
+        t.edge,
+      );
     }
+    for (const landmark of map.landmarks ?? []) {
+      const { x, z } = landmark.position;
+      const r = landmark.radius;
+      if (landmark.kind === 'garden') {
+        for (let i = 0; i < 5; i++) {
+          const a = i * 2.399,
+            px = x + Math.sin(a) * (r - 1),
+            pz = z + Math.cos(a) * (r - 1);
+          this.part('disc', 'tree-ground-shade', px, -0.015, pz, 2.4, 0.04, 1.8, t.bush);
+          this.part('disc', 'simple-tree-trunk', px, 0.9, pz, 0.45, 1.8, 0.45, '#a96f43');
+          this.part('round', 'rounded-tree-crown', px, 2.05, pz, 2.3, 2.0, 2.2, t.bush);
+          this.part('round', 'tree-lit-crown', px - 0.2, 2.65, pz + 0.1, 1.65, 1.1, 1.5, t.leaf);
+        }
+      } else if (landmark.kind === 'gate') {
+        for (const side of [-1, 1]) this.flag(x + side * 4, z, '#637df3');
+        // Existing map pillars provide the actual collision at each gate.
+      } else if (landmark.kind === 'altar') {
+        this.part('disc', 'sunlit-sanctum', x, -0.005, z, r * 1.55, 0.1, r * 1.55, t.cap);
+        this.part('disc', 'sanctum-inlay', x, 0.052, z, r * 1.3, 0.025, r * 1.3, t.path);
+        for (const side of [-1, 1]) {
+          this.part(
+            'box',
+            'sanctum-pillar',
+            x + side * (r + 0.5),
+            0.65,
+            z + 1,
+            1.1,
+            1.3,
+            1.1,
+            t.wall,
+          );
+          this.part(
+            'rock',
+            'sanctum-crystal',
+            x + side * (r + 0.5),
+            1.6,
+            z + 1,
+            0.8,
+            1.2,
+            0.8,
+            '#72eaff',
+          );
+        }
+      } else if (landmark.kind === 'fountain') {
+        this.part('disc', 'simple-fountain-basin', x, 0.15, z, 5, 0.5, 5, t.cap);
+        this.part('disc', 'clear-fountain-pool', x, 0.42, z, 4.2, 0.04, 4.2, '#42d9fa');
+        this.part('rock', 'fountain-crystal', x, 1.0, z, 0.8, 1.6, 0.8, '#abf7ff');
+      } else {
+        for (const side of [-1, 1]) {
+          this.part(
+            'box',
+            'camp-supply-crate',
+            x + side * 2,
+            0.55,
+            z + 1,
+            1.1,
+            1.1,
+            1.1,
+            '#dc9450',
+          );
+          this.part(
+            'box',
+            'crate-bright-lid',
+            x + side * 2,
+            1.13,
+            z + 1,
+            1.1,
+            0.12,
+            1.1,
+            '#ffe4a1',
+          );
+          this.part(
+            'box',
+            'crate-strap',
+            x + side * 2,
+            0.57,
+            z + 0.435,
+            0.16,
+            1.0,
+            0.035,
+            '#ffe4a1',
+          );
+        }
+        this.flag(x - 3.2, z + 2.5, '#f36b85');
+      }
+    }
+    // Castle walls and river gaps use the same source data as the colliders.
+    this.buildWater(map, t.cap);
+    for (const castle of map.castles ?? []) {
+      const { x, z } = castle.position,
+        w = castle.width,
+        d = castle.depth;
+      const gate = Math.min(8, w * 0.55),
+        wing = (w - gate) / 2;
+      const wall = (cx: number, cz: number, ww: number, dd: number) => {
+        this.part('box', 'pastel-castle-wall', cx, 0.85, cz, ww, 1.7, dd, t.wall);
+        this.part('box', 'castle-sunlit-coping', cx, 1.75, cz, ww, 0.2, dd, t.cap);
+        const count = Math.max(1, Math.floor(Math.max(ww, dd) / 2.2));
+        for (let i = 0; i < count; i++) {
+          const offset = (i + 0.5) / count - 0.5;
+          this.part(
+            'box',
+            'chunky-castle-battlement',
+            cx + (ww > dd ? offset * ww : 0),
+            2.0,
+            cz + (dd > ww ? offset * dd : 0),
+            ww > dd ? 0.9 : dd,
+            0.4,
+            dd > ww ? 0.9 : dd,
+            t.cap,
+          );
+        }
+      };
+      wall(x, z + d / 2, w, 1.4);
+      wall(x - w / 2, z, 1.4, d);
+      wall(x + w / 2, z, 1.4, d);
+      wall(x - (gate + wing) / 2, z - d / 2, wing, 1.4);
+      wall(x + (gate + wing) / 2, z - d / 2, wing, 1.4);
+      for (const side of [-1, 1]) {
+        this.flag(x + side * (gate / 2 + wing / 2), z - d / 2 - 0.8, t.roof);
+        for (const end of [-1, 1]) {
+          const tx = x + (side * w) / 2,
+            tz = z + (end * d) / 2;
+          this.part('disc', 'toy-castle-tower', tx, 1.25, tz, 3.4, 2.5, 3.4, t.wall);
+          this.part('disc', 'tower-cream-rim', tx, 2.5, tz, 3.5, 0.22, 3.5, t.cap);
+          this.part('cone', 'bright-castle-roof', tx, 3.25, tz, 3.7, 1.3, 3.7, t.roof);
+          this.part('round', 'gold-roof-tip', tx, 3.95, tz, 0.3, 0.3, 0.3, '#ffe17b');
+          this.part('box', 'tower-window', tx, 1.55, tz - 1.705, 0.45, 0.75, 0.04, '#52679c');
+        }
+      }
+    }
+  }
+  private buildWater(map: GameMap, bank: string) {
+    if (!map.rivers?.length) return;
+    const texture = new DynamicTexture(
+      'simple-blue-current',
+      { width: 256, height: 128 },
+      this.scene,
+      false,
+    );
+    const ctx = texture.getContext();
+    ctx.fillStyle = '#2fb9f1';
+    ctx.fillRect(0, 0, 256, 128);
+    ctx.strokeStyle = '#97efff';
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    for (let i = 0; i < 8; i++) {
+      const x = (i * 71) % 256,
+        y = 12 + ((i * 37) % 104);
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.quadraticCurveTo(x + 9, y + 3, x + 23, y);
+      ctx.stroke();
+    }
+    texture.update();
+    texture.uScale = map.width / 12;
+    this.waterTexture = texture;
+    const water = this.material('#ffffff');
+    water.diffuseTexture = texture;
+    water.emissiveColor.setAll(0.12);
+    for (const river of map.rivers) {
+      const surface = MeshBuilder.CreateGround(
+        'bright-blue-river',
+        { width: map.width, height: river.depth },
+        this.scene,
+      );
+      surface.parent = this.root;
+      surface.position.set(0, 0.015, river.z);
+      surface.material = water;
+      surface.isPickable = false;
+      for (const side of [-1, 1])
+        this.part(
+          'box',
+          'clean-river-bank',
+          0,
+          0.025,
+          river.z + side * (river.depth / 2 + 0.18),
+          map.width,
+          0.16,
+          0.36,
+          bank,
+        );
+      for (const bridge of river.bridges) {
+        const length = river.depth + 1.2;
+        this.part(
+          'box',
+          'bridge-flat-deck',
+          bridge.x,
+          0.02,
+          river.z,
+          bridge.width,
+          0.16,
+          length,
+          '#dc9a54',
+        );
+        for (let i = 0; i < Math.ceil(length / 0.75); i++)
+          this.part(
+            'box',
+            'bridge-wide-plank',
+            bridge.x,
+            0.12,
+            river.z - length / 2 + ((i + 0.5) * length) / Math.ceil(length / 0.75),
+            bridge.width - 0.1,
+            0.08,
+            0.65,
+            '#ffce7d',
+          );
+        for (const side of [-1, 1]) {
+          const x = bridge.x + side * (bridge.width / 2 + 0.1);
+          this.part(
+            'box',
+            'bridge-low-rail',
+            x,
+            0.55,
+            river.z,
+            0.18,
+            0.18,
+            length + 0.3,
+            '#f8dc9a',
+          );
+          for (const end of [-1, 1])
+            this.part(
+              'box',
+              'bridge-end-post',
+              x,
+              0.35,
+              river.z + (end * length) / 2,
+              0.4,
+              0.8,
+              0.4,
+              '#bd7c47',
+            );
+        }
+      }
+    }
+  }
+  update(time: number, _focus?: Vec2) {
+    if (this.waterTexture) this.waterTexture.uOffset = (time * 0.035) % 1;
   }
   dispose() {
-    this.disposed = true;
     this.root.dispose();
-    for (const light of this.lights) light.dispose();
-    for (const texture of this.textures) texture.dispose();
-    for (const material of this.ownedMaterials) material.dispose();
-    this.ownedMaterials = [];
+    this.waterTexture?.dispose();
+    for (const material of this.materials.values()) material.dispose();
+    this.materials.clear();
+    this.templates.clear();
   }
 }

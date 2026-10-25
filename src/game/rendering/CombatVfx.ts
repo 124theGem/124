@@ -357,8 +357,16 @@ export class CombatVfx {
       };
     });
   }
-  private slash(p: Vec2, facing: number, color: string, radius = 2.2, delay = 0, spin = false) {
-    this.visual(0.78 + delay, (root, materials) => {
+  private slash(
+    p: Vec2,
+    facing: number,
+    color: string,
+    radius = 2.2,
+    delay = 0,
+    spin = false,
+    duration = 0.78,
+  ) {
+    this.visual(duration + delay, (root, materials) => {
       root.position.copyFrom(point(p, 0.9));
       root.rotation.y = facing;
       const mat = this.material('weapon-trail', color, 0.9);
@@ -386,7 +394,7 @@ export class CombatVfx {
       blade.material = mat;
       return (age, t) => {
         root.setEnabled(age >= delay);
-        const u = Math.max(0, (age - delay) / 0.78);
+        const u = Math.max(0, (age - delay) / duration);
         root.rotation.y = facing + (spin ? u * Math.PI * 2 : (u - 0.5) * 0.65);
         root.scaling.setAll(0.75 + Math.min(1, u) * 0.3);
         mat.alpha = 0.95 * (1 - Math.min(1, u));
@@ -590,7 +598,15 @@ export class CombatVfx {
       a = c.abilities[index];
     if (!a) {
       if (event.sourceId && c.range <= 5)
-        this.slash(origin, event.facing ?? 0, c.color, Math.min(3, c.range));
+        this.slash(
+          origin,
+          event.facing ?? 0,
+          c.color,
+          Math.min(3, c.range),
+          0,
+          false,
+          c.interval * 0.85,
+        );
       return;
     }
     if (event.castStage === 'windup') {

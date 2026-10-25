@@ -43,6 +43,8 @@ export function makeEntity(
     interval: c.interval,
     cooldowns: [0, 0, 0],
     attackCooldown: 0,
+    ammo: c.ammoCapacity,
+    ammoReload: 0,
     dodgeCooldown: 0,
     ultimate: 30,
     statuses: [],

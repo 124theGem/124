@@ -79,6 +79,8 @@ export interface ClassDef {
   speed: number;
   range: number;
   interval: number;
+  ammoCapacity: number;
+  reloadTime: number;
   abilities: [AbilityDef, AbilityDef, AbilityDef];
 }
 export interface Status {
@@ -133,6 +135,9 @@ export interface Entity {
   interval: number;
   cooldowns: number[];
   attackCooldown: number;
+  ammo: number;
+  /** Progress in seconds toward the next charge; charges reload sequentially. */
+  ammoReload: number;
   dodgeCooldown: number;
   ultimate: number;
   statuses: Status[];
