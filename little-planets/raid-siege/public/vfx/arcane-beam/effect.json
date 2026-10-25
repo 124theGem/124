@@ -1,0 +1,33 @@
+{
+  "name": "Prismatic Descent — Arcane Beam VFX v2",
+  "original_art": true,
+  "visual_match": "narrow violet-white beam, rotating orbital rings, flat cyan electrical shards, sustained channel, sharp fade",
+  "fps": 24,
+  "total_duration_seconds": 3.1666666666666665,
+  "intro_frames": 12,
+  "sustain_loop_unique_frames": 16,
+  "sustain_playback_frames": 56,
+  "outro_frames": 8,
+  "mobile_resolution": 512,
+  "hd_resolution": 768,
+  "columns": 4,
+  "impact_anchor": {
+    "u": 0.5,
+    "v_from_top": 0.74
+  },
+  "atlases": {
+    "intro": {
+      "cols": 4,
+      "rows": 3
+    },
+    "loop": {
+      "cols": 4,
+      "rows": 4
+    },
+    "outro": {
+      "cols": 4,
+      "rows": 2
+    }
+  },
+  "licensing_note": "Original procedural VFX, created without reusing ActionVFX frames, marks, or artwork."
+}
