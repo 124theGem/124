@@ -14,6 +14,7 @@ import { add, clamp, direction, distance, lineClear, normalize } from '../core/m
 import { getClass } from '../classes/catalog';
 import { navigable, navigate } from '../ai/navigation';
 import { COMBAT_SPEED, combatDuration } from '../core/tempo';
+import { basicAttackSpec, inCone } from '../controls/aim';
 import { arenaAllowsMove, barrierBlocks } from './defenses';
 import { makeEntity } from '../teams/roster';
 export const has = (e: Entity, kind: string) =>
@@ -174,6 +175,8 @@ export class CombatSystem {
       position: target.position,
       value: Math.round(value),
       color: '#89e8b9',
+      sourceId: source.id,
+      classId: source.classId,
     });
   }
   effects(
@@ -241,7 +244,11 @@ export class CombatSystem {
         )
           source.position = end;
       } else if (f.kind === 'knockback') {
-        const end = add(target.position, direction(source.position, target.position), f.power);
+        const end = add(
+          target.position,
+          direction(origin ?? source.position, target.position),
+          f.power,
+        );
         if (
           navigable(this.state.map, end) &&
           arenaAllowsMove(this.state, target.position, end) &&
@@ -345,7 +352,18 @@ export class CombatSystem {
         targetId: manual ? undefined : t?.id,
         color: getClass(e.classId).color,
       });
-    else if (t) this.damage(e, t, e.attack);
+    else if (basicAttackSpec(e).shape === 'cone') {
+      const spec = basicAttackSpec(e);
+      for (const enemy of this.state.entities.filter(
+        (target) =>
+          target.alive &&
+          target.team !== e.team &&
+          !has(target, 'stealth') &&
+          inCone(e.position, dir, target.position, spec.range, spec.arc) &&
+          lineClear(e.position, target.position, this.state.map.obstacles),
+      ))
+        this.damage(e, enemy, e.attack);
+    } else if (t) this.damage(e, t, e.attack);
     this.event({
       type: 'cast',
       position: e.position,
@@ -416,7 +434,7 @@ export class CombatSystem {
     if (a.ultimate) e.ultimate = 0;
     this.animate(
       e,
-      (['skill1', 'skill2', 'skill3', 'ultimate'] as const)[index],
+      a.ultimate ? 'ultimate' : (['skill1', 'skill2'] as const)[index],
       combatDuration(a.ultimate ? 1.6 : 1.05),
     );
     if (distance(e.position, center) > 0.2) {
@@ -609,6 +627,19 @@ export class CombatSystem {
       });
       return;
     }
+    if (a.shape === 'cone') {
+      const dir = { x: Math.sin(e.facing), z: Math.cos(e.facing) };
+      this.impactEvent(e, a, add(e.position, dir, a.range), e.position);
+      for (const enemy of this.state.entities.filter(
+        (target) =>
+          target.alive &&
+          target.team !== e.team &&
+          inCone(e.position, dir, target.position, a.range, a.arc ?? Math.PI / 2) &&
+          lineClear(e.position, target.position, this.state.map.obstacles),
+      ))
+        this.effects(e, enemy, a.effects);
+      return;
+    }
     this.impactEvent(e, a, center, e.position);
     if ((a.delay ?? 0) > 0 || a.duration > 0) {
       const totem = a.id === 'shaman-2' ? 1.25 : 1;
@@ -666,7 +697,7 @@ export class CombatSystem {
           distance(t.position, center) <= a.radius &&
           lineClear(center, t.position, this.state.map.obstacles),
       ))
-        this.effects(e, t, a.effects);
+        this.effects(e, t, a.effects, center);
     } else if (target) this.effects(e, target, a.effects);
   }
   private areaImpact(source: Entity, p: Projectile) {

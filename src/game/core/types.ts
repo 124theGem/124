@@ -56,6 +56,8 @@ export interface AbilityDef {
   delivery?: 'jump' | 'wall' | 'mines' | 'repulse' | 'seeker';
   arenaDuration?: number;
   mineCount?: number;
+  shape?: 'cone';
+  arc?: number;
 }
 export interface ClassDef {
   id: string;
@@ -75,7 +77,7 @@ export interface ClassDef {
   speed: number;
   range: number;
   interval: number;
-  abilities: [AbilityDef, AbilityDef, AbilityDef, AbilityDef];
+  abilities: [AbilityDef, AbilityDef, AbilityDef];
 }
 export interface Status {
   kind: StatusKind;

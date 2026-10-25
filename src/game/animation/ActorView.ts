@@ -271,7 +271,10 @@ export class ActorView {
               : aliases.attack;
     if (entity.animation === 'attack' && c.weapon === 'bombs') animation = 'Spellcast_Shoot';
     if (entity.animation.startsWith('skill') || entity.animation === 'ultimate') {
-      const index = entity.animation === 'ultimate' ? 3 : Number(entity.animation.slice(-1)) - 1;
+      const index =
+        entity.animation === 'ultimate'
+          ? c.abilities.findIndex((a) => a.ultimate)
+          : Number(entity.animation.slice(-1)) - 1;
       animation = c.abilities[index]?.animation ?? animation;
     }
     if (

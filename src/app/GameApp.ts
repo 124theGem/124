@@ -21,6 +21,7 @@ import { connectTelegram, type TelegramIntegration } from '../telegram/integrati
 import {
   home,
   heroes,
+  skillInspector,
   hud,
   inventory,
   results,
@@ -50,6 +51,7 @@ export class GameApp {
   private mode: Mode = 'raid';
   private allies: [string, string] = ['guardian', 'priest'];
   private classSelection = 'guardian';
+  private skillSelection = 0;
   private allySlot: number | null = null;
   private itemSelection: string | null = null;
   private preview?: HeroPreview;
@@ -158,12 +160,18 @@ export class GameApp {
     this.controlsCleanup?.();
     this.screen = 'heroes';
     this.allySlot = slot;
+    this.skillSelection = 0;
     this.classSelection = slot === null ? this.profile.selectedClass : this.allies[slot];
     this.renderHeroes();
   }
   private renderHeroes() {
     this.preview?.dispose();
-    this.root.innerHTML = heroes(this.profile, this.classSelection, this.allySlot);
+    this.root.innerHTML = heroes(
+      this.profile,
+      this.classSelection,
+      this.allySlot,
+      this.skillSelection,
+    );
     this.preview = new HeroPreview(
       document.getElementById('hero-preview') as HTMLCanvasElement,
       this.classSelection,
@@ -418,14 +426,14 @@ export class GameApp {
     const abilities = getClass(p.classId).abilities;
     this.root.querySelectorAll<HTMLElement>('[data-skill]').forEach((button, i) => {
       const cooldown = p.cooldowns[i];
-      const charge = i === 3 && p.ultimate < 100;
+      const charge = abilities[i].ultimate && p.ultimate < 100;
       button.classList.toggle('on-cooldown', cooldown > 0 || charge);
       button.classList.toggle('no-resource', p.resource < abilities[i].cost);
       button.style.setProperty(
         '--readiness',
-        `${i === 3 ? p.ultimate : 100 * (1 - cooldown / abilities[i].cooldown)}%`,
+        `${abilities[i].ultimate ? p.ultimate : 100 * (1 - cooldown / abilities[i].cooldown)}%`,
       );
-      button.classList.toggle('ready', i === 3 && p.ultimate >= 100 && cooldown <= 0);
+      button.classList.toggle('ready', abilities[i].ultimate && p.ultimate >= 100 && cooldown <= 0);
       button.querySelector('.cooldown')!.textContent =
         cooldown > 0 ? Math.ceil(cooldown).toString() : charge ? `${Math.floor(p.ultimate)}%` : '';
     });
@@ -608,6 +616,7 @@ export class GameApp {
     }
     if (target.dataset.class) {
       this.classSelection = target.dataset.class;
+      this.skillSelection = 0;
       this.renderHeroes();
       return;
     }
@@ -616,6 +625,19 @@ export class GameApp {
       else this.allies[this.allySlot] = target.dataset.selectClass;
       this.save();
       void this.showHome();
+      return;
+    }
+    if (target.dataset.inspectSkill !== undefined) {
+      this.skillSelection = Number(target.dataset.inspectSkill);
+      const c = getClass(this.classSelection);
+      this.root.querySelector('.skill-inspector')!.outerHTML = skillInspector(
+        c,
+        this.skillSelection,
+      );
+      return;
+    }
+    if (target.dataset.demoSkill !== undefined) {
+      await this.demoUltimate(Number(target.dataset.demoSkill));
       return;
     }
     if (target.hasAttribute('data-demo-ult')) {
@@ -686,25 +708,41 @@ export class GameApp {
       `<div class="modal-heading"><span class="eyebrow">ПУТЬ ГЕРОЯ</span><h2>Станьте сильнее</h2></div><div class="upgrade-art">${icon('sun', 65)}<b>${n} / 10</b><small>+${n * 25} HP · +${n * 3} атаки · +${n} защиты</small></div><p>Каждое улучшение даёт всем вашим героям +25 HP, +3 атаки и +1 защиты в рейдах. В PvP усиления нормализованы.</p><button class="primary" data-action="buy-upgrade" ${n >= 10 || this.profile.gold < cost ? 'disabled' : ''}>${icon('coin', 19)} ${n >= 10 ? 'Достигнут максимум' : `Улучшить за ${cost} золота`}</button>`,
     );
   }
-  private async demoUltimate() {
+  private async demoUltimate(
+    index = getClass(this.classSelection).abilities.findIndex((a) => a.ultimate),
+  ) {
     this.preview?.dispose();
     this.preview = undefined;
     this.screen = 'demo';
-    this.root.innerHTML = `<div class="demo-caption">${getClass(this.classSelection).abilities[3].name}</div>`;
+    this.root.innerHTML = `<div class="demo-caption">${getClass(this.classSelection).abilities[index].name}</div>`;
     this.simulation = new Simulation({ mode: 'hill', classId: this.classSelection });
     const p = this.simulation.player;
+    const skill = getClass(p.classId).abilities[index];
+    const targetDistance = skill.range > 0 ? Math.min(4, skill.range * 0.7) : 2;
     p.ultimate = 100;
     p.resource = 100;
     for (const e of this.simulation.state.entities) {
       if (e.team === 'B') {
-        e.position = { x: p.position.x + (Number(e.id.slice(-1)) - 1) * 2, z: p.position.z + 4 };
+        e.position = {
+          x: p.position.x + (Number(e.id.slice(-1)) - 1) * 0.8,
+          z: p.position.z + targetDistance,
+        };
         e.previous = { ...e.position };
       }
-      if (e.team === 'A') e.hp *= 0.5;
+      if (e.team === 'A') {
+        e.hp *= 0.5;
+        if (e.id !== p.id) {
+          e.position = { x: p.position.x + 1, z: p.position.z + 1 };
+          e.previous = { ...e.position };
+        }
+      }
     }
     await this.loadWorld(false);
-    this.simulation.combat.cast(p, 3, 'B1', { x: p.position.x, z: p.position.z + 4 });
-    this.demoUntil = performance.now() + 3000;
+    this.simulation.combat.cast(p, index, skill.target === 'ally' ? 'A1' : 'B1', {
+      x: p.position.x,
+      z: p.position.z + targetDistance,
+    });
+    this.demoUntil = performance.now() + 6500;
   }
   private toggleDebug() {
     if (!import.meta.env.DEV || this.screen !== 'battle') return;

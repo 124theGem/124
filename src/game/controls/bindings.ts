@@ -17,7 +17,7 @@ export function bindControls(
         e.preventDefault();
       controller.keys.add(e.code);
       if (e.repeat) return;
-      const index = ['Digit1', 'Digit2', 'Digit3', 'Digit4'].indexOf(e.code);
+      const index = ['Digit1', 'Digit2', 'Digit3'].indexOf(e.code);
       if (index >= 0) controller.useAbility(index);
       if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') controller.roll();
       if (e.code === 'Escape') onPause();

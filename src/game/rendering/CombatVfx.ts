@@ -11,6 +11,7 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { GameEvent, MatchState, Vec2 } from '../core/types';
 import type { Quality } from './WorldRenderer';
 import { skillVisual } from './skillVisuals';
+import { HealVfx } from './HealVfx';
 import { getClass } from '../classes/catalog';
 
 interface SpellVisual {
@@ -28,12 +29,14 @@ export class CombatVfx {
   private particles = new Set<ParticleSystem>();
   private shields = new Map<string, Mesh>();
   private sprite: DynamicTexture;
+  private healing: HealVfx;
   private serial = 0;
   private burstIndex = 0;
   private templates = new Map<string, Mesh>();
   private palette = new Map<string, StandardMaterial>();
   quality: Quality = 'medium';
   constructor(private scene: Scene) {
+    this.healing = new HealVfx(scene);
     this.sprite = new DynamicTexture(
       'spell-particle-atlas',
       { width: 64, height: 64 },
@@ -549,6 +552,10 @@ export class CombatVfx {
       return;
     }
     if (event.type === 'heal') {
+      if (event.classId === 'priest') {
+        this.healing.play(event.position);
+        return;
+      }
       this.burst(event.position, '#a7f3be', 6, 0.8, true);
       return;
     }
@@ -593,7 +600,7 @@ export class CombatVfx {
       return;
     }
     const style = skillVisual(c.id, index)!,
-      radius = Math.max(1.2, a.radius || 2),
+      radius = Math.max(1.2, a.shape === 'cone' ? a.range : a.radius || 2),
       facing = event.facing ?? 0;
     const source = state.entities.find((e) => e.id === event.sourceId);
     const life = a.duration ? Math.min(8, a.duration) : event.ultimate ? 2.2 : 1.25;
@@ -609,6 +616,11 @@ export class CombatVfx {
           }
         };
       });
+      return;
+    }
+    if (c.id === 'priest' && style === 'healing') return; // The actual heal event plays the supplied atlas.
+    if (style === 'nature-gust') {
+      this.leafGust(to, radius, c.color);
       return;
     }
     if (a.type === 'projectile') return; // The real simulated projectile supplies travel and impact.
@@ -690,6 +702,30 @@ export class CombatVfx {
         event.ultimate || /whirl|dance/.test(style),
       );
   }
+  private leafGust(p: Vec2, radius: number, color: string) {
+    this.visual(1.1, (root) => {
+      root.position.copyFrom(point(p));
+      const leaves = Array.from({ length: 22 }, (_, i) => {
+        const leaf = this.shape('spike', root, i % 3 ? color : '#e3ffad');
+        leaf.scaling.set(0.15, 0.4, 0.08);
+        return leaf;
+      });
+      return (age, t) => {
+        leaves.forEach((leaf, i) => {
+          const angle = i * 2.399 + age * 5;
+          const r = radius * (0.2 + t * 0.8) * (0.5 + (i % 4) / 6);
+          leaf.position.set(
+            Math.sin(angle) * r,
+            0.25 + Math.sin(Math.PI * t) * (0.6 + (i % 4) * 0.25),
+            Math.cos(angle) * r,
+          );
+          leaf.rotation.set(angle, angle * 0.7, Math.PI / 3);
+          leaf.scaling.set(0.15 * (1 - t), 0.4 * (1 - t), 0.08);
+        });
+      };
+    });
+    this.burst(p, '#d6ffad', 18, 0.5, true);
+  }
   update(dt: number, state: MatchState) {
     for (const visual of [...this.visuals]) {
       const follow = visual.root.metadata?.follow;
@@ -748,6 +784,7 @@ export class CombatVfx {
     for (const m of v.materials) m.dispose();
   }
   clear() {
+    this.healing.clear();
     for (const v of this.visuals) this.disposeVisual(v);
     this.visuals = [];
     for (const p of this.particles) {
@@ -764,5 +801,6 @@ export class CombatVfx {
     for (const mesh of this.templates.values()) mesh.dispose();
     for (const mat of this.palette.values()) mat.dispose();
     this.sprite.dispose();
+    this.healing.dispose();
   }
 }

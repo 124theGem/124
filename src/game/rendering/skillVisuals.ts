@@ -1,3 +1,5 @@
+import { getClass } from '../classes/catalog';
+
 /** Explicit art direction for every ability, independent of effect ordering. */
 export const SKILL_VISUALS: Record<string, readonly string[]> = {
   demolitionist: ['cluster-mines', 'last-resort', 'minefield', 'seeking-charge'],
@@ -12,9 +14,10 @@ export const SKILL_VISUALS: Record<string, readonly string[]> = {
   icemage: ['ice-lance', 'ice-trap', 'ice-armor', 'blizzard'],
   necromancer: ['curse-skull', 'summon', 'life-drain', 'undead-army'],
   priest: ['healing', 'cleanse', 'holy-shield', 'resurrection'],
-  druid: ['roots', 'nature-heal', 'spores', 'life-tree'],
+  druid: ['nature-gust', 'nature-heal', 'spores', 'life-tree'],
   paladin: ['holy-strike', 'oath-wall', 'holy-heal', 'divine-wings'],
   bard: ['sound-wave', 'speed-song', 'power-song', 'hero-anthem'],
   shaman: ['chain-lightning', 'spirit-totem', 'spirit-guard', 'elemental-storm'],
 };
-export const skillVisual = (classId: string, index: number) => SKILL_VISUALS[classId]?.[index];
+export const skillVisual = (classId: string, index: number) =>
+  SKILL_VISUALS[classId]?.[Number(getClass(classId).abilities[index]?.id.split('-').pop()) - 1];
