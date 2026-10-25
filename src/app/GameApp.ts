@@ -1,3 +1,4 @@
+import { abilityChargeCost } from '../game/core/types';
 import { CLASSES, getClass } from '../game/classes/catalog';
 import { FIXED_DT, type GameEvent, type MatchState, type Mode } from '../game/core/types';
 import { distance } from '../game/core/math';
@@ -426,14 +427,15 @@ export class GameApp {
     const abilities = getClass(p.classId).abilities;
     this.root.querySelectorAll<HTMLElement>('[data-skill]').forEach((button, i) => {
       const cooldown = p.cooldowns[i];
-      const charge = abilities[i].ultimate && p.ultimate < 100;
+      const chargeCost = abilityChargeCost(abilities[i]);
+      const charge = p.ultimate < chargeCost;
       button.classList.toggle('on-cooldown', cooldown > 0 || charge);
       button.classList.toggle('no-resource', p.resource < abilities[i].cost);
       button.style.setProperty(
         '--readiness',
-        `${abilities[i].ultimate ? p.ultimate : 100 * (1 - cooldown / abilities[i].cooldown)}%`,
+        `${chargeCost > 0 ? (100 * p.ultimate) / chargeCost : 100 * (1 - cooldown / abilities[i].cooldown)}%`,
       );
-      button.classList.toggle('ready', abilities[i].ultimate && p.ultimate >= 100 && cooldown <= 0);
+      button.classList.toggle('ready', abilities[i].ultimate && !charge && cooldown <= 0);
       button.querySelector('.cooldown')!.textContent =
         cooldown > 0 ? Math.ceil(cooldown).toString() : charge ? `${Math.floor(p.ultimate)}%` : '';
     });

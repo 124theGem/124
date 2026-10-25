@@ -1,4 +1,6 @@
+import { abilityChargeCost } from '../core/types';
 import type { Command, Entity, MatchState, Vec2 } from '../core/types';
+import { abilityChargeCost } from '../core/types';
 import type { Controller } from '../networking/interfaces/controllers';
 import { getClass } from '../classes/catalog';
 import { distance, direction } from '../core/math';
@@ -79,7 +81,7 @@ export class BotController implements Controller {
               ({ a, i }) =>
                 me.cooldowns[i] <= 0 &&
                 me.resource >= a.cost &&
-                (!a.ultimate || me.ultimate >= 100),
+                me.ultimate >= abilityChargeCost(a),
             )
         : [];
     for (const { a, i } of skills) {

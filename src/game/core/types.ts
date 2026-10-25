@@ -52,6 +52,7 @@ export interface AbilityDef {
   sound: string;
   ai: 'offense' | 'heal' | 'defense' | 'buff';
   ultimate: boolean;
+  chargeCost?: number;
   delay?: number;
   delivery?: 'jump' | 'wall' | 'mines' | 'repulse' | 'seeker';
   arenaDuration?: number;
@@ -297,3 +298,6 @@ export interface MatchState {
 export const TEAM_LIMIT = 3;
 export const FIXED_DT = 1 / 30;
 export const emptyStats = (): Stats => ({ kills: 0, deaths: 0, damage: 0, healing: 0, capture: 0 });
+
+export const abilityChargeCost = (ability: AbilityDef) =>
+  ability.chargeCost ?? (ability.ultimate ? 100 : 0);

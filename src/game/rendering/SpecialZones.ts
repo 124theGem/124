@@ -20,6 +20,18 @@ export function specialZone(scene: Scene, z: Zone): Mesh | undefined {
     m.backFaceCulling = false;
     return m;
   };
+  if (z.arena && z.abilityId === 'guardian-4') {
+    const boundary = MeshBuilder.CreateTorus(
+      'titan-arena-ground-boundary',
+      { diameter: z.radius * 2, thickness: 0.045, tessellation: 64 },
+      scene,
+    );
+    boundary.parent = root;
+    boundary.position.y = 0.03;
+    boundary.material = mat('titan-arena-ground', z.color, 0.24);
+    boundary.isPickable = false;
+    return root;
+  }
   const metal = mat('defense-bronze', '#cbb47c'),
     energy = mat('defense-energy', z.color, z.trap ? 1 : 0.27);
   const box = (
